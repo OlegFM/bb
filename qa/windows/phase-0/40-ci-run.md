@@ -1,42 +1,62 @@
-# Windows CI run (task 11)
+# Windows CI run (task 11, fix round 1)
 
-Date: 2026-09-11
-node -v: v22.19.0
-git rev-parse HEAD (when the push in this step was made): 0eeb71c286cf701b921434a488ca11e1c86197bb
-Machine: reference desktop, Windows 11 Pro 10.0.26200
+Date: 2026-09-12
+node -v: v22.19.0 (this machine's own tools; the CI job uses its own runner-installed Node 22.x)
+git rev-parse HEAD (the pushed and measured SHA): 363e830c0c37d667935e4759919d59993069b49a
+Machine: reference desktop, Windows 11 Pro 10.0.26200 (dispatch/polling only; the job itself runs on `windows-2025`)
 
-## Push
+## Registration
 
-```bash
-git push -u origin windows-native/phase-0
-```
+The original `HTTP 404: workflow ci.yml not found on the default branch` from the first evidence round is resolved: Task 11c added a `windows-native/**` push-trigger branch to `ci.yml`, so `git push` of this branch now starts the workflow on its own — no `gh workflow run` needed. After the push-triggered run appeared, I also confirmed the fix directly: `gh workflow run ci.yml --ref windows-native/phase-0 -R OlegFM/bb` now succeeds and returns a run URL (`gh workflow list -R OlegFM/bb --all` also now lists `CI` as `active`, alongside `Version Lockstep`), whereas before it 404'd. (Full original root-cause trail — same-day fork, GitHub only registers a workflow once some event has actually triggered it — is preserved in the `git show 9ca4e933a:qa/windows/phase-0/40-ci-run.md` version of this file.)
 
-Succeeded: `branch 'windows-native/phase-0' set up to track 'origin/windows-native/phase-0'` / `* [new branch] windows-native/phase-0 -> windows-native/phase-0`.
+**Caveat learned the hard way**: `ci.yml`'s `concurrency` group (`ci-${{ github.workflow }}-${{ github.ref }}`, `cancel-in-progress: true` off `main`) means dispatching a second run for the same branch while the push-triggered one is in flight cancels the first. My confirmation dispatch did exactly that to the run I needed to measure; I cancelled the stray dispatched run and used `gh run rerun` on the original run ID to get a clean, uninterrupted measurement instead of pushing another commit.
 
-## Dispatch: BLOCKED — could not run the Windows CI job
+## Push and run
 
 ```bash
-gh workflow run ci.yml --ref windows-native/phase-0 -R OlegFM/bb
+git push   # 9ca4e933a..363e830c0
 ```
 
-Result: `HTTP 404: workflow ci.yml not found on the default branch`. Also tried the full path (`gh workflow run .github/workflows/ci.yml ...`) and the raw REST call (`gh api -X POST repos/OlegFM/bb/actions/workflows/ci.yml/dispatches -f ref=windows-native/phase-0`) — both 404 with the same message.
+`gh run list -R OlegFM/bb --branch windows-native/phase-0 --workflow ci.yml --limit 3` showed the push-triggered run (`34654743994`) for SHA `363e830c0...` within about a minute.
 
-### Root cause
+## Result
 
-`OlegFM/bb` (`origin`) is a fork of `get-bb/bb`, **created today at 2026-09-11T10:58:35Z** (`gh api repos/OlegFM/bb --jq '{created_at}'`), about 10 hours before this task ran. `ci.yml` genuinely exists on the fork's `main` at the exact commit we expect:
+- Run URL: https://github.com/OlegFM/bb/actions/runs/34654743994
+- Job: `Windows x64 (windows-2025, Node 22.x)` — **conclusion: success**
+- Steps (all `success`; job ran 22:38:44Z-22:47:58Z, about 9m14s):
 
-- `git ls-tree -r --name-only origin/main -- .github/workflows` lists `ci.yml`.
-- `gh api repos/OlegFM/bb/contents/.github/workflows/ci.yml --jq '.sha'` returns a blob SHA for it.
-- `gh api repos/OlegFM/bb/git/ref/heads/main --jq '.object.sha'` (`fa1f44ebe9e5676004b669e48c99b3c7606466b6`) matches `git rev-parse origin/main` exactly — the ref is fully synced, not stale.
+| step | conclusion |
+|---|---|
+| Set up job | success |
+| Checkout repository | success |
+| Set up pnpm | success |
+| Set up Node.js | success |
+| Install dependencies | success |
+| Load native add-ons | success |
+| Typecheck and build | success |
+| Test (Windows baseline) | success |
+| Upload Windows test run summaries | success |
+| Post Set up Node.js | success |
+| Post Set up pnpm | success |
+| Post Checkout repository | success |
+| Complete job | success |
 
-But `gh api "repos/OlegFM/bb/actions/workflows"` lists only **one** workflow, `Version Lockstep` (`version-lockstep.yml`), `created_at`/`updated_at` both `2026-09-11T23:32:49Z` — i.e. it was registered by *this task's own* `git push` moments earlier. `version-lockstep.yml` has `on: { push, pull_request, workflow_dispatch }` (no branch filter), so pushing `windows-native/phase-0` triggered it (it shows up, queued forever, in `gh api repos/OlegFM/bb/actions/runs`, matching the amendments' note that Blacksmith-only jobs queue forever on the fork). `ci.yml`'s push trigger is `branches: [main]`, so the same push did **not** trigger it — and evidently GitHub's Actions subsystem only registers a workflow (making it visible to `GET .../actions/workflows` and dispatchable via `workflow_dispatch`) once it has actually run at least once on the fork, not merely by being present in the default branch's tree. Since this fork has never had a push to `main` and no PR has been opened against it, `ci.yml` has never run here and is invisible to the dispatch API — a chicken-and-egg gap specific to a same-day fork.
+The `Test (Windows baseline)` step's own `conclusion` is `success` because of its `continue-on-error: true` in `ci.yml` — that reports the job as unblocked, not that every test passed. The CI baseline table below (from the uploaded artifact) is the real signal, and it shows real failures, consistent with this task's local Windows run.
 
-`repos/OlegFM/bb/actions/permissions` shows `{"enabled": true, "allowed_actions": "all"}`, so this is not a permissions/opt-in problem — Actions are fully enabled on the fork.
+Overall run: I cancelled it (`gh run cancel 34654743994`) once the Windows job's own conclusion was set, so the Blacksmith-only jobs (checks/tests/smoke, all queued and unrunnable on this fork) stop consuming the queue; the run's overall `conclusion` is `cancelled`, which does not retroactively change the Windows job's already-recorded `success`.
 
-### What would unblock this
+Artifact: `windows-x64-test-results` (34,179 bytes, not expired).
 
-The two normal ways to make GitHub register `ci.yml` are (a) a push to the fork's `main` that touches, or at least replays, that push event, or (b) opening a pull request (whose `pull_request` trigger would run it). Both are outside this task's sanctioned actions: amendment D authorizes pushing `windows-native/phase-0` and dispatching the workflow, and amendment G explicitly forbids merging or opening a PR. Pushing to the fork's `main` branch was never mentioned as sanctioned or unsanctioned by the brief or amendments (the brief's plan only expected `gh workflow run` to work directly), so it was treated as a missing decision rather than guessed at, per this task's instructions to ask rather than guess when blocked. **No CI run happened; there is no run URL, job conclusion, step table, artifact, or CI test baseline to report.**
+## CI test baseline (from the artifact)
 
-## Gate item
+Downloaded via `gh run download 34654743994 -R OlegFM/bb -n windows-x64-test-results -D <scratch dir>` and summarised with `node qa/windows/scripts/summarize-turbo-run.mjs <scratch dir>`:
 
-`qa/windows/phase-0/40-ci-run.md` links a green `windows-x64` job: **NO** — blocked as described above, not attempted-and-failed. This is the one Step 6 gate item this task could not evaluate.
+| package | test task |
+|---|---|
+| @bb/desktop | fail (1) |
+| @bb/domain | pass |
+| @bb/host-daemon | fail (1) |
+| @bb/process-utils | fail (1) |
+| @bb/scripts | fail (1) |
+
+5 packages have a `test` task in this filter set; 4 fail (`@bb/desktop`, `@bb/host-daemon`, `@bb/process-utils`, `@bb/scripts`) and 1 passes (`@bb/domain`) — matches this task's full local Windows run in `31-test-baseline.md` (the same four packages fail there too), so the CI leg's narrower baseline is consistent with the fuller local measurement.
