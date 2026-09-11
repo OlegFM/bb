@@ -2,7 +2,7 @@ Date: 2026-09-12
 node -v: v22.19.0 (confirmed immediately before this run)
 git rev-parse HEAD: 363e830c0c37d667935e4759919d59993069b49a
 Machine: reference desktop, Windows 11 Pro 10.0.26200
-Command: pnpm exec turbo run build typecheck --output-logs=new-only 2>&1 | Tee-Object qa/windows/phase-0/30-build-typecheck.txt
+Command: pnpm exec turbo run build typecheck --output-logs=new-only 2>&1 | Tee-Object -Append qa/windows/phase-0/30-build-typecheck.txt
 Provenance: the five lines above were written with PowerShell's Set-Content before the pipeline ran; the pipeline's own output below was appended with Tee-Object -Append; the trailing EXIT= line at the end of this file is $LASTEXITCODE, read immediately after the pipeline and appended with Add-Content.
 • turbo 2.10.12
 
