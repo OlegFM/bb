@@ -2959,3 +2959,69 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
+### Task 11d: Drop the Codex version line from `pnpm dev:status`
+
+Added by the Phase 0 gate (Task 11): `@bb/scripts#test` fails on POSIX and on Windows in `test/provider-literal-ratchet.test.mjs` because `packages/scripts/src/commands/run-dev-app.ts:215` calls `captureCommandOutput("codex", ["--version"])`. `scripts/check-provider-literal-ratchet.mjs` counts provider-id literals in core against `scripts/provider-literal-baseline.json` and refuses new ones. The `Codex: <version>` status line was copied from the bash launcher; core has no business naming one provider, so the line goes instead of being allowlisted.
+
+**Files:**
+- Modify: `packages/scripts/src/lib/dev-app-launcher.ts:43` (the `codexVersion: string` field of the status args) and `:194` (the `` `Codex: ${args.codexVersion}` `` line)
+- Modify: `packages/scripts/src/commands/run-dev-app.ts:211-226` (`printStatus`)
+- Test: `packages/scripts/test/dev-app-launcher.test.ts:172,186`
+
+**Interfaces:**
+- Produces: `formatDevAppStatus` prints 12 lines (no `Codex:` line); `DevAppStatusArgs` has no `codexVersion`.
+
+- [ ] **Step 1: Reproduce the ratchet failure**
+
+Run: `node scripts/check-provider-literal-ratchet.mjs`
+Expected: exit 1 naming `packages/scripts/src/commands/run-dev-app.ts` (save to `.superpowers/sdd/2026-09-11-native-windows-phase-0/task-11d-red.log`).
+
+- [ ] **Step 2: Update the test first**
+
+In `packages/scripts/test/dev-app-launcher.test.ts` delete the line `codexVersion: "codex-cli 0.50.0",` (line 172) and the expected line `"Codex: codex-cli 0.50.0",` (line 186).
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- dev-app-launcher`
+Expected: FAIL (the status still prints a `Codex: undefined` line).
+
+- [ ] **Step 3: Remove the field, the line and the probe**
+
+In `packages/scripts/src/lib/dev-app-launcher.ts` delete the `codexVersion: string;` field (line 43) and the `` `Codex: ${args.codexVersion}`, `` element (line 194).
+
+In `packages/scripts/src/commands/run-dev-app.ts` change `printStatus` so the tuple has four elements:
+
+```ts
+  const [branchName, commit, devState, desktopState] = await Promise.all([
+    captureCommandOutput("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
+    captureCommandOutput("git", ["rev-parse", "--short", "HEAD"]),
+    readTrackedProcessState({ pidPath: paths.devPidPath, serviceName: "dev server" }),
+    readTrackedProcessState({ pidPath: paths.desktopPidPath, serviceName: "desktop" }),
+  ]);
+```
+
+and delete the `codexVersion: codexVersion ?? "not installed",` argument.
+
+- [ ] **Step 4: Verify**
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- dev-app-launcher`
+Expected: PASS.
+
+Run: `pnpm exec turbo run typecheck --filter=@bb/scripts`
+Expected: PASS.
+
+Run: `node scripts/check-provider-literal-ratchet.mjs`
+Expected: exit 0 with the committed baseline unchanged (`git status --short scripts/provider-literal-baseline.json` prints nothing; the file was never in the baseline, so no `--write` is needed).
+
+Run on the reference desktop: `pnpm dev:status`
+Expected: the status block prints without a `Codex:` line.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/scripts/src/lib/dev-app-launcher.ts packages/scripts/src/commands/run-dev-app.ts packages/scripts/test/dev-app-launcher.test.ts
+git commit -m "Drop the Codex version line from pnpm dev:status
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
