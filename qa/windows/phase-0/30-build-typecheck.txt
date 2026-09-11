@@ -1,0 +1,384 @@
+Date: 2026-09-11
+node -v: v22.19.0 (confirmed immediately before this run)
+git rev-parse HEAD: 0eeb71c286cf701b921434a488ca11e1c86197bb
+Machine: reference desktop, Windows 11 Pro 10.0.26200
+Command: pnpm exec turbo run build typecheck --output-logs=new-only 2>&1 | Tee-Object qa/windows/phase-0/30-build-typecheck.txt
+
+• turbo 2.10.12
+
+   • Packages in scope: @bb/agent-runtime, @bb/app, @bb/bundled-plugins, @bb/cli, @bb/client-core, @bb/config, @bb/connect, @bb/connect-client, @bb/connect-db, @bb/core-ui, @bb/db, @bb/demo-server, @bb/desktop, @bb/desktop-contract, @bb/domain, @bb/fuzzy-match, @bb/hono-typed-routes, @bb/host-daemon, @bb/host-daemon-contract, @bb/host-watcher, @bb/host-workspace, @bb/integration-tests, @bb/local-open-targets, @bb/logger, @bb/mobile, @bb/mobile-bridge, @bb/plugin-api-map, @bb/plugin-build, @bb/plugin-interaction-contracts, @bb/plugin-registry, @bb/process-utils, @bb/provider-bridge-acp, @bb/provider-bridge-protocol, @bb/provider-parity, @bb/qa, @bb/scripts, @bb/sdk, @bb/secret-storage, @bb/server, @bb/server-contract, @bb/shared-ui, @bb/templates, @bb/test-helpers, @bb/thread-view, @bb/tsconfig, @bb/tunnel-client, @bb/tunnel-contract, @bb/web, @get-bb/plugin-sdk, bb-app, bb-environment-provider-host, bb-plugin-account-pool, bb-plugin-agent-enrichment, bb-plugin-ask-user-question, bb-plugin-automations, bb-plugin-bb-guide, bb-plugin-browser-automation, bb-plugin-composer-customization, bb-plugin-concurrency-limit, bb-plugin-connect, bb-plugin-content-script-example, bb-plugin-custom-instructions, bb-plugin-echo-provider, bb-plugin-environment-git-worktree, bb-plugin-environment-personal-workspace, bb-plugin-environment-project-checkout, bb-plugin-github, bb-plugin-inline-vis, bb-plugin-keep-awake, bb-plugin-memory, bb-plugin-monaco-editor, bb-plugin-pdf-preview, bb-plugin-plugin-api-docs, bb-plugin-plugin-api-tester, bb-plugin-provider-acp, bb-plugin-provider-claude-code, bb-plugin-provider-codex, bb-plugin-provider-pi, bb-plugin-provider-retry, bb-plugin-provider-usage, bb-plugin-push-notifications, bb-plugin-replacement-lab-alpha, bb-plugin-replacement-lab-beta, bb-plugin-scheduled-send, bb-plugin-scripted-echo-provider, bb-plugin-secrets, bb-plugin-side-chat, bb-plugin-sidebar-navigation, bb-plugin-simple-notes, bb-plugin-slack-bot, bb-plugin-tasks, bb-plugin-theme-preview, bb-plugin-thread-chat-demo, bb-plugin-workflows
+   • Running build, typecheck in 94 packages
+   • Remote caching disabled
+
+@bb/templates:generate:templates: cache hit, suppressing logs 5c9f23b8f6f54213
+@bb/web:build: cache miss, executing 51481f7eb506667d
+@bb/templates:generate:plugin-scaffold: cache hit, suppressing logs f6aabafde1c22c45
+@bb/plugin-build:generate: cache hit, suppressing logs f61bb65ed0f66536
+@bb/server:generate:bb-official-marketplace: cache hit, suppressing logs 7aabc34cc13440ea
+@bb/fuzzy-match:typecheck: cache miss, executing 2b0fb33f4fe5abdd
+@bb/plugin-interaction-contracts:typecheck: cache miss, executing 443ca6af217c20d6
+@bb/domain:typecheck: cache miss, executing 02beab8a6e227d96
+@bb/plugin-api-map:typecheck: cache miss, executing 1d43c074ac333426
+@bb/tunnel-contract:typecheck: cache miss, executing 25f8cdd8b923f727
+@bb/connect-db:typecheck: cache miss, executing 5c02965ad606d5e2
+@bb/secret-storage:typecheck: cache miss, executing 46f197c944a6ea8f
+@bb/hono-typed-routes:typecheck: cache miss, executing 671612fb29c3c02d
+@bb/process-utils:typecheck: cache hit, suppressing logs 407adce807207933
+@bb/shared-ui:typecheck: cache miss, executing 53ea361e8e4930a2
+@bb/web:build: 
+@bb/web:build: > @bb/web@0.0.1 build C:\Users\olege\Work\bb\apps\web
+@bb/web:build: > vite build
+@bb/web:build: 
+@bb/fuzzy-match:typecheck: 
+@bb/fuzzy-match:typecheck: > @bb/fuzzy-match@0.0.1 typecheck C:\Users\olege\Work\bb\packages\fuzzy-match
+@bb/fuzzy-match:typecheck: > tsc --noEmit
+@bb/fuzzy-match:typecheck: 
+@bb/plugin-interaction-contracts:typecheck: 
+@bb/plugin-interaction-contracts:typecheck: > @bb/plugin-interaction-contracts@0.0.1 typecheck C:\Users\olege\Work\bb\packages\plugin-interaction-contracts
+@bb/plugin-interaction-contracts:typecheck: > tsc --noEmit
+@bb/plugin-interaction-contracts:typecheck: 
+@bb/domain:typecheck: 
+@bb/domain:typecheck: > @bb/domain@0.0.1 typecheck C:\Users\olege\Work\bb\packages\domain
+@bb/domain:typecheck: > tsc --noEmit
+@bb/domain:typecheck: 
+@bb/plugin-api-map:typecheck: 
+@bb/plugin-api-map:typecheck: > @bb/plugin-api-map@0.0.1 typecheck C:\Users\olege\Work\bb\packages\plugin-api-map
+@bb/plugin-api-map:typecheck: > tsc --noEmit
+@bb/plugin-api-map:typecheck: 
+@bb/tunnel-contract:typecheck: 
+@bb/tunnel-contract:typecheck: > @bb/tunnel-contract@0.0.1 typecheck C:\Users\olege\Work\bb\packages\tunnel-contract
+@bb/tunnel-contract:typecheck: > tsc --noEmit
+@bb/tunnel-contract:typecheck: 
+@bb/connect-db:typecheck: 
+@bb/connect-db:typecheck: > @bb/connect-db@0.0.1 typecheck C:\Users\olege\Work\bb\packages\connect-db
+@bb/connect-db:typecheck: > tsc --noEmit
+@bb/connect-db:typecheck: 
+@bb/mobile-bridge:typecheck: cache miss, executing 144bdf9b7c443bc0
+@bb/secret-storage:typecheck: 
+@bb/secret-storage:typecheck: > @bb/secret-storage@0.0.1 typecheck C:\Users\olege\Work\bb\packages\secret-storage
+@bb/secret-storage:typecheck: > tsc --noEmit
+@bb/secret-storage:typecheck: 
+@bb/connect-client:typecheck: cache miss, executing 43d2e60cca9c5d67
+@bb/hono-typed-routes:typecheck: 
+@bb/hono-typed-routes:typecheck: > @bb/hono-typed-routes@0.0.1 typecheck C:\Users\olege\Work\bb\packages\hono-typed-routes
+@bb/hono-typed-routes:typecheck: > tsc --noEmit
+@bb/hono-typed-routes:typecheck: 
+@bb/shared-ui:typecheck: 
+@bb/shared-ui:typecheck: > @bb/shared-ui@0.0.1 typecheck C:\Users\olege\Work\bb\packages\shared-ui
+@bb/shared-ui:typecheck: > tsc --noEmit
+@bb/shared-ui:typecheck: 
+@bb/config:typecheck: cache miss, executing 3c1fd687bdca4b94
+@bb/mobile-bridge:typecheck: 
+@bb/mobile-bridge:typecheck: > @bb/mobile-bridge@0.0.1 typecheck C:\Users\olege\Work\bb\packages\mobile-bridge
+@bb/mobile-bridge:typecheck: > tsc --noEmit
+@bb/mobile-bridge:typecheck: 
+@bb/templates:typecheck: cache miss, executing 83b08d0b5ede0896
+@bb/connect-client:typecheck: 
+@bb/connect-client:typecheck: > @bb/connect-client@0.0.1 typecheck C:\Users\olege\Work\bb\packages\connect-client
+@bb/connect-client:typecheck: > tsc --noEmit
+@bb/connect-client:typecheck: 
+@bb/test-helpers:typecheck: cache hit, suppressing logs e22ba53f935c6a91
+@bb/tunnel-client:typecheck: cache miss, executing 1667c88b31a50e71
+@bb/connect:typecheck: cache miss, executing 45ae0f301537232f
+@bb/config:typecheck: 
+@bb/config:typecheck: > @bb/config@0.0.1 typecheck C:\Users\olege\Work\bb\packages\config
+@bb/config:typecheck: > tsc --noEmit
+@bb/config:typecheck: 
+@bb/web:typecheck: cache miss, executing b385e6da5ceff2ea
+@bb/provider-bridge-protocol:typecheck: cache miss, executing 527721f3d4d2f5e2
+@bb/templates:typecheck: 
+@bb/templates:typecheck: > @bb/templates@0.0.1 typecheck C:\Users\olege\Work\bb\packages\templates
+@bb/templates:typecheck: > tsc --noEmit
+@bb/templates:typecheck: 
+@bb/db:typecheck: cache miss, executing ed3d7f3392dbd94a
+@bb/logger:typecheck: cache miss, executing 785f2b73c185e174
+@bb/tunnel-client:typecheck: 
+@bb/tunnel-client:typecheck: > @bb/tunnel-client@0.0.1 typecheck C:\Users\olege\Work\bb\packages\tunnel-client
+@bb/tunnel-client:typecheck: > tsc --noEmit
+@bb/tunnel-client:typecheck: 
+@bb/connect:typecheck: 
+@bb/connect:typecheck: > @bb/connect@0.0.1 typecheck C:\Users\olege\Work\bb\apps\connect
+@bb/connect:typecheck: > tsc --noEmit
+@bb/connect:typecheck: 
+@bb/web:typecheck: 
+@bb/web:typecheck: > @bb/web@0.0.1 typecheck C:\Users\olege\Work\bb\apps\web
+@bb/web:typecheck: > tsc --noEmit
+@bb/web:typecheck: 
+@bb/provider-bridge-protocol:typecheck: 
+@bb/provider-bridge-protocol:typecheck: > @bb/provider-bridge-protocol@0.0.1 typecheck C:\Users\olege\Work\bb\packages\provider-bridge-protocol
+@bb/provider-bridge-protocol:typecheck: > tsc --noEmit
+@bb/provider-bridge-protocol:typecheck: 
+@bb/core-ui:typecheck: cache miss, executing bd82e86e1443eeec
+@bb/host-watcher:typecheck: cache miss, executing faa1013b3a657f4c
+@bb/db:typecheck: 
+@bb/db:typecheck: > @bb/db@0.0.1 typecheck C:\Users\olege\Work\bb\packages\db
+@bb/db:typecheck: > tsc --noEmit
+@bb/db:typecheck: 
+@bb/logger:typecheck: 
+@bb/logger:typecheck: > @bb/logger@0.0.1 typecheck C:\Users\olege\Work\bb\packages\logger
+@bb/logger:typecheck: > tsc --noEmit
+@bb/logger:typecheck: 
+@bb/host-workspace:typecheck: cache miss, executing cec011378a35bbb2
+@bb/core-ui:typecheck: 
+@bb/core-ui:typecheck: > @bb/core-ui@0.0.1 typecheck C:\Users\olege\Work\bb\packages\core-ui
+@bb/core-ui:typecheck: > tsc --noEmit
+@bb/core-ui:typecheck: 
+@bb/host-daemon-contract:typecheck: cache miss, executing 1852d63d8b8dde15
+@bb/host-watcher:typecheck: 
+@bb/host-watcher:typecheck: > @bb/host-watcher@0.0.1 typecheck C:\Users\olege\Work\bb\packages\host-watcher
+@bb/host-watcher:typecheck: > tsc --noEmit
+@bb/host-watcher:typecheck: 
+@bb/host-workspace:typecheck: 
+@bb/host-workspace:typecheck: > @bb/host-workspace@0.0.1 typecheck C:\Users\olege\Work\bb\packages\host-workspace
+@bb/host-workspace:typecheck: > tsc --noEmit
+@bb/host-workspace:typecheck: 
+@bb/provider-bridge-acp:typecheck: cache miss, executing c43fef78a904219a
+@bb/host-daemon-contract:typecheck: 
+@bb/host-daemon-contract:typecheck: > @bb/host-daemon-contract@0.0.1 typecheck C:\Users\olege\Work\bb\packages\host-daemon-contract
+@bb/host-daemon-contract:typecheck: > tsc --noEmit
+@bb/host-daemon-contract:typecheck: 
+@bb/provider-bridge-acp:typecheck: 
+@bb/provider-bridge-acp:typecheck: > @bb/provider-bridge-acp@0.0.1 typecheck C:\Users\olege\Work\bb\packages\provider-bridge-acp
+@bb/provider-bridge-acp:typecheck: > tsc --noEmit
+@bb/provider-bridge-acp:typecheck: 
+@bb/scripts:build: cache miss, executing e4d95efdf73811fa
+@bb/scripts:typecheck: cache miss, executing 26c8aeec99d6b2a5
+@bb/server-contract:typecheck: cache miss, executing fa22ee482df42ccc
+@bb/desktop-contract:typecheck: cache miss, executing 0dc67e576a37d4a7
+@bb/local-open-targets:typecheck: cache miss, executing 10a5a1fe40735d8b
+@bb/scripts:build: 
+@bb/scripts:build: > @bb/scripts@0.0.1 build C:\Users\olege\Work\bb\packages\scripts
+@bb/scripts:build: > node ../../scripts/build-package.mjs
+@bb/scripts:build: 
+@bb/thread-view:typecheck: cache miss, executing a2cb1c571f034a19
+@bb/scripts:typecheck: 
+@bb/scripts:typecheck: > @bb/scripts@0.0.1 typecheck C:\Users\olege\Work\bb\packages\scripts
+@bb/scripts:typecheck: > tsc --noEmit
+@bb/scripts:typecheck: 
+@bb/desktop-contract:typecheck: 
+@bb/desktop-contract:typecheck: > @bb/desktop-contract@0.0.1 typecheck C:\Users\olege\Work\bb\packages\desktop-contract
+@bb/desktop-contract:typecheck: > tsc --noEmit
+@bb/desktop-contract:typecheck: 
+@bb/server-contract:typecheck: 
+@bb/server-contract:typecheck: > @bb/server-contract@0.0.1 typecheck C:\Users\olege\Work\bb\packages\server-contract
+@bb/server-contract:typecheck: > tsc --noEmit
+@bb/server-contract:typecheck: 
+@bb/local-open-targets:typecheck: 
+@bb/local-open-targets:typecheck: > @bb/local-open-targets@0.0.1 typecheck C:\Users\olege\Work\bb\packages\local-open-targets
+@bb/local-open-targets:typecheck: > tsc --noEmit
+@bb/local-open-targets:typecheck: 
+@bb/demo-server:typecheck: cache miss, executing dbe4ddff709be360
+@bb/thread-view:typecheck: 
+@bb/thread-view:typecheck: > @bb/thread-view@0.0.1 typecheck C:\Users\olege\Work\bb\packages\thread-view
+@bb/thread-view:typecheck: > tsc --noEmit
+@bb/thread-view:typecheck: 
+@bb/qa:typecheck: cache miss, executing 714543c797c5657d
+@bb/demo-server:typecheck: 
+@bb/demo-server:typecheck: > @bb/demo-server@0.0.1 typecheck C:\Users\olege\Work\bb\apps\demo-server
+@bb/demo-server:typecheck: > tsc --noEmit
+@bb/demo-server:typecheck: 
+@bb/qa:typecheck: 
+@bb/qa:typecheck: > @bb/qa@0.0.1 typecheck C:\Users\olege\Work\bb\tests\qa
+@bb/qa:typecheck: > tsc --noEmit
+@bb/qa:typecheck: 
+@bb/sdk:build: cache hit, suppressing logs 2bdf205d72e55439
+@bb/sdk:typecheck: cache miss, executing 8d18b723f56cc93c
+@bb/provider-parity:typecheck: cache miss, executing e3c270a7f74ad0be
+@bb/client-core:typecheck: cache miss, executing d912de9ff17c60c6
+@bb/scripts:build: @bb/scripts: built 9 entries
+@get-bb/plugin-sdk:build:types: cache hit, suppressing logs 106dabb8a6ad49f0
+bb-app:typecheck: cache miss, executing 58679d65bf5e99ae
+@bb/sdk:typecheck: 
+@bb/sdk:typecheck: > @bb/sdk@0.0.1 typecheck C:\Users\olege\Work\bb\packages\sdk
+@bb/sdk:typecheck: > tsc --noEmit
+@bb/sdk:typecheck: 
+@bb/provider-parity:typecheck: 
+@bb/provider-parity:typecheck: > @bb/provider-parity@0.0.1 typecheck C:\Users\olege\Work\bb\packages\provider-parity
+@bb/provider-parity:typecheck: > tsc --noEmit
+@bb/provider-parity:typecheck: 
+@bb/client-core:typecheck: 
+@bb/client-core:typecheck: > @bb/client-core@0.0.1 typecheck C:\Users\olege\Work\bb\packages\client-core
+@bb/client-core:typecheck: > tsc --noEmit
+@bb/client-core:typecheck: 
+bb-app:typecheck: 
+bb-app:typecheck: > bb-app@0.42.1 typecheck C:\Users\olege\Work\bb\packages\bb-app
+bb-app:typecheck: > tsc --noEmit
+bb-app:typecheck: 
+@bb/mobile:typecheck: cache miss, executing 2f6064925c0783ad
+@bb/mobile:typecheck: 
+@bb/mobile:typecheck: > @bb/mobile@0.0.1 typecheck C:\Users\olege\Work\bb\apps\mobile
+@bb/mobile:typecheck: > tsc --noEmit
+@bb/mobile:typecheck: 
+bb-plugin-browser-automation:typecheck: cache miss, executing 46a4c7652ac8d5fd
+bb-plugin-browser-automation:typecheck: 
+bb-plugin-browser-automation:typecheck: > bb-plugin-browser-automation@0.1.0 typecheck C:\Users\olege\Work\bb\plugins\browser-automation
+bb-plugin-browser-automation:typecheck: > tsc --noEmit
+bb-plugin-browser-automation:typecheck: 
+bb-plugin-composer-customization:typecheck: cache miss, executing ca83663210dee7c8
+@get-bb/plugin-sdk:build: cache hit, suppressing logs 52c7be3391528925
+@get-bb/plugin-sdk:typecheck: cache miss, executing 75d6d38224940daf
+bb-plugin-replacement-lab-beta:typecheck: cache miss, executing 3a172ded3012b8be
+bb-environment-provider-host:typecheck: cache miss, executing ba29db2befcf5614
+bb-plugin-composer-customization:typecheck: 
+bb-plugin-composer-customization:typecheck: > bb-plugin-composer-customization@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\composer-customization
+bb-plugin-composer-customization:typecheck: > tsc --noEmit
+bb-plugin-composer-customization:typecheck: 
+@get-bb/plugin-sdk:typecheck: 
+@get-bb/plugin-sdk:typecheck: > @get-bb/plugin-sdk@0.4.56 typecheck C:\Users\olege\Work\bb\packages\plugin-sdk
+@get-bb/plugin-sdk:typecheck: > tsc --noEmit
+@get-bb/plugin-sdk:typecheck: 
+bb-plugin-replacement-lab-beta:typecheck: 
+bb-plugin-replacement-lab-beta:typecheck: > bb-plugin-replacement-lab-beta@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\replacement-lab-beta
+bb-plugin-replacement-lab-beta:typecheck: > tsc --noEmit
+bb-plugin-replacement-lab-beta:typecheck: 
+bb-environment-provider-host:typecheck: 
+bb-environment-provider-host:typecheck: > bb-environment-provider-host@0.0.1 typecheck C:\Users\olege\Work\bb\packages\environment-provider-host
+bb-environment-provider-host:typecheck: > tsc --noEmit
+bb-environment-provider-host:typecheck: 
+bb-plugin-thread-chat-demo:typecheck: cache miss, executing 797e720d999e1c84
+bb-plugin-sidebar-navigation:typecheck: cache miss, executing 8c7e83397a04ea9a
+bb-plugin-scripted-echo-provider:typecheck: cache miss, executing 4515907eea1c6475
+bb-plugin-replacement-lab-alpha:typecheck: cache miss, executing f66827fb392984ed
+bb-plugin-echo-provider:typecheck: cache miss, executing 9e757568fdb76d10
+@bb/plugin-build:typecheck: cache miss, executing c5dae9abf67694a3
+bb-plugin-thread-chat-demo:typecheck: 
+bb-plugin-thread-chat-demo:typecheck: > bb-plugin-thread-chat-demo@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\thread-chat-demo
+bb-plugin-thread-chat-demo:typecheck: > tsc --noEmit
+bb-plugin-thread-chat-demo:typecheck: 
+bb-plugin-sidebar-navigation:typecheck: 
+bb-plugin-sidebar-navigation:typecheck: > bb-plugin-sidebar-navigation@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\sidebar-navigation
+bb-plugin-sidebar-navigation:typecheck: > tsc --noEmit
+bb-plugin-sidebar-navigation:typecheck: 
+bb-plugin-scripted-echo-provider:typecheck: 
+bb-plugin-scripted-echo-provider:typecheck: > bb-plugin-scripted-echo-provider@0.0.1 typecheck C:\Users\olege\Work\bb\tests\scripted-echo-provider
+bb-plugin-scripted-echo-provider:typecheck: > tsc --noEmit
+bb-plugin-scripted-echo-provider:typecheck: 
+bb-plugin-replacement-lab-alpha:typecheck: 
+bb-plugin-replacement-lab-alpha:typecheck: > bb-plugin-replacement-lab-alpha@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\replacement-lab-alpha
+bb-plugin-replacement-lab-alpha:typecheck: > tsc --noEmit
+bb-plugin-replacement-lab-alpha:typecheck: 
+bb-plugin-echo-provider:typecheck: 
+bb-plugin-echo-provider:typecheck: > bb-plugin-echo-provider@0.1.0 typecheck C:\Users\olege\Work\bb\examples\plugins\echo-provider
+bb-plugin-echo-provider:typecheck: > tsc --noEmit
+bb-plugin-echo-provider:typecheck: 
+@bb/plugin-build:typecheck: 
+@bb/plugin-build:typecheck: > @bb/plugin-build@0.0.1 typecheck C:\Users\olege\Work\bb\packages\plugin-build
+@bb/plugin-build:typecheck: > tsc --noEmit
+@bb/plugin-build:typecheck: 
+@bb/plugin-build:build: cache hit, suppressing logs 622061d56a01c4b0
+@bb/desktop:typecheck: cache miss, executing 01b387e4320ca869
+@bb/desktop:typecheck: 
+@bb/desktop:typecheck: > @bb/desktop@0.42.1 typecheck C:\Users\olege\Work\bb\apps\desktop
+@bb/desktop:typecheck: > tsc --noEmit
+@bb/desktop:typecheck: 
+bb-plugin-tasks:typecheck: cache miss, executing 4b50f97a34bc37be
+bb-plugin-tasks:build: cache miss, executing e9223919923aac9a
+bb-plugin-bb-guide:typecheck: cache miss, executing a0ed9ad6fc866a67
+bb-plugin-provider-codex:typecheck: cache miss, executing 75568c84b6806de8
+bb-plugin-tasks:typecheck: 
+bb-plugin-tasks:typecheck: > bb-plugin-tasks@0.1.2 typecheck C:\Users\olege\Work\bb\plugins\tasks
+bb-plugin-tasks:typecheck: > tsc --noEmit
+bb-plugin-tasks:typecheck: 
+bb-plugin-tasks:build: 
+bb-plugin-tasks:build: > bb-plugin-tasks@0.1.2 build C:\Users\olege\Work\bb\plugins\tasks
+bb-plugin-tasks:build: > node --conditions=source --import tsx ../../scripts/build-official-plugins.mjs tasks
+bb-plugin-tasks:build: 
+bb-plugin-bb-guide:typecheck: 
+bb-plugin-bb-guide:typecheck: > bb-plugin-bb-guide@0.1.0 typecheck C:\Users\olege\Work\bb\plugins\bb-guide
+bb-plugin-bb-guide:typecheck: > tsc --noEmit
+bb-plugin-bb-guide:typecheck: 
+bb-plugin-provider-codex:typecheck: 
+bb-plugin-provider-codex:typecheck: > bb-plugin-provider-codex@0.1.0 typecheck C:\Users\olege\Work\bb\plugins\provider-codex
+bb-plugin-provider-codex:typecheck: > tsc --noEmit
+bb-plugin-provider-codex:typecheck: 
+@bb/plugin-registry:typecheck: cache miss, executing 8cbf5829a8eeb591
+bb-plugin-keep-awake:typecheck: cache miss, executing c5f4f5591f0948f5
+bb-plugin-secrets:typecheck: cache miss, executing 0d17983e19d2d278
+@bb/plugin-registry:typecheck: 
+@bb/plugin-registry:typecheck: > @bb/plugin-registry@0.0.1 typecheck C:\Users\olege\Work\bb\packages\plugin-registry
+@bb/plugin-registry:typecheck: > node ./scripts/build-registry.mjs --check && tsc --noEmit
+@bb/plugin-registry:typecheck: 
+@bb/plugin-registry:typecheck: file:///C:/Users/olege/Work/bb/packages/plugin-registry/scripts/build-registry.mjs:152
+@bb/plugin-registry:typecheck:     throw new Error(
+@bb/plugin-registry:typecheck:           ^
+@bb/plugin-registry:typecheck: 
+@bb/plugin-registry:typecheck: Error: item name collision: "toggle" from both components\ui\toggle.tsx and components/ui/toggle.tsx
+@bb/plugin-registry:typecheck:     at file:///C:/Users/olege/Work/bb/packages/plugin-registry/scripts/build-registry.mjs:152:11
+@bb/plugin-registry:typecheck: 
+@bb/plugin-registry:typecheck: Node.js v22.19.0
+@bb/plugin-registry:typecheck:  ELIFECYCLE  Command failed with exit code 1.
+bb-plugin-ask-user-question:typecheck: cache miss, executing 057695fac2aba181
+bb-plugin-provider-acp:typecheck: cache miss, executing 5db33e9d4c04854a
+bb-plugin-plugin-api-tester:typecheck: cache miss, executing 95277357e37806bd
+bb-plugin-account-pool:typecheck: cache miss, executing 079108fe19fc1ee8
+bb-plugin-provider-usage:typecheck: cache miss, executing a21ae2b71baff0de
+bb-plugin-scheduled-send:typecheck: cache miss, executing 6b6ee354b693299d
+bb-plugin-memory:typecheck: cache miss, executing bfddc9826acdab5a
+bb-plugin-memory:build: cache miss, executing 50b263a22ad93504
+@bb/agent-runtime:typecheck: cache miss, executing 0b73b1496255cf62
+bb-plugin-connect:typecheck: cache miss, executing 11ae8eeee1983aa7
+bb-plugin-theme-preview:typecheck: cache miss, executing 7be748756dd5c123
+bb-plugin-custom-instructions:typecheck: cache miss, executing 16e3212dbc88ae44
+bb-plugin-github:typecheck: cache miss, executing 70242bc58b5473f1
+bb-plugin-github:build: cache miss, executing 39927f21bac1a0ce
+bb-plugin-plugin-api-docs:typecheck: cache miss, executing 011861d6f7445e1f
+bb-plugin-monaco-editor:typecheck: cache miss, executing 347f331a01c9423c
+bb-plugin-environment-git-worktree:typecheck: cache miss, executing 4df3eaa13b6bd17f
+bb-plugin-concurrency-limit:typecheck: cache miss, executing 642aeefe4cc4aa3d
+bb-plugin-provider-retry:typecheck: cache miss, executing dfb30972ec5f5684
+bb-plugin-pdf-preview:typecheck: cache miss, executing 26db38b42ee9911d
+bb-plugin-environment-project-checkout:typecheck: cache miss, executing a3cb43d7d0bda5ff
+bb-plugin-provider-pi:typecheck: cache miss, executing ed7666f48f5da812
+bb-plugin-side-chat:typecheck: cache miss, executing ac1c4e8d3cdc243e
+@bb/cli:typecheck: cache miss, executing 86a7eac75e81c280
+@bb/cli:build: cache hit, suppressing logs b74a3f051db28e76
+bb-plugin-automations:typecheck: cache miss, executing 3cb3f63db60f11d7
+bb-plugin-simple-notes:typecheck: cache miss, executing aad0a0c814197539
+bb-plugin-simple-notes:build: cache miss, executing 696dc12ee4d0639e
+bb-plugin-workflows:typecheck: cache miss, executing d23a8a77bfb467f1
+bb-plugin-simple-notes:prepare:bundled: cache hit, suppressing logs ef1a300518f00b4e
+bb-plugin-automations:prepare:bundled: cache hit, suppressing logs 31c9a7e6ef8a8c2b
+bb-plugin-account-pool:prepare:bundled: cache hit, suppressing logs 680ac81ec1b31160
+bb-plugin-ask-user-question:prepare:bundled: cache hit, suppressing logs 1a48cd45c0f72ada
+bb-plugin-browser-automation:prepare:bundled: cache hit, suppressing logs b8f23778fc1912c3
+bb-plugin-bb-guide:prepare:bundled: cache hit, suppressing logs 1668471f8cbade64
+bb-plugin-connect:prepare:bundled: cache hit, suppressing logs 996585e0b17a15a7
+bb-plugin-concurrency-limit:prepare:bundled: cache hit, suppressing logs 9382a1c56f8cc1bc
+bb-plugin-environment-git-worktree:prepare:bundled: cache hit, suppressing logs 0e5d8a7f176735c6
+bb-plugin-custom-instructions:prepare:bundled: cache hit, suppressing logs 39055b7155d2c69f
+bb-plugin-environment-project-checkout:prepare:bundled: cache hit, suppressing logs bb60885131978b96
+bb-plugin-github:prepare:bundled: cache hit, suppressing logs b45b2dcb5f01d288
+bb-plugin-plugin-api-tester:prepare:bundled: cache hit, suppressing logs cf6846b0d471c4d8
+bb-plugin-keep-awake:prepare:bundled: cache hit, suppressing logs b4f3b453ba950fe1
+bb-plugin-memory:prepare:bundled: cache hit, suppressing logs 0cd2fd7fb7c7f353
+bb-plugin-monaco-editor:prepare:bundled: cache hit, suppressing logs 46e4f3fbf17c7824
+bb-plugin-pdf-preview:prepare:bundled: cache hit, suppressing logs 03b7cfbc28261132
+bb-plugin-plugin-api-docs:prepare:bundled: cache hit, suppressing logs 9f99455799ce8ed7
+bb-plugin-provider-codex:prepare:bundled: cache hit, suppressing logs d53a7fdc70f82f9d
+bb-plugin-provider-acp:prepare:bundled: cache hit, suppressing logs de57a5ed56bdaa34
+bb-plugin-provider-retry:prepare:bundled: cache hit, suppressing logs 200f26ef79ae119a
+bb-plugin-provider-pi:prepare:bundled: cache hit, suppressing logs 0b1c1a3b346ae4b3
+bb-plugin-provider-usage:prepare:bundled: cache hit, suppressing logs 10e876fc5d14599f
+bb-plugin-theme-preview:prepare:bundled: cache hit, suppressing logs c7aea058846126a8
+bb-plugin-scheduled-send:prepare:bundled: cache hit, suppressing logs a8027931fa2ce636
+bb-plugin-workflows:prepare:bundled: cache hit, suppressing logs 2ef0425266a5d186
+bb-plugin-secrets:prepare:bundled: cache hit, suppressing logs b14508ff10f7d5a7
+bb-plugin-tasks:prepare:bundled: cache miss, executing 603699e068da0762
+bb-plugin-side-chat:prepare:bundled: cache hit, suppressing logs b9326ef687c49234
+bb-plugin-provider-claude-code:typecheck: cache miss, executing ad795f638ec8bfce
+bb-plugin-push-notifications:typecheck: cache miss, executing 04cb347b70eaf824
+bb-plugin-provider-claude-code:prepare:bundled: cache hit, suppressing logs ed19b2fa6252e609
+bb-plugin-push-notifications:prepare:bundled: cache hit, suppressing logs fdc5db134bf58a7b
+bb-plugin-environment-personal-workspace:typecheck: cache miss, executing ea84983f43ff2384
+bb-plugin-environment-personal-workspace:prepare:bundled: cache hit, suppressing logs 4799945f5a232aa6
+bb-plugin-inline-vis:typecheck: cache miss, executing ea82a78e1c2f7672
+bb-plugin-inline-vis:prepare:bundled: cache hit, suppressing logs 11b1e86c64de485b
+@bb/plugin-registry#typecheck:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-registry) C:\nvm4w\nodejs\pnpm.CMD run typecheck exited (1)
+
+ Tasks:    90 successful, 133 total
+Cached:    43 cached, 133 total
+  Time:    35.644s 
+Failed:    @bb/plugin-registry#typecheck
+
+ ERROR  run failed: command  exited (1)
+EXIT=1

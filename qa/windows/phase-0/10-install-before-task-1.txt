@@ -1,0 +1,1546 @@
+apps/desktop                             |  WARN  Unsupported platform: wanted: {"cpu":["any"],"os":["darwin","linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+packages/bb-app                          |  WARN  Unsupported platform: wanted: {"cpu":["any"],"os":["darwin","linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+Scope: all 95 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +2279
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 2279, reused 0, downloaded 0, added 0
+Progress: resolved 2279, reused 0, downloaded 1, added 0
+Progress: resolved 2279, reused 0, downloaded 12, added 12
+Progress: resolved 2279, reused 0, downloaded 13, added 12
+Progress: resolved 2279, reused 0, downloaded 24, added 24
+Progress: resolved 2279, reused 0, downloaded 25, added 25
+Progress: resolved 2279, reused 0, downloaded 26, added 26
+Progress: resolved 2279, reused 0, downloaded 27, added 26
+Progress: resolved 2279, reused 0, downloaded 31, added 31
+Progress: resolved 2279, reused 0, downloaded 36, added 40
+Progress: resolved 2279, reused 0, downloaded 47, added 53
+Progress: resolved 2279, reused 0, downloaded 48, added 53
+Progress: resolved 2279, reused 0, downloaded 56, added 62
+Progress: resolved 2279, reused 0, downloaded 58, added 64
+ WARN  GET https://registry.npmjs.org/vitest/-/vitest-4.1.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/msw/-/msw-2.12.14.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/strict-event-emitter/-/strict-event-emitter-0.5.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@types/node/-/node-24.12.4.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@open-draft/until/-/until-2.1.0.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@types/statuses/-/statuses-2.0.6.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/statuses/-/statuses-2.0.2.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/graphql/-/graphql-16.13.2.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-6.3.0.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/headers-polyfill/-/headers-polyfill-4.0.3.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@mswjs/interceptors/-/interceptors-0.41.3.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/rettime/-/rettime-0.10.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/tough-cookie/-/tough-cookie-6.0.1.tgz error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 2279, reused 0, downloaded 59, added 64
+Progress: resolved 2279, reused 0, downloaded 59, added 65
+Progress: resolved 2279, reused 0, downloaded 60, added 65
+Progress: resolved 2279, reused 0, downloaded 60, added 66
+
+   ╭──────────────────────────────────────────────────────────────────╮
+   │                                                                  │
+   │                Update available! 9.15.0 → 12.3.4.                │
+   │   Changelog: https://github.com/pnpm/pnpm/releases/tag/v12.3.4   │
+   │         Run "corepack install -g pnpm@12.3.4" to update.         │
+   │                                                                  │
+   ╰──────────────────────────────────────────────────────────────────╯
+
+Progress: resolved 2279, reused 0, downloaded 61, added 66
+Progress: resolved 2279, reused 0, downloaded 61, added 67
+ WARN  GET https://registry.npmjs.org/msw/-/msw-2.12.14.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/vitest/-/vitest-4.1.1.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/@open-draft/until/-/until-2.1.0.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/@mswjs/interceptors/-/interceptors-0.41.3.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/strict-event-emitter/-/strict-event-emitter-0.5.1.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/graphql/-/graphql-16.13.2.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/@types/node/-/node-24.12.4.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/headers-polyfill/-/headers-polyfill-4.0.3.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/@types/statuses/-/statuses-2.0.6.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/statuses/-/statuses-2.0.2.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-6.3.0.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/rettime/-/rettime-0.10.1.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+ WARN  GET https://registry.npmjs.org/tough-cookie/-/tough-cookie-6.0.1.tgz error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+Progress: resolved 2279, reused 0, downloaded 62, added 67
+Progress: resolved 2279, reused 0, downloaded 62, added 68
+Progress: resolved 2279, reused 0, downloaded 63, added 68
+Progress: resolved 2279, reused 0, downloaded 63, added 69
+Progress: resolved 2279, reused 0, downloaded 64, added 70
+Progress: resolved 2279, reused 0, downloaded 65, added 70
+Progress: resolved 2279, reused 0, downloaded 65, added 71
+Progress: resolved 2279, reused 0, downloaded 66, added 71
+Progress: resolved 2279, reused 0, downloaded 67, added 73
+Progress: resolved 2279, reused 0, downloaded 71, added 77
+Progress: resolved 2279, reused 0, downloaded 73, added 79
+Progress: resolved 2279, reused 0, downloaded 74, added 79
+Progress: resolved 2279, reused 0, downloaded 74, added 83
+Progress: resolved 2279, reused 0, downloaded 75, added 84
+Progress: resolved 2279, reused 0, downloaded 76, added 84
+Progress: resolved 2279, reused 0, downloaded 76, added 85
+Progress: resolved 2279, reused 0, downloaded 77, added 85
+Progress: resolved 2279, reused 0, downloaded 83, added 92
+Progress: resolved 2279, reused 0, downloaded 84, added 93
+Progress: resolved 2279, reused 0, downloaded 86, added 95
+Progress: resolved 2279, reused 0, downloaded 89, added 98
+Progress: resolved 2279, reused 0, downloaded 90, added 99
+Progress: resolved 2279, reused 0, downloaded 91, added 99
+Progress: resolved 2279, reused 0, downloaded 94, added 103
+Progress: resolved 2279, reused 0, downloaded 94, added 104
+Progress: resolved 2279, reused 0, downloaded 95, added 104
+Progress: resolved 2279, reused 0, downloaded 96, added 106
+Progress: resolved 2279, reused 0, downloaded 97, added 106
+Progress: resolved 2279, reused 0, downloaded 99, added 109
+Progress: resolved 2279, reused 0, downloaded 100, added 109
+Progress: resolved 2279, reused 0, downloaded 101, added 111
+Progress: resolved 2279, reused 0, downloaded 102, added 112
+Progress: resolved 2279, reused 0, downloaded 103, added 112
+Progress: resolved 2279, reused 0, downloaded 107, added 117
+Progress: resolved 2279, reused 0, downloaded 108, added 118
+Progress: resolved 2279, reused 0, downloaded 109, added 119
+Progress: resolved 2279, reused 0, downloaded 110, added 119
+Progress: resolved 2279, reused 0, downloaded 115, added 125
+Progress: resolved 2279, reused 0, downloaded 117, added 127
+Progress: resolved 2279, reused 0, downloaded 119, added 129
+Progress: resolved 2279, reused 0, downloaded 122, added 132
+Progress: resolved 2279, reused 0, downloaded 126, added 136
+Progress: resolved 2279, reused 0, downloaded 127, added 136
+Progress: resolved 2279, reused 0, downloaded 127, added 137
+Progress: resolved 2279, reused 0, downloaded 130, added 140
+Progress: resolved 2279, reused 0, downloaded 131, added 141
+Progress: resolved 2279, reused 0, downloaded 132, added 141
+Progress: resolved 2279, reused 0, downloaded 133, added 146
+Progress: resolved 2279, reused 0, downloaded 134, added 147
+Progress: resolved 2279, reused 0, downloaded 138, added 151
+Progress: resolved 2279, reused 0, downloaded 140, added 153
+Progress: resolved 2279, reused 0, downloaded 144, added 157
+Progress: resolved 2279, reused 0, downloaded 146, added 159
+Progress: resolved 2279, reused 0, downloaded 150, added 163
+Progress: resolved 2279, reused 0, downloaded 151, added 164
+Progress: resolved 2279, reused 0, downloaded 156, added 169
+Progress: resolved 2279, reused 0, downloaded 159, added 172
+Progress: resolved 2279, reused 0, downloaded 164, added 177
+Progress: resolved 2279, reused 0, downloaded 165, added 177
+Progress: resolved 2279, reused 0, downloaded 168, added 181
+Progress: resolved 2279, reused 0, downloaded 170, added 183
+Progress: resolved 2279, reused 0, downloaded 171, added 184
+Progress: resolved 2279, reused 0, downloaded 172, added 184
+Progress: resolved 2279, reused 0, downloaded 172, added 185
+Progress: resolved 2279, reused 0, downloaded 173, added 186
+Progress: resolved 2279, reused 0, downloaded 175, added 187
+Progress: resolved 2279, reused 0, downloaded 176, added 189
+Progress: resolved 2279, reused 0, downloaded 177, added 190
+Progress: resolved 2279, reused 0, downloaded 178, added 191
+Progress: resolved 2279, reused 0, downloaded 179, added 192
+Progress: resolved 2279, reused 0, downloaded 180, added 193
+Progress: resolved 2279, reused 0, downloaded 182, added 195
+Progress: resolved 2279, reused 0, downloaded 183, added 195
+Progress: resolved 2279, reused 0, downloaded 183, added 196
+Progress: resolved 2279, reused 0, downloaded 184, added 196
+Progress: resolved 2279, reused 0, downloaded 184, added 197
+Progress: resolved 2279, reused 0, downloaded 185, added 197
+Progress: resolved 2279, reused 0, downloaded 185, added 199
+Progress: resolved 2279, reused 0, downloaded 186, added 199
+Progress: resolved 2279, reused 0, downloaded 186, added 200
+Progress: resolved 2279, reused 0, downloaded 187, added 200
+Progress: resolved 2279, reused 0, downloaded 188, added 202
+Progress: resolved 2279, reused 0, downloaded 190, added 204
+Progress: resolved 2279, reused 0, downloaded 191, added 204
+Progress: resolved 2279, reused 0, downloaded 191, added 205
+Progress: resolved 2279, reused 0, downloaded 192, added 206
+Progress: resolved 2279, reused 0, downloaded 193, added 206
+Progress: resolved 2279, reused 0, downloaded 194, added 208
+Progress: resolved 2279, reused 0, downloaded 195, added 208
+Progress: resolved 2279, reused 0, downloaded 195, added 209
+Progress: resolved 2279, reused 0, downloaded 196, added 209
+Progress: resolved 2279, reused 0, downloaded 196, added 210
+Progress: resolved 2279, reused 0, downloaded 197, added 210
+Progress: resolved 2279, reused 0, downloaded 197, added 211
+Progress: resolved 2279, reused 0, downloaded 198, added 211
+Progress: resolved 2279, reused 0, downloaded 198, added 212
+Progress: resolved 2279, reused 0, downloaded 199, added 212
+Progress: resolved 2279, reused 0, downloaded 199, added 213
+Progress: resolved 2279, reused 0, downloaded 200, added 214
+Progress: resolved 2279, reused 0, downloaded 201, added 214
+Progress: resolved 2279, reused 0, downloaded 201, added 215
+Progress: resolved 2279, reused 0, downloaded 202, added 216
+Progress: resolved 2279, reused 0, downloaded 203, added 216
+Progress: resolved 2279, reused 0, downloaded 203, added 217
+Progress: resolved 2279, reused 0, downloaded 204, added 217
+Progress: resolved 2279, reused 0, downloaded 205, added 219
+Progress: resolved 2279, reused 0, downloaded 206, added 219
+Progress: resolved 2279, reused 0, downloaded 207, added 221
+Progress: resolved 2279, reused 0, downloaded 208, added 222
+Progress: resolved 2279, reused 0, downloaded 209, added 222
+Progress: resolved 2279, reused 0, downloaded 210, added 224
+Progress: resolved 2279, reused 0, downloaded 211, added 225
+Progress: resolved 2279, reused 0, downloaded 212, added 225
+Progress: resolved 2279, reused 0, downloaded 212, added 226
+Progress: resolved 2279, reused 0, downloaded 213, added 227
+Progress: resolved 2279, reused 0, downloaded 214, added 227
+Progress: resolved 2279, reused 0, downloaded 214, added 228
+Progress: resolved 2279, reused 0, downloaded 215, added 229
+Progress: resolved 2279, reused 0, downloaded 216, added 230
+Progress: resolved 2279, reused 0, downloaded 217, added 230
+Progress: resolved 2279, reused 0, downloaded 217, added 231
+Progress: resolved 2279, reused 0, downloaded 218, added 231
+Progress: resolved 2279, reused 0, downloaded 218, added 232
+Progress: resolved 2279, reused 0, downloaded 219, added 232
+Progress: resolved 2279, reused 0, downloaded 219, added 233
+Progress: resolved 2279, reused 0, downloaded 220, added 234
+Progress: resolved 2279, reused 0, downloaded 221, added 235
+Progress: resolved 2279, reused 0, downloaded 222, added 236
+Progress: resolved 2279, reused 0, downloaded 223, added 236
+Progress: resolved 2279, reused 0, downloaded 223, added 237
+Progress: resolved 2279, reused 0, downloaded 224, added 237
+Progress: resolved 2279, reused 0, downloaded 224, added 238
+Progress: resolved 2279, reused 0, downloaded 225, added 238
+Progress: resolved 2279, reused 0, downloaded 225, added 239
+Progress: resolved 2279, reused 0, downloaded 226, added 239
+Progress: resolved 2279, reused 0, downloaded 227, added 241
+Progress: resolved 2279, reused 0, downloaded 228, added 242
+Progress: resolved 2279, reused 0, downloaded 229, added 243
+Progress: resolved 2279, reused 0, downloaded 231, added 245
+Progress: resolved 2279, reused 0, downloaded 232, added 245
+Progress: resolved 2279, reused 0, downloaded 232, added 246
+Progress: resolved 2279, reused 0, downloaded 233, added 247
+Progress: resolved 2279, reused 0, downloaded 234, added 247
+Progress: resolved 2279, reused 0, downloaded 234, added 248
+Progress: resolved 2279, reused 0, downloaded 235, added 248
+Progress: resolved 2279, reused 0, downloaded 235, added 249
+Progress: resolved 2279, reused 0, downloaded 238, added 252
+Progress: resolved 2279, reused 0, downloaded 239, added 252
+Progress: resolved 2279, reused 0, downloaded 239, added 253
+Progress: resolved 2279, reused 0, downloaded 240, added 253
+Progress: resolved 2279, reused 0, downloaded 242, added 256
+Progress: resolved 2279, reused 0, downloaded 243, added 256
+Progress: resolved 2279, reused 0, downloaded 243, added 257
+Progress: resolved 2279, reused 0, downloaded 244, added 258
+Progress: resolved 2279, reused 0, downloaded 245, added 259
+Progress: resolved 2279, reused 0, downloaded 247, added 261
+Progress: resolved 2279, reused 0, downloaded 249, added 263
+Progress: resolved 2279, reused 0, downloaded 250, added 264
+Progress: resolved 2279, reused 0, downloaded 251, added 265
+Progress: resolved 2279, reused 0, downloaded 253, added 267
+Progress: resolved 2279, reused 0, downloaded 255, added 269
+Progress: resolved 2279, reused 0, downloaded 257, added 271
+Progress: resolved 2279, reused 0, downloaded 258, added 272
+Progress: resolved 2279, reused 0, downloaded 260, added 274
+Progress: resolved 2279, reused 0, downloaded 264, added 278
+Progress: resolved 2279, reused 0, downloaded 266, added 280
+Progress: resolved 2279, reused 0, downloaded 269, added 283
+Progress: resolved 2279, reused 0, downloaded 273, added 287
+Progress: resolved 2279, reused 0, downloaded 277, added 291
+Progress: resolved 2279, reused 0, downloaded 280, added 294
+Progress: resolved 2279, reused 0, downloaded 283, added 297
+Progress: resolved 2279, reused 0, downloaded 286, added 300
+Progress: resolved 2279, reused 0, downloaded 288, added 302
+Progress: resolved 2279, reused 0, downloaded 291, added 305
+Progress: resolved 2279, reused 0, downloaded 292, added 306
+Progress: resolved 2279, reused 0, downloaded 293, added 307
+Progress: resolved 2279, reused 0, downloaded 296, added 310
+Progress: resolved 2279, reused 0, downloaded 297, added 311
+Progress: resolved 2279, reused 0, downloaded 298, added 311
+Progress: resolved 2279, reused 0, downloaded 300, added 314
+Progress: resolved 2279, reused 0, downloaded 302, added 316
+Progress: resolved 2279, reused 0, downloaded 303, added 316
+Progress: resolved 2279, reused 0, downloaded 306, added 320
+Progress: resolved 2279, reused 0, downloaded 309, added 323
+Progress: resolved 2279, reused 0, downloaded 310, added 324
+Progress: resolved 2279, reused 0, downloaded 311, added 324
+Progress: resolved 2279, reused 0, downloaded 311, added 325
+Progress: resolved 2279, reused 0, downloaded 312, added 325
+Progress: resolved 2279, reused 0, downloaded 312, added 326
+Progress: resolved 2279, reused 0, downloaded 314, added 328
+Progress: resolved 2279, reused 0, downloaded 315, added 328
+Progress: resolved 2279, reused 0, downloaded 315, added 329
+Progress: resolved 2279, reused 0, downloaded 317, added 331
+Progress: resolved 2279, reused 0, downloaded 318, added 332
+Progress: resolved 2279, reused 0, downloaded 320, added 334
+Progress: resolved 2279, reused 0, downloaded 321, added 334
+Progress: resolved 2279, reused 0, downloaded 324, added 338
+Progress: resolved 2279, reused 0, downloaded 328, added 342
+Progress: resolved 2279, reused 0, downloaded 330, added 344
+Progress: resolved 2279, reused 0, downloaded 331, added 344
+Progress: resolved 2279, reused 0, downloaded 333, added 347
+Progress: resolved 2279, reused 0, downloaded 336, added 350
+Progress: resolved 2279, reused 0, downloaded 338, added 352
+Progress: resolved 2279, reused 0, downloaded 339, added 353
+Progress: resolved 2279, reused 0, downloaded 342, added 356
+Progress: resolved 2279, reused 0, downloaded 343, added 356
+Progress: resolved 2279, reused 0, downloaded 343, added 357
+Progress: resolved 2279, reused 0, downloaded 345, added 359
+Progress: resolved 2279, reused 0, downloaded 347, added 361
+Progress: resolved 2279, reused 0, downloaded 350, added 364
+Progress: resolved 2279, reused 0, downloaded 353, added 367
+Progress: resolved 2279, reused 0, downloaded 356, added 370
+Progress: resolved 2279, reused 0, downloaded 357, added 370
+Progress: resolved 2279, reused 0, downloaded 359, added 373
+Progress: resolved 2279, reused 0, downloaded 362, added 376
+Progress: resolved 2279, reused 0, downloaded 364, added 378
+Progress: resolved 2279, reused 0, downloaded 367, added 381
+Progress: resolved 2279, reused 0, downloaded 368, added 381
+Progress: resolved 2279, reused 0, downloaded 368, added 382
+Progress: resolved 2279, reused 0, downloaded 370, added 384
+Progress: resolved 2279, reused 0, downloaded 373, added 387
+Progress: resolved 2279, reused 0, downloaded 375, added 389
+Progress: resolved 2279, reused 0, downloaded 377, added 391
+Progress: resolved 2279, reused 0, downloaded 379, added 393
+Progress: resolved 2279, reused 0, downloaded 381, added 395
+Progress: resolved 2279, reused 0, downloaded 384, added 398
+Progress: resolved 2279, reused 0, downloaded 388, added 402
+Progress: resolved 2279, reused 0, downloaded 389, added 402
+Progress: resolved 2279, reused 0, downloaded 392, added 406
+Progress: resolved 2279, reused 0, downloaded 394, added 408
+Progress: resolved 2279, reused 0, downloaded 396, added 410
+Progress: resolved 2279, reused 0, downloaded 399, added 413
+Progress: resolved 2279, reused 0, downloaded 400, added 414
+Progress: resolved 2279, reused 0, downloaded 403, added 417
+Progress: resolved 2279, reused 0, downloaded 404, added 417
+Progress: resolved 2279, reused 0, downloaded 404, added 418
+Progress: resolved 2279, reused 0, downloaded 405, added 418
+Progress: resolved 2279, reused 0, downloaded 405, added 419
+Progress: resolved 2279, reused 0, downloaded 406, added 419
+Progress: resolved 2279, reused 0, downloaded 408, added 422
+Progress: resolved 2279, reused 0, downloaded 409, added 422
+Progress: resolved 2279, reused 0, downloaded 409, added 423
+Progress: resolved 2279, reused 0, downloaded 410, added 423
+Progress: resolved 2279, reused 0, downloaded 411, added 425
+Progress: resolved 2279, reused 0, downloaded 412, added 425
+Progress: resolved 2279, reused 0, downloaded 412, added 426
+Progress: resolved 2279, reused 0, downloaded 413, added 427
+Progress: resolved 2279, reused 0, downloaded 414, added 427
+Progress: resolved 2279, reused 0, downloaded 414, added 428
+Progress: resolved 2279, reused 0, downloaded 415, added 429
+Progress: resolved 2279, reused 0, downloaded 416, added 430
+Progress: resolved 2279, reused 0, downloaded 417, added 430
+Progress: resolved 2279, reused 0, downloaded 417, added 431
+Progress: resolved 2279, reused 0, downloaded 418, added 432
+Progress: resolved 2279, reused 0, downloaded 419, added 432
+Progress: resolved 2279, reused 0, downloaded 420, added 434
+Progress: resolved 2279, reused 0, downloaded 422, added 436
+Progress: resolved 2279, reused 0, downloaded 425, added 439
+Progress: resolved 2279, reused 0, downloaded 427, added 441
+Progress: resolved 2279, reused 0, downloaded 429, added 443
+Progress: resolved 2279, reused 0, downloaded 432, added 446
+Progress: resolved 2279, reused 0, downloaded 434, added 448
+Progress: resolved 2279, reused 0, downloaded 437, added 451
+Progress: resolved 2279, reused 0, downloaded 439, added 453
+Progress: resolved 2279, reused 0, downloaded 441, added 455
+Progress: resolved 2279, reused 0, downloaded 444, added 458
+Progress: resolved 2279, reused 0, downloaded 445, added 459
+Progress: resolved 2279, reused 0, downloaded 448, added 462
+Progress: resolved 2279, reused 0, downloaded 451, added 465
+Progress: resolved 2279, reused 0, downloaded 454, added 468
+Progress: resolved 2279, reused 0, downloaded 456, added 470
+Progress: resolved 2279, reused 0, downloaded 457, added 471
+Progress: resolved 2279, reused 0, downloaded 458, added 471
+Progress: resolved 2279, reused 0, downloaded 458, added 472
+Progress: resolved 2279, reused 0, downloaded 459, added 472
+Progress: resolved 2279, reused 0, downloaded 459, added 473
+Progress: resolved 2279, reused 0, downloaded 460, added 473
+Progress: resolved 2279, reused 0, downloaded 461, added 475
+Progress: resolved 2279, reused 0, downloaded 462, added 475
+Progress: resolved 2279, reused 0, downloaded 462, added 476
+Progress: resolved 2279, reused 0, downloaded 463, added 476
+Progress: resolved 2279, reused 0, downloaded 464, added 478
+Progress: resolved 2279, reused 0, downloaded 465, added 479
+Progress: resolved 2279, reused 0, downloaded 467, added 481
+Progress: resolved 2279, reused 0, downloaded 468, added 481
+Progress: resolved 2279, reused 0, downloaded 469, added 483
+Progress: resolved 2279, reused 0, downloaded 470, added 483
+Progress: resolved 2279, reused 0, downloaded 470, added 484
+Progress: resolved 2279, reused 0, downloaded 472, added 486
+Progress: resolved 2279, reused 0, downloaded 473, added 487
+Progress: resolved 2279, reused 0, downloaded 474, added 487
+Progress: resolved 2279, reused 0, downloaded 474, added 488
+Progress: resolved 2279, reused 0, downloaded 475, added 489
+Progress: resolved 2279, reused 0, downloaded 477, added 491
+Progress: resolved 2279, reused 0, downloaded 478, added 491
+Progress: resolved 2279, reused 0, downloaded 479, added 493
+Progress: resolved 2279, reused 0, downloaded 480, added 494
+Progress: resolved 2279, reused 0, downloaded 481, added 495
+Progress: resolved 2279, reused 0, downloaded 482, added 496
+Progress: resolved 2279, reused 0, downloaded 484, added 498
+Progress: resolved 2279, reused 0, downloaded 485, added 499
+Progress: resolved 2279, reused 0, downloaded 488, added 502
+Progress: resolved 2279, reused 0, downloaded 489, added 503
+Progress: resolved 2279, reused 0, downloaded 491, added 505
+Progress: resolved 2279, reused 0, downloaded 494, added 508
+Progress: resolved 2279, reused 0, downloaded 496, added 509
+Progress: resolved 2279, reused 0, downloaded 497, added 510
+Progress: resolved 2279, reused 0, downloaded 497, added 511
+Progress: resolved 2279, reused 0, downloaded 499, added 513
+Progress: resolved 2279, reused 0, downloaded 500, added 513
+Progress: resolved 2279, reused 0, downloaded 500, added 514
+Progress: resolved 2279, reused 0, downloaded 501, added 515
+Progress: resolved 2279, reused 0, downloaded 502, added 516
+Progress: resolved 2279, reused 0, downloaded 503, added 517
+Progress: resolved 2279, reused 0, downloaded 504, added 517
+Progress: resolved 2279, reused 0, downloaded 504, added 518
+Progress: resolved 2279, reused 0, downloaded 505, added 518
+Progress: resolved 2279, reused 0, downloaded 505, added 519
+Progress: resolved 2279, reused 0, downloaded 506, added 520
+Progress: resolved 2279, reused 0, downloaded 509, added 522
+Progress: resolved 2279, reused 0, downloaded 512, added 526
+Progress: resolved 2279, reused 0, downloaded 513, added 527
+Progress: resolved 2279, reused 0, downloaded 514, added 527
+Progress: resolved 2279, reused 0, downloaded 514, added 528
+Progress: resolved 2279, reused 0, downloaded 515, added 529
+Progress: resolved 2279, reused 0, downloaded 517, added 531
+Progress: resolved 2279, reused 0, downloaded 518, added 532
+Progress: resolved 2279, reused 0, downloaded 521, added 535
+Progress: resolved 2279, reused 0, downloaded 524, added 538
+Progress: resolved 2279, reused 0, downloaded 527, added 541
+Progress: resolved 2279, reused 0, downloaded 528, added 542
+Progress: resolved 2279, reused 0, downloaded 540, added 554
+Progress: resolved 2279, reused 0, downloaded 545, added 559
+Progress: resolved 2279, reused 0, downloaded 552, added 566
+Progress: resolved 2279, reused 0, downloaded 558, added 571
+Progress: resolved 2279, reused 0, downloaded 559, added 573
+Progress: resolved 2279, reused 0, downloaded 565, added 579
+Progress: resolved 2279, reused 0, downloaded 568, added 582
+Progress: resolved 2279, reused 0, downloaded 569, added 583
+Progress: resolved 2279, reused 0, downloaded 570, added 583
+Progress: resolved 2279, reused 0, downloaded 572, added 586
+Progress: resolved 2279, reused 0, downloaded 574, added 588
+Progress: resolved 2279, reused 0, downloaded 575, added 588
+Progress: resolved 2279, reused 0, downloaded 575, added 589
+Progress: resolved 2279, reused 0, downloaded 576, added 589
+Progress: resolved 2279, reused 0, downloaded 579, added 593
+Progress: resolved 2279, reused 0, downloaded 587, added 601
+Progress: resolved 2279, reused 0, downloaded 591, added 605
+Progress: resolved 2279, reused 0, downloaded 594, added 608
+Progress: resolved 2279, reused 0, downloaded 597, added 611
+Progress: resolved 2279, reused 0, downloaded 598, added 612
+Progress: resolved 2279, reused 0, downloaded 606, added 620
+Progress: resolved 2279, reused 0, downloaded 613, added 626
+Progress: resolved 2279, reused 0, downloaded 616, added 630
+Progress: resolved 2279, reused 0, downloaded 619, added 633
+Progress: resolved 2279, reused 0, downloaded 625, added 639
+Progress: resolved 2279, reused 0, downloaded 629, added 643
+Progress: resolved 2279, reused 0, downloaded 631, added 645
+Progress: resolved 2279, reused 0, downloaded 633, added 647
+Progress: resolved 2279, reused 0, downloaded 635, added 649
+Progress: resolved 2279, reused 0, downloaded 636, added 650
+Progress: resolved 2279, reused 0, downloaded 638, added 652
+Progress: resolved 2279, reused 0, downloaded 640, added 654
+Progress: resolved 2279, reused 0, downloaded 644, added 658
+Progress: resolved 2279, reused 0, downloaded 646, added 660
+Progress: resolved 2279, reused 0, downloaded 648, added 662
+Progress: resolved 2279, reused 0, downloaded 650, added 664
+Progress: resolved 2279, reused 0, downloaded 656, added 670
+Progress: resolved 2279, reused 0, downloaded 660, added 674
+Progress: resolved 2279, reused 0, downloaded 665, added 679
+Progress: resolved 2279, reused 0, downloaded 668, added 682
+Progress: resolved 2279, reused 0, downloaded 672, added 686
+Progress: resolved 2279, reused 0, downloaded 675, added 689
+Progress: resolved 2279, reused 0, downloaded 676, added 690
+Progress: resolved 2279, reused 0, downloaded 677, added 691
+Progress: resolved 2279, reused 0, downloaded 678, added 691
+Progress: resolved 2279, reused 0, downloaded 678, added 692
+Progress: resolved 2279, reused 0, downloaded 679, added 692
+Progress: resolved 2279, reused 0, downloaded 679, added 693
+Progress: resolved 2279, reused 0, downloaded 680, added 693
+Progress: resolved 2279, reused 0, downloaded 680, added 694
+Progress: resolved 2279, reused 0, downloaded 681, added 694
+Progress: resolved 2279, reused 0, downloaded 681, added 695
+Progress: resolved 2279, reused 0, downloaded 682, added 695
+Progress: resolved 2279, reused 0, downloaded 682, added 696
+Progress: resolved 2279, reused 0, downloaded 683, added 697
+Progress: resolved 2279, reused 0, downloaded 684, added 697
+Progress: resolved 2279, reused 0, downloaded 684, added 698
+Progress: resolved 2279, reused 0, downloaded 685, added 699
+Progress: resolved 2279, reused 0, downloaded 686, added 700
+Progress: resolved 2279, reused 0, downloaded 687, added 700
+Progress: resolved 2279, reused 0, downloaded 687, added 701
+Progress: resolved 2279, reused 0, downloaded 688, added 701
+Progress: resolved 2279, reused 0, downloaded 688, added 702
+Progress: resolved 2279, reused 0, downloaded 689, added 704
+Progress: resolved 2279, reused 0, downloaded 690, added 704
+Progress: resolved 2279, reused 0, downloaded 691, added 706
+Progress: resolved 2279, reused 0, downloaded 693, added 708
+Progress: resolved 2279, reused 0, downloaded 694, added 709
+Progress: resolved 2279, reused 0, downloaded 695, added 710
+Progress: resolved 2279, reused 0, downloaded 696, added 710
+Progress: resolved 2279, reused 0, downloaded 696, added 711
+Progress: resolved 2279, reused 0, downloaded 697, added 711
+Progress: resolved 2279, reused 0, downloaded 698, added 713
+Progress: resolved 2279, reused 0, downloaded 699, added 714
+Progress: resolved 2279, reused 0, downloaded 700, added 714
+Progress: resolved 2279, reused 0, downloaded 702, added 717
+Progress: resolved 2279, reused 0, downloaded 703, added 718
+Progress: resolved 2279, reused 0, downloaded 704, added 719
+Progress: resolved 2279, reused 0, downloaded 706, added 721
+Progress: resolved 2279, reused 0, downloaded 710, added 725
+Progress: resolved 2279, reused 0, downloaded 714, added 729
+Progress: resolved 2279, reused 0, downloaded 719, added 734
+Progress: resolved 2279, reused 0, downloaded 724, added 739
+Progress: resolved 2279, reused 0, downloaded 728, added 743
+Progress: resolved 2279, reused 0, downloaded 730, added 745
+Progress: resolved 2279, reused 0, downloaded 737, added 752
+Progress: resolved 2279, reused 0, downloaded 740, added 755
+Progress: resolved 2279, reused 0, downloaded 741, added 755
+Progress: resolved 2279, reused 0, downloaded 763, added 778
+Progress: resolved 2279, reused 0, downloaded 773, added 788
+Progress: resolved 2279, reused 0, downloaded 787, added 802
+Progress: resolved 2279, reused 0, downloaded 800, added 815
+Progress: resolved 2279, reused 0, downloaded 804, added 819
+Progress: resolved 2279, reused 0, downloaded 805, added 820
+Progress: resolved 2279, reused 0, downloaded 810, added 825
+Progress: resolved 2279, reused 0, downloaded 813, added 828
+Progress: resolved 2279, reused 0, downloaded 816, added 832
+Progress: resolved 2279, reused 0, downloaded 820, added 836
+Progress: resolved 2279, reused 0, downloaded 823, added 839
+Progress: resolved 2279, reused 0, downloaded 826, added 842
+Progress: resolved 2279, reused 0, downloaded 829, added 845
+Progress: resolved 2279, reused 0, downloaded 832, added 848
+Progress: resolved 2279, reused 0, downloaded 837, added 853
+Progress: resolved 2279, reused 0, downloaded 838, added 853
+Progress: resolved 2279, reused 0, downloaded 841, added 858
+Progress: resolved 2279, reused 0, downloaded 842, added 858
+Progress: resolved 2279, reused 0, downloaded 843, added 860
+Progress: resolved 2279, reused 0, downloaded 845, added 862
+Progress: resolved 2279, reused 0, downloaded 846, added 862
+Progress: resolved 2279, reused 0, downloaded 847, added 864
+Progress: resolved 2279, reused 0, downloaded 848, added 865
+Progress: resolved 2279, reused 0, downloaded 851, added 868
+Progress: resolved 2279, reused 0, downloaded 854, added 872
+Progress: resolved 2279, reused 0, downloaded 855, added 873
+Progress: resolved 2279, reused 0, downloaded 856, added 873
+Progress: resolved 2279, reused 0, downloaded 857, added 875
+Progress: resolved 2279, reused 0, downloaded 858, added 876
+Progress: resolved 2279, reused 0, downloaded 860, added 878
+Progress: resolved 2279, reused 0, downloaded 861, added 878
+Progress: resolved 2279, reused 0, downloaded 862, added 880
+Progress: resolved 2279, reused 0, downloaded 866, added 884
+Progress: resolved 2279, reused 0, downloaded 867, added 885
+Progress: resolved 2279, reused 0, downloaded 869, added 887
+Progress: resolved 2279, reused 0, downloaded 873, added 890
+Progress: resolved 2279, reused 0, downloaded 877, added 894
+Progress: resolved 2279, reused 0, downloaded 885, added 902
+Progress: resolved 2279, reused 0, downloaded 892, added 909
+Progress: resolved 2279, reused 0, downloaded 897, added 914
+Progress: resolved 2279, reused 0, downloaded 900, added 918
+Progress: resolved 2279, reused 0, downloaded 901, added 919
+Progress: resolved 2279, reused 0, downloaded 902, added 920
+Progress: resolved 2279, reused 0, downloaded 903, added 920
+Progress: resolved 2279, reused 0, downloaded 904, added 922
+Progress: resolved 2279, reused 0, downloaded 905, added 923
+Progress: resolved 2279, reused 0, downloaded 906, added 924
+Progress: resolved 2279, reused 0, downloaded 907, added 924
+Progress: resolved 2279, reused 0, downloaded 907, added 925
+Progress: resolved 2279, reused 0, downloaded 908, added 926
+Progress: resolved 2279, reused 0, downloaded 910, added 928
+Progress: resolved 2279, reused 0, downloaded 912, added 930
+Progress: resolved 2279, reused 0, downloaded 914, added 932
+Progress: resolved 2279, reused 0, downloaded 915, added 932
+Progress: resolved 2279, reused 0, downloaded 915, added 933
+Progress: resolved 2279, reused 0, downloaded 916, added 933
+Progress: resolved 2279, reused 0, downloaded 916, added 934
+Progress: resolved 2279, reused 0, downloaded 917, added 934
+Progress: resolved 2279, reused 0, downloaded 918, added 936
+Progress: resolved 2279, reused 0, downloaded 919, added 937
+Progress: resolved 2279, reused 0, downloaded 920, added 938
+Progress: resolved 2279, reused 0, downloaded 921, added 938
+Progress: resolved 2279, reused 0, downloaded 923, added 941
+Progress: resolved 2279, reused 0, downloaded 924, added 941
+Progress: resolved 2279, reused 0, downloaded 926, added 944
+Progress: resolved 2279, reused 0, downloaded 927, added 944
+Progress: resolved 2279, reused 0, downloaded 929, added 947
+Progress: resolved 2279, reused 0, downloaded 930, added 949
+Progress: resolved 2279, reused 0, downloaded 932, added 951
+Progress: resolved 2279, reused 0, downloaded 935, added 954
+Progress: resolved 2279, reused 0, downloaded 937, added 956
+Progress: resolved 2279, reused 0, downloaded 939, added 959
+Progress: resolved 2279, reused 0, downloaded 940, added 960
+Progress: resolved 2279, reused 0, downloaded 942, added 963
+Progress: resolved 2279, reused 0, downloaded 945, added 966
+Progress: resolved 2279, reused 0, downloaded 947, added 968
+Progress: resolved 2279, reused 0, downloaded 948, added 969
+Progress: resolved 2279, reused 0, downloaded 951, added 973
+Progress: resolved 2279, reused 0, downloaded 952, added 974
+Progress: resolved 2279, reused 0, downloaded 953, added 975
+Progress: resolved 2279, reused 0, downloaded 954, added 976
+Progress: resolved 2279, reused 0, downloaded 955, added 976
+Progress: resolved 2279, reused 0, downloaded 956, added 978
+Progress: resolved 2279, reused 0, downloaded 957, added 979
+Progress: resolved 2279, reused 0, downloaded 959, added 981
+Progress: resolved 2279, reused 0, downloaded 960, added 982
+Progress: resolved 2279, reused 0, downloaded 961, added 982
+Progress: resolved 2279, reused 0, downloaded 963, added 985
+Progress: resolved 2279, reused 0, downloaded 964, added 986
+Progress: resolved 2279, reused 0, downloaded 965, added 986
+Progress: resolved 2279, reused 0, downloaded 965, added 987
+Progress: resolved 2279, reused 0, downloaded 969, added 991
+Progress: resolved 2279, reused 0, downloaded 970, added 992
+Progress: resolved 2279, reused 0, downloaded 971, added 992
+Progress: resolved 2279, reused 0, downloaded 972, added 995
+Progress: resolved 2279, reused 0, downloaded 973, added 995
+Progress: resolved 2279, reused 0, downloaded 973, added 996
+Progress: resolved 2279, reused 0, downloaded 974, added 997
+Progress: resolved 2279, reused 0, downloaded 975, added 998
+Progress: resolved 2279, reused 0, downloaded 976, added 998
+Progress: resolved 2279, reused 0, downloaded 976, added 999
+Progress: resolved 2279, reused 0, downloaded 978, added 1001
+Progress: resolved 2279, reused 0, downloaded 979, added 1001
+Progress: resolved 2279, reused 0, downloaded 979, added 1002
+Progress: resolved 2279, reused 0, downloaded 980, added 1003
+Progress: resolved 2279, reused 0, downloaded 981, added 1003
+Progress: resolved 2279, reused 0, downloaded 982, added 1005
+Progress: resolved 2279, reused 0, downloaded 983, added 1006
+Progress: resolved 2279, reused 0, downloaded 984, added 1006
+Progress: resolved 2279, reused 0, downloaded 985, added 1008
+Progress: resolved 2279, reused 0, downloaded 987, added 1010
+Progress: resolved 2279, reused 0, downloaded 988, added 1010
+Progress: resolved 2279, reused 0, downloaded 989, added 1012
+Progress: resolved 2279, reused 0, downloaded 990, added 1012
+Progress: resolved 2279, reused 0, downloaded 990, added 1013
+Progress: resolved 2279, reused 0, downloaded 991, added 1014
+Progress: resolved 2279, reused 0, downloaded 993, added 1016
+Progress: resolved 2279, reused 0, downloaded 994, added 1017
+Progress: resolved 2279, reused 0, downloaded 995, added 1018
+Progress: resolved 2279, reused 0, downloaded 996, added 1018
+Progress: resolved 2279, reused 0, downloaded 997, added 1020
+Progress: resolved 2279, reused 0, downloaded 998, added 1021
+Progress: resolved 2279, reused 0, downloaded 1002, added 1025
+Progress: resolved 2279, reused 0, downloaded 1005, added 1028
+Progress: resolved 2279, reused 0, downloaded 1009, added 1032
+Progress: resolved 2279, reused 0, downloaded 1012, added 1035
+Progress: resolved 2279, reused 0, downloaded 1014, added 1037
+Progress: resolved 2279, reused 0, downloaded 1018, added 1041
+Progress: resolved 2279, reused 0, downloaded 1023, added 1046
+Progress: resolved 2279, reused 0, downloaded 1028, added 1051
+Progress: resolved 2279, reused 0, downloaded 1031, added 1054
+Progress: resolved 2279, reused 0, downloaded 1032, added 1054
+Progress: resolved 2279, reused 0, downloaded 1034, added 1057
+Progress: resolved 2279, reused 0, downloaded 1037, added 1060
+Progress: resolved 2279, reused 0, downloaded 1040, added 1063
+Progress: resolved 2279, reused 0, downloaded 1043, added 1066
+Progress: resolved 2279, reused 0, downloaded 1046, added 1069
+Progress: resolved 2279, reused 0, downloaded 1049, added 1072
+Progress: resolved 2279, reused 0, downloaded 1050, added 1073
+Progress: resolved 2279, reused 0, downloaded 1051, added 1073
+Progress: resolved 2279, reused 0, downloaded 1055, added 1078
+Progress: resolved 2279, reused 0, downloaded 1056, added 1079
+Progress: resolved 2279, reused 0, downloaded 1057, added 1079
+Progress: resolved 2279, reused 0, downloaded 1059, added 1082
+Progress: resolved 2279, reused 0, downloaded 1061, added 1084
+Progress: resolved 2279, reused 0, downloaded 1064, added 1087
+Progress: resolved 2279, reused 0, downloaded 1066, added 1089
+Progress: resolved 2279, reused 0, downloaded 1067, added 1089
+Progress: resolved 2279, reused 0, downloaded 1067, added 1090
+Progress: resolved 2279, reused 0, downloaded 1069, added 1092
+Progress: resolved 2279, reused 0, downloaded 1073, added 1096
+Progress: resolved 2279, reused 0, downloaded 1074, added 1097
+Progress: resolved 2279, reused 0, downloaded 1076, added 1099
+Progress: resolved 2279, reused 0, downloaded 1077, added 1100
+Progress: resolved 2279, reused 0, downloaded 1078, added 1100
+Progress: resolved 2279, reused 0, downloaded 1079, added 1102
+Progress: resolved 2279, reused 0, downloaded 1082, added 1105
+Progress: resolved 2279, reused 0, downloaded 1086, added 1109
+Progress: resolved 2279, reused 0, downloaded 1087, added 1110
+Progress: resolved 2279, reused 0, downloaded 1088, added 1111
+Progress: resolved 2279, reused 0, downloaded 1089, added 1111
+Progress: resolved 2279, reused 0, downloaded 1089, added 1112
+Progress: resolved 2279, reused 0, downloaded 1090, added 1113
+Progress: resolved 2279, reused 0, downloaded 1091, added 1114
+Progress: resolved 2279, reused 0, downloaded 1092, added 1114
+Progress: resolved 2279, reused 0, downloaded 1094, added 1117
+Progress: resolved 2279, reused 0, downloaded 1095, added 1118
+Progress: resolved 2279, reused 0, downloaded 1096, added 1118
+Progress: resolved 2279, reused 0, downloaded 1097, added 1120
+Progress: resolved 2279, reused 0, downloaded 1099, added 1122
+Progress: resolved 2279, reused 0, downloaded 1100, added 1123
+Progress: resolved 2279, reused 0, downloaded 1101, added 1123
+Progress: resolved 2279, reused 0, downloaded 1102, added 1125
+Progress: resolved 2279, reused 0, downloaded 1104, added 1127
+Progress: resolved 2279, reused 0, downloaded 1106, added 1129
+Progress: resolved 2279, reused 0, downloaded 1108, added 1131
+Progress: resolved 2279, reused 0, downloaded 1111, added 1134
+Progress: resolved 2279, reused 0, downloaded 1113, added 1136
+Progress: resolved 2279, reused 0, downloaded 1117, added 1140
+Progress: resolved 2279, reused 0, downloaded 1119, added 1142
+Progress: resolved 2279, reused 0, downloaded 1120, added 1143
+Progress: resolved 2279, reused 0, downloaded 1123, added 1146
+Progress: resolved 2279, reused 0, downloaded 1126, added 1149
+Progress: resolved 2279, reused 0, downloaded 1134, added 1157
+Progress: resolved 2279, reused 0, downloaded 1135, added 1158
+Progress: resolved 2279, reused 0, downloaded 1136, added 1158
+Progress: resolved 2279, reused 0, downloaded 1142, added 1165
+Progress: resolved 2279, reused 0, downloaded 1147, added 1170
+Progress: resolved 2279, reused 0, downloaded 1148, added 1170
+Progress: resolved 2279, reused 0, downloaded 1151, added 1174
+Progress: resolved 2279, reused 0, downloaded 1156, added 1179
+Progress: resolved 2279, reused 0, downloaded 1157, added 1180
+Progress: resolved 2279, reused 0, downloaded 1158, added 1181
+Progress: resolved 2279, reused 0, downloaded 1160, added 1183
+Progress: resolved 2279, reused 0, downloaded 1161, added 1183
+Progress: resolved 2279, reused 0, downloaded 1161, added 1184
+Progress: resolved 2279, reused 0, downloaded 1162, added 1184
+Progress: resolved 2279, reused 0, downloaded 1167, added 1190
+Progress: resolved 2279, reused 0, downloaded 1168, added 1190
+Progress: resolved 2279, reused 0, downloaded 1169, added 1192
+Progress: resolved 2279, reused 0, downloaded 1172, added 1195
+Progress: resolved 2279, reused 0, downloaded 1176, added 1199
+Progress: resolved 2279, reused 0, downloaded 1180, added 1203
+Progress: resolved 2279, reused 0, downloaded 1183, added 1206
+Progress: resolved 2279, reused 0, downloaded 1184, added 1207
+Progress: resolved 2279, reused 0, downloaded 1185, added 1209
+Progress: resolved 2279, reused 0, downloaded 1186, added 1210
+Progress: resolved 2279, reused 0, downloaded 1187, added 1210
+Progress: resolved 2279, reused 0, downloaded 1189, added 1213
+Progress: resolved 2279, reused 0, downloaded 1190, added 1214
+Progress: resolved 2279, reused 0, downloaded 1191, added 1215
+Progress: resolved 2279, reused 0, downloaded 1193, added 1217
+Progress: resolved 2279, reused 0, downloaded 1195, added 1219
+Progress: resolved 2279, reused 0, downloaded 1198, added 1222
+Progress: resolved 2279, reused 0, downloaded 1201, added 1225
+Progress: resolved 2279, reused 0, downloaded 1202, added 1225
+Progress: resolved 2279, reused 0, downloaded 1202, added 1226
+Progress: resolved 2279, reused 0, downloaded 1203, added 1227
+Progress: resolved 2279, reused 0, downloaded 1205, added 1229
+Progress: resolved 2279, reused 0, downloaded 1208, added 1232
+Progress: resolved 2279, reused 0, downloaded 1209, added 1233
+Progress: resolved 2279, reused 0, downloaded 1211, added 1235
+Progress: resolved 2279, reused 0, downloaded 1212, added 1236
+Progress: resolved 2279, reused 0, downloaded 1215, added 1239
+Progress: resolved 2279, reused 0, downloaded 1217, added 1241
+Progress: resolved 2279, reused 0, downloaded 1219, added 1243
+Progress: resolved 2279, reused 0, downloaded 1221, added 1245
+Progress: resolved 2279, reused 0, downloaded 1225, added 1249
+Progress: resolved 2279, reused 0, downloaded 1226, added 1250
+Progress: resolved 2279, reused 0, downloaded 1227, added 1251
+Progress: resolved 2279, reused 0, downloaded 1228, added 1251
+Progress: resolved 2279, reused 0, downloaded 1228, added 1252
+Progress: resolved 2279, reused 0, downloaded 1229, added 1253
+Progress: resolved 2279, reused 0, downloaded 1230, added 1253
+Progress: resolved 2279, reused 0, downloaded 1231, added 1255
+Progress: resolved 2279, reused 0, downloaded 1232, added 1255
+Progress: resolved 2279, reused 0, downloaded 1232, added 1256
+Progress: resolved 2279, reused 0, downloaded 1234, added 1258
+Progress: resolved 2279, reused 0, downloaded 1235, added 1259
+Progress: resolved 2279, reused 0, downloaded 1237, added 1261
+Progress: resolved 2279, reused 0, downloaded 1239, added 1263
+Progress: resolved 2279, reused 0, downloaded 1243, added 1266
+Progress: resolved 2279, reused 0, downloaded 1245, added 1269
+Progress: resolved 2279, reused 0, downloaded 1249, added 1273
+Progress: resolved 2279, reused 0, downloaded 1251, added 1275
+Progress: resolved 2279, reused 0, downloaded 1252, added 1276
+Progress: resolved 2279, reused 0, downloaded 1254, added 1278
+Progress: resolved 2279, reused 0, downloaded 1257, added 1281
+Progress: resolved 2279, reused 0, downloaded 1259, added 1283
+Progress: resolved 2279, reused 0, downloaded 1264, added 1288
+Progress: resolved 2279, reused 0, downloaded 1266, added 1290
+Progress: resolved 2279, reused 0, downloaded 1267, added 1291
+Progress: resolved 2279, reused 0, downloaded 1268, added 1291
+Progress: resolved 2279, reused 0, downloaded 1269, added 1293
+Progress: resolved 2279, reused 0, downloaded 1272, added 1296
+Progress: resolved 2279, reused 0, downloaded 1273, added 1296
+Progress: resolved 2279, reused 0, downloaded 1275, added 1299
+Progress: resolved 2279, reused 0, downloaded 1276, added 1300
+Progress: resolved 2279, reused 0, downloaded 1277, added 1301
+Progress: resolved 2279, reused 0, downloaded 1278, added 1301
+Progress: resolved 2279, reused 0, downloaded 1279, added 1303
+Progress: resolved 2279, reused 0, downloaded 1281, added 1305
+Progress: resolved 2279, reused 0, downloaded 1283, added 1307
+Progress: resolved 2279, reused 0, downloaded 1287, added 1311
+Progress: resolved 2279, reused 0, downloaded 1288, added 1312
+Progress: resolved 2279, reused 0, downloaded 1289, added 1312
+Progress: resolved 2279, reused 0, downloaded 1289, added 1313
+Progress: resolved 2279, reused 0, downloaded 1290, added 1313
+Progress: resolved 2279, reused 0, downloaded 1292, added 1316
+Progress: resolved 2279, reused 0, downloaded 1293, added 1317
+Progress: resolved 2279, reused 0, downloaded 1297, added 1321
+Progress: resolved 2279, reused 0, downloaded 1300, added 1324
+Progress: resolved 2279, reused 0, downloaded 1302, added 1326
+Progress: resolved 2279, reused 0, downloaded 1304, added 1328
+Progress: resolved 2279, reused 0, downloaded 1307, added 1331
+Progress: resolved 2279, reused 0, downloaded 1308, added 1332
+Progress: resolved 2279, reused 0, downloaded 1311, added 1335
+Progress: resolved 2279, reused 0, downloaded 1312, added 1336
+Progress: resolved 2279, reused 0, downloaded 1313, added 1337
+Progress: resolved 2279, reused 0, downloaded 1314, added 1338
+Progress: resolved 2279, reused 0, downloaded 1316, added 1340
+Progress: resolved 2279, reused 0, downloaded 1317, added 1341
+Progress: resolved 2279, reused 0, downloaded 1320, added 1344
+Progress: resolved 2279, reused 0, downloaded 1322, added 1346
+Progress: resolved 2279, reused 0, downloaded 1323, added 1347
+Progress: resolved 2279, reused 0, downloaded 1326, added 1350
+Progress: resolved 2279, reused 0, downloaded 1327, added 1350
+Progress: resolved 2279, reused 0, downloaded 1329, added 1353
+Progress: resolved 2279, reused 0, downloaded 1330, added 1353
+Progress: resolved 2279, reused 0, downloaded 1333, added 1357
+Progress: resolved 2279, reused 0, downloaded 1334, added 1358
+Progress: resolved 2279, reused 0, downloaded 1338, added 1362
+Progress: resolved 2279, reused 0, downloaded 1339, added 1363
+Progress: resolved 2279, reused 0, downloaded 1340, added 1363
+Progress: resolved 2279, reused 0, downloaded 1348, added 1371
+Progress: resolved 2279, reused 0, downloaded 1349, added 1373
+Progress: resolved 2279, reused 0, downloaded 1354, added 1378
+Progress: resolved 2279, reused 0, downloaded 1355, added 1379
+Progress: resolved 2279, reused 0, downloaded 1357, added 1381
+Progress: resolved 2279, reused 0, downloaded 1359, added 1383
+Progress: resolved 2279, reused 0, downloaded 1362, added 1386
+Progress: resolved 2279, reused 0, downloaded 1364, added 1388
+Progress: resolved 2279, reused 0, downloaded 1366, added 1390
+Progress: resolved 2279, reused 0, downloaded 1368, added 1391
+Progress: resolved 2279, reused 0, downloaded 1372, added 1396
+Progress: resolved 2279, reused 0, downloaded 1375, added 1399
+Progress: resolved 2279, reused 0, downloaded 1378, added 1402
+Progress: resolved 2279, reused 0, downloaded 1379, added 1402
+Progress: resolved 2279, reused 0, downloaded 1380, added 1404
+Progress: resolved 2279, reused 0, downloaded 1382, added 1406
+Progress: resolved 2279, reused 0, downloaded 1384, added 1408
+Progress: resolved 2279, reused 0, downloaded 1385, added 1409
+Progress: resolved 2279, reused 0, downloaded 1387, added 1411
+Progress: resolved 2279, reused 0, downloaded 1393, added 1417
+Progress: resolved 2279, reused 0, downloaded 1396, added 1420
+Progress: resolved 2279, reused 0, downloaded 1398, added 1422
+Progress: resolved 2279, reused 0, downloaded 1399, added 1423
+Progress: resolved 2279, reused 0, downloaded 1403, added 1427
+Progress: resolved 2279, reused 0, downloaded 1404, added 1428
+Progress: resolved 2279, reused 0, downloaded 1405, added 1429
+Progress: resolved 2279, reused 0, downloaded 1407, added 1431
+Progress: resolved 2279, reused 0, downloaded 1408, added 1431
+Progress: resolved 2279, reused 0, downloaded 1410, added 1434
+Progress: resolved 2279, reused 0, downloaded 1413, added 1437
+Progress: resolved 2279, reused 0, downloaded 1416, added 1440
+Progress: resolved 2279, reused 0, downloaded 1417, added 1441
+Progress: resolved 2279, reused 0, downloaded 1420, added 1444
+Progress: resolved 2279, reused 0, downloaded 1421, added 1445
+Progress: resolved 2279, reused 0, downloaded 1423, added 1447
+Progress: resolved 2279, reused 0, downloaded 1425, added 1448
+Progress: resolved 2279, reused 0, downloaded 1425, added 1449
+Progress: resolved 2279, reused 0, downloaded 1426, added 1450
+Progress: resolved 2279, reused 0, downloaded 1427, added 1450
+Progress: resolved 2279, reused 0, downloaded 1427, added 1451
+Progress: resolved 2279, reused 0, downloaded 1428, added 1452
+Progress: resolved 2279, reused 0, downloaded 1429, added 1452
+Progress: resolved 2279, reused 0, downloaded 1430, added 1454
+Progress: resolved 2279, reused 0, downloaded 1432, added 1455
+Progress: resolved 2279, reused 0, downloaded 1434, added 1458
+Progress: resolved 2279, reused 0, downloaded 1435, added 1458
+Progress: resolved 2279, reused 0, downloaded 1435, added 1459
+Progress: resolved 2279, reused 0, downloaded 1436, added 1459
+Progress: resolved 2279, reused 0, downloaded 1437, added 1461
+Progress: resolved 2279, reused 0, downloaded 1438, added 1461
+Progress: resolved 2279, reused 0, downloaded 1438, added 1462
+Progress: resolved 2279, reused 0, downloaded 1439, added 1462
+Progress: resolved 2279, reused 0, downloaded 1440, added 1464
+Progress: resolved 2279, reused 0, downloaded 1441, added 1464
+Progress: resolved 2279, reused 0, downloaded 1441, added 1465
+Progress: resolved 2279, reused 0, downloaded 1442, added 1465
+Progress: resolved 2279, reused 0, downloaded 1443, added 1467
+Progress: resolved 2279, reused 0, downloaded 1444, added 1467
+Progress: resolved 2279, reused 0, downloaded 1446, added 1470
+Progress: resolved 2279, reused 0, downloaded 1447, added 1470
+Progress: resolved 2279, reused 0, downloaded 1448, added 1472
+Progress: resolved 2279, reused 0, downloaded 1449, added 1473
+Progress: resolved 2279, reused 0, downloaded 1450, added 1473
+Progress: resolved 2279, reused 0, downloaded 1450, added 1474
+Progress: resolved 2279, reused 0, downloaded 1451, added 1474
+Progress: resolved 2279, reused 0, downloaded 1451, added 1475
+Progress: resolved 2279, reused 0, downloaded 1452, added 1476
+Progress: resolved 2279, reused 0, downloaded 1453, added 1476
+Progress: resolved 2279, reused 0, downloaded 1455, added 1479
+Progress: resolved 2279, reused 0, downloaded 1456, added 1479
+Progress: resolved 2279, reused 0, downloaded 1459, added 1483
+Progress: resolved 2279, reused 0, downloaded 1461, added 1485
+Progress: resolved 2279, reused 0, downloaded 1462, added 1486
+Progress: resolved 2279, reused 0, downloaded 1463, added 1486
+Progress: resolved 2279, reused 0, downloaded 1466, added 1489
+Progress: resolved 2279, reused 0, downloaded 1466, added 1490
+Progress: resolved 2279, reused 0, downloaded 1467, added 1490
+Progress: resolved 2279, reused 0, downloaded 1467, added 1491
+Progress: resolved 2279, reused 0, downloaded 1468, added 1491
+Progress: resolved 2279, reused 0, downloaded 1468, added 1492
+Progress: resolved 2279, reused 0, downloaded 1469, added 1492
+Progress: resolved 2279, reused 0, downloaded 1469, added 1493
+Progress: resolved 2279, reused 0, downloaded 1470, added 1493
+Progress: resolved 2279, reused 0, downloaded 1471, added 1495
+Progress: resolved 2279, reused 0, downloaded 1472, added 1495
+Progress: resolved 2279, reused 0, downloaded 1472, added 1496
+Progress: resolved 2279, reused 0, downloaded 1473, added 1497
+Progress: resolved 2279, reused 0, downloaded 1474, added 1497
+Progress: resolved 2279, reused 0, downloaded 1474, added 1498
+Progress: resolved 2279, reused 0, downloaded 1475, added 1498
+Progress: resolved 2279, reused 0, downloaded 1475, added 1499
+Progress: resolved 2279, reused 0, downloaded 1476, added 1499
+Progress: resolved 2279, reused 0, downloaded 1476, added 1500
+Progress: resolved 2279, reused 0, downloaded 1477, added 1500
+Progress: resolved 2279, reused 0, downloaded 1477, added 1501
+Progress: resolved 2279, reused 0, downloaded 1478, added 1501
+Progress: resolved 2279, reused 0, downloaded 1479, added 1503
+Progress: resolved 2279, reused 0, downloaded 1481, added 1505
+Progress: resolved 2279, reused 0, downloaded 1483, added 1507
+Progress: resolved 2279, reused 0, downloaded 1484, added 1508
+Progress: resolved 2279, reused 0, downloaded 1485, added 1508
+Progress: resolved 2279, reused 0, downloaded 1488, added 1512
+Progress: resolved 2279, reused 0, downloaded 1489, added 1513
+Progress: resolved 2279, reused 0, downloaded 1491, added 1515
+Progress: resolved 2279, reused 0, downloaded 1492, added 1515
+Progress: resolved 2279, reused 0, downloaded 1493, added 1517
+Progress: resolved 2279, reused 0, downloaded 1494, added 1517
+Progress: resolved 2279, reused 0, downloaded 1496, added 1520
+Progress: resolved 2279, reused 0, downloaded 1498, added 1522
+Progress: resolved 2279, reused 0, downloaded 1500, added 1524
+Progress: resolved 2279, reused 0, downloaded 1501, added 1525
+Progress: resolved 2279, reused 0, downloaded 1502, added 1525
+Progress: resolved 2279, reused 0, downloaded 1502, added 1526
+Progress: resolved 2279, reused 0, downloaded 1503, added 1526
+Progress: resolved 2279, reused 0, downloaded 1503, added 1527
+Progress: resolved 2279, reused 0, downloaded 1504, added 1527
+Progress: resolved 2279, reused 0, downloaded 1505, added 1529
+Progress: resolved 2279, reused 0, downloaded 1506, added 1530
+Progress: resolved 2279, reused 0, downloaded 1507, added 1530
+Progress: resolved 2279, reused 0, downloaded 1509, added 1533
+Progress: resolved 2279, reused 0, downloaded 1510, added 1534
+Progress: resolved 2279, reused 0, downloaded 1511, added 1535
+Progress: resolved 2279, reused 0, downloaded 1512, added 1536
+Progress: resolved 2279, reused 0, downloaded 1513, added 1537
+Progress: resolved 2279, reused 0, downloaded 1514, added 1537
+Progress: resolved 2279, reused 0, downloaded 1515, added 1539
+Progress: resolved 2279, reused 0, downloaded 1516, added 1539
+Progress: resolved 2279, reused 0, downloaded 1516, added 1540
+Progress: resolved 2279, reused 0, downloaded 1517, added 1540
+Progress: resolved 2279, reused 0, downloaded 1518, added 1542
+Progress: resolved 2279, reused 0, downloaded 1519, added 1543
+Progress: resolved 2279, reused 0, downloaded 1520, added 1543
+Progress: resolved 2279, reused 0, downloaded 1521, added 1545
+Progress: resolved 2279, reused 0, downloaded 1522, added 1545
+Progress: resolved 2279, reused 0, downloaded 1523, added 1547
+Progress: resolved 2279, reused 0, downloaded 1525, added 1549
+Progress: resolved 2279, reused 0, downloaded 1527, added 1551
+Progress: resolved 2279, reused 0, downloaded 1528, added 1552
+Progress: resolved 2279, reused 0, downloaded 1531, added 1555
+Progress: resolved 2279, reused 0, downloaded 1533, added 1557
+Progress: resolved 2279, reused 0, downloaded 1535, added 1559
+Progress: resolved 2279, reused 0, downloaded 1538, added 1562
+Progress: resolved 2279, reused 0, downloaded 1539, added 1563
+Progress: resolved 2279, reused 0, downloaded 1540, added 1564
+Progress: resolved 2279, reused 0, downloaded 1545, added 1569
+Progress: resolved 2279, reused 0, downloaded 1546, added 1570
+Progress: resolved 2279, reused 0, downloaded 1548, added 1572
+Progress: resolved 2279, reused 0, downloaded 1552, added 1575
+Progress: resolved 2279, reused 0, downloaded 1561, added 1584
+Progress: resolved 2279, reused 0, downloaded 1563, added 1586
+Progress: resolved 2279, reused 0, downloaded 1565, added 1588
+Progress: resolved 2279, reused 0, downloaded 1566, added 1588
+Progress: resolved 2279, reused 0, downloaded 1567, added 1589
+Progress: resolved 2279, reused 0, downloaded 1567, added 1590
+Progress: resolved 2279, reused 0, downloaded 1567, added 1591
+Progress: resolved 2279, reused 0, downloaded 1568, added 1591
+Progress: resolved 2279, reused 0, downloaded 1569, added 1593
+Progress: resolved 2279, reused 0, downloaded 1570, added 1593
+Progress: resolved 2279, reused 0, downloaded 1570, added 1594
+Progress: resolved 2279, reused 0, downloaded 1571, added 1594
+Progress: resolved 2279, reused 0, downloaded 1573, added 1597
+Progress: resolved 2279, reused 0, downloaded 1575, added 1599
+Progress: resolved 2279, reused 0, downloaded 1576, added 1600
+Progress: resolved 2279, reused 0, downloaded 1577, added 1601
+Progress: resolved 2279, reused 0, downloaded 1579, added 1603
+Progress: resolved 2279, reused 0, downloaded 1580, added 1603
+Progress: resolved 2279, reused 0, downloaded 1582, added 1606
+Progress: resolved 2279, reused 0, downloaded 1583, added 1607
+Progress: resolved 2279, reused 0, downloaded 1584, added 1607
+Progress: resolved 2279, reused 0, downloaded 1584, added 1608
+Progress: resolved 2279, reused 0, downloaded 1585, added 1609
+Progress: resolved 2279, reused 0, downloaded 1586, added 1609
+Progress: resolved 2279, reused 0, downloaded 1586, added 1610
+Progress: resolved 2279, reused 0, downloaded 1587, added 1610
+Progress: resolved 2279, reused 0, downloaded 1587, added 1611
+Progress: resolved 2279, reused 0, downloaded 1588, added 1611
+Progress: resolved 2279, reused 0, downloaded 1588, added 1612
+Progress: resolved 2279, reused 0, downloaded 1589, added 1612
+Progress: resolved 2279, reused 0, downloaded 1589, added 1613
+Progress: resolved 2279, reused 0, downloaded 1590, added 1613
+Progress: resolved 2279, reused 0, downloaded 1590, added 1614
+Progress: resolved 2279, reused 0, downloaded 1591, added 1614
+Progress: resolved 2279, reused 0, downloaded 1591, added 1615
+Progress: resolved 2279, reused 0, downloaded 1592, added 1616
+Progress: resolved 2279, reused 0, downloaded 1593, added 1617
+Progress: resolved 2279, reused 0, downloaded 1594, added 1618
+Progress: resolved 2279, reused 0, downloaded 1595, added 1619
+Progress: resolved 2279, reused 0, downloaded 1596, added 1620
+Progress: resolved 2279, reused 0, downloaded 1597, added 1620
+Progress: resolved 2279, reused 0, downloaded 1598, added 1622
+Progress: resolved 2279, reused 0, downloaded 1599, added 1622
+Progress: resolved 2279, reused 0, downloaded 1600, added 1624
+Progress: resolved 2279, reused 0, downloaded 1603, added 1627
+Progress: resolved 2279, reused 0, downloaded 1606, added 1631
+Progress: resolved 2279, reused 0, downloaded 1607, added 1632
+Progress: resolved 2279, reused 0, downloaded 1608, added 1633
+Progress: resolved 2279, reused 0, downloaded 1609, added 1633
+Progress: resolved 2279, reused 0, downloaded 1609, added 1634
+Progress: resolved 2279, reused 0, downloaded 1610, added 1634
+Progress: resolved 2279, reused 0, downloaded 1610, added 1635
+Progress: resolved 2279, reused 0, downloaded 1611, added 1636
+Progress: resolved 2279, reused 0, downloaded 1612, added 1636
+Progress: resolved 2279, reused 0, downloaded 1614, added 1639
+Progress: resolved 2279, reused 0, downloaded 1615, added 1639
+Progress: resolved 2279, reused 0, downloaded 1615, added 1640
+Progress: resolved 2279, reused 0, downloaded 1616, added 1640
+Progress: resolved 2279, reused 0, downloaded 1616, added 1641
+Progress: resolved 2279, reused 0, downloaded 1617, added 1642
+Progress: resolved 2279, reused 0, downloaded 1618, added 1642
+Progress: resolved 2279, reused 0, downloaded 1618, added 1643
+Progress: resolved 2279, reused 0, downloaded 1619, added 1643
+Progress: resolved 2279, reused 0, downloaded 1619, added 1644
+Progress: resolved 2279, reused 0, downloaded 1621, added 1646
+Progress: resolved 2279, reused 0, downloaded 1622, added 1647
+Progress: resolved 2279, reused 0, downloaded 1623, added 1647
+Progress: resolved 2279, reused 0, downloaded 1624, added 1649
+Progress: resolved 2279, reused 0, downloaded 1625, added 1649
+Progress: resolved 2279, reused 0, downloaded 1625, added 1650
+Progress: resolved 2279, reused 0, downloaded 1626, added 1651
+Progress: resolved 2279, reused 0, downloaded 1627, added 1651
+Progress: resolved 2279, reused 0, downloaded 1627, added 1652
+Progress: resolved 2279, reused 0, downloaded 1628, added 1652
+Progress: resolved 2279, reused 0, downloaded 1628, added 1653
+Progress: resolved 2279, reused 0, downloaded 1629, added 1653
+Progress: resolved 2279, reused 0, downloaded 1629, added 1654
+Progress: resolved 2279, reused 0, downloaded 1630, added 1654
+Progress: resolved 2279, reused 0, downloaded 1631, added 1656
+Progress: resolved 2279, reused 0, downloaded 1632, added 1657
+Progress: resolved 2279, reused 0, downloaded 1633, added 1657
+Progress: resolved 2279, reused 0, downloaded 1633, added 1658
+Progress: resolved 2279, reused 0, downloaded 1634, added 1659
+Progress: resolved 2279, reused 0, downloaded 1635, added 1659
+Progress: resolved 2279, reused 0, downloaded 1635, added 1660
+Progress: resolved 2279, reused 0, downloaded 1636, added 1661
+Progress: resolved 2279, reused 0, downloaded 1638, added 1663
+Progress: resolved 2279, reused 0, downloaded 1639, added 1664
+Progress: resolved 2279, reused 0, downloaded 1641, added 1666
+Progress: resolved 2279, reused 0, downloaded 1643, added 1668
+Progress: resolved 2279, reused 0, downloaded 1647, added 1671
+Progress: resolved 2279, reused 0, downloaded 1649, added 1674
+Progress: resolved 2279, reused 0, downloaded 1653, added 1678
+Progress: resolved 2279, reused 0, downloaded 1655, added 1680
+Progress: resolved 2279, reused 0, downloaded 1658, added 1682
+Progress: resolved 2279, reused 0, downloaded 1662, added 1687
+Progress: resolved 2279, reused 0, downloaded 1665, added 1689
+Progress: resolved 2279, reused 0, downloaded 1666, added 1691
+Progress: resolved 2279, reused 0, downloaded 1670, added 1695
+Progress: resolved 2279, reused 0, downloaded 1674, added 1699
+Progress: resolved 2279, reused 0, downloaded 1676, added 1701
+Progress: resolved 2279, reused 0, downloaded 1683, added 1708
+Progress: resolved 2279, reused 0, downloaded 1692, added 1717
+Progress: resolved 2279, reused 0, downloaded 1696, added 1721
+Progress: resolved 2279, reused 0, downloaded 1699, added 1724
+Progress: resolved 2279, reused 0, downloaded 1701, added 1726
+Progress: resolved 2279, reused 0, downloaded 1705, added 1730
+Progress: resolved 2279, reused 0, downloaded 1709, added 1734
+Progress: resolved 2279, reused 0, downloaded 1710, added 1735
+Progress: resolved 2279, reused 0, downloaded 1716, added 1741
+Progress: resolved 2279, reused 0, downloaded 1723, added 1748
+Progress: resolved 2279, reused 0, downloaded 1725, added 1750
+Progress: resolved 2279, reused 0, downloaded 1726, added 1750
+Progress: resolved 2279, reused 0, downloaded 1734, added 1759
+Progress: resolved 2279, reused 0, downloaded 1736, added 1761
+Progress: resolved 2279, reused 0, downloaded 1738, added 1763
+Progress: resolved 2279, reused 0, downloaded 1739, added 1763
+Progress: resolved 2279, reused 0, downloaded 1741, added 1766
+Progress: resolved 2279, reused 0, downloaded 1742, added 1766
+Progress: resolved 2279, reused 0, downloaded 1745, added 1770
+Progress: resolved 2279, reused 0, downloaded 1746, added 1771
+Progress: resolved 2279, reused 0, downloaded 1749, added 1774
+Progress: resolved 2279, reused 0, downloaded 1750, added 1775
+Progress: resolved 2279, reused 0, downloaded 1753, added 1778
+Progress: resolved 2279, reused 0, downloaded 1759, added 1784
+Progress: resolved 2279, reused 0, downloaded 1764, added 1789
+Progress: resolved 2279, reused 0, downloaded 1767, added 1791
+Progress: resolved 2279, reused 0, downloaded 1768, added 1793
+Progress: resolved 2279, reused 0, downloaded 1771, added 1796
+Progress: resolved 2279, reused 0, downloaded 1774, added 1799
+Progress: resolved 2279, reused 0, downloaded 1777, added 1802
+Progress: resolved 2279, reused 0, downloaded 1778, added 1803
+Progress: resolved 2279, reused 0, downloaded 1781, added 1806
+Progress: resolved 2279, reused 0, downloaded 1782, added 1807
+Progress: resolved 2279, reused 0, downloaded 1786, added 1811
+Progress: resolved 2279, reused 0, downloaded 1787, added 1812
+Progress: resolved 2279, reused 0, downloaded 1789, added 1814
+Progress: resolved 2279, reused 0, downloaded 1791, added 1816
+Progress: resolved 2279, reused 0, downloaded 1797, added 1822
+Progress: resolved 2279, reused 0, downloaded 1802, added 1827
+Progress: resolved 2279, reused 0, downloaded 1812, added 1835
+Progress: resolved 2279, reused 0, downloaded 1822, added 1847
+Progress: resolved 2279, reused 0, downloaded 1828, added 1853
+Progress: resolved 2279, reused 0, downloaded 1838, added 1863
+Progress: resolved 2279, reused 0, downloaded 1844, added 1869
+Progress: resolved 2279, reused 0, downloaded 1845, added 1869
+Progress: resolved 2279, reused 0, downloaded 1847, added 1872
+Progress: resolved 2279, reused 0, downloaded 1848, added 1873
+Progress: resolved 2279, reused 0, downloaded 1851, added 1876
+Progress: resolved 2279, reused 0, downloaded 1852, added 1877
+Progress: resolved 2279, reused 0, downloaded 1854, added 1879
+Progress: resolved 2279, reused 0, downloaded 1855, added 1880
+Progress: resolved 2279, reused 0, downloaded 1859, added 1884
+Progress: resolved 2279, reused 0, downloaded 1862, added 1887
+Progress: resolved 2279, reused 0, downloaded 1863, added 1887
+Progress: resolved 2279, reused 0, downloaded 1864, added 1889
+Progress: resolved 2279, reused 0, downloaded 1866, added 1891
+Progress: resolved 2279, reused 0, downloaded 1867, added 1891
+Progress: resolved 2279, reused 0, downloaded 1871, added 1895
+Progress: resolved 2279, reused 0, downloaded 1872, added 1897
+Progress: resolved 2279, reused 0, downloaded 1875, added 1899
+Progress: resolved 2279, reused 0, downloaded 1876, added 1901
+Progress: resolved 2279, reused 0, downloaded 1877, added 1902
+Progress: resolved 2279, reused 0, downloaded 1881, added 1906
+Progress: resolved 2279, reused 0, downloaded 1882, added 1906
+Progress: resolved 2279, reused 0, downloaded 1885, added 1909
+Progress: resolved 2279, reused 0, downloaded 1887, added 1912
+Progress: resolved 2279, reused 0, downloaded 1888, added 1913
+Progress: resolved 2279, reused 0, downloaded 1892, added 1917
+Progress: resolved 2279, reused 0, downloaded 1896, added 1921
+Progress: resolved 2279, reused 0, downloaded 1899, added 1924
+Progress: resolved 2279, reused 0, downloaded 1901, added 1926
+Progress: resolved 2279, reused 0, downloaded 1905, added 1930
+Progress: resolved 2279, reused 0, downloaded 1906, added 1930
+Progress: resolved 2279, reused 0, downloaded 1909, added 1934
+Progress: resolved 2279, reused 0, downloaded 1910, added 1935
+Progress: resolved 2279, reused 0, downloaded 1913, added 1938
+Progress: resolved 2279, reused 0, downloaded 1914, added 1938
+Progress: resolved 2279, reused 0, downloaded 1917, added 1941
+Progress: resolved 2279, reused 0, downloaded 1918, added 1943
+Progress: resolved 2279, reused 0, downloaded 1919, added 1944
+Progress: resolved 2279, reused 0, downloaded 1920, added 1945
+Progress: resolved 2279, reused 0, downloaded 1921, added 1946
+Progress: resolved 2279, reused 0, downloaded 1922, added 1946
+Progress: resolved 2279, reused 0, downloaded 1922, added 1947
+Progress: resolved 2279, reused 0, downloaded 1923, added 1948
+Progress: resolved 2279, reused 0, downloaded 1924, added 1948
+Progress: resolved 2279, reused 0, downloaded 1928, added 1953
+Progress: resolved 2279, reused 0, downloaded 1931, added 1956
+Progress: resolved 2279, reused 0, downloaded 1936, added 1961
+Progress: resolved 2279, reused 0, downloaded 1944, added 1969
+Progress: resolved 2279, reused 0, downloaded 1945, added 1970
+Progress: resolved 2279, reused 0, downloaded 1947, added 1972
+Progress: resolved 2279, reused 0, downloaded 1949, added 1973
+Progress: resolved 2279, reused 0, downloaded 1951, added 1976
+Progress: resolved 2279, reused 0, downloaded 1952, added 1976
+Progress: resolved 2279, reused 0, downloaded 1952, added 1977
+Progress: resolved 2279, reused 0, downloaded 1953, added 1977
+Progress: resolved 2279, reused 0, downloaded 1953, added 1978
+Progress: resolved 2279, reused 0, downloaded 1954, added 1979
+Progress: resolved 2279, reused 0, downloaded 1955, added 1979
+Progress: resolved 2279, reused 0, downloaded 1955, added 1980
+Progress: resolved 2279, reused 0, downloaded 1956, added 1980
+Progress: resolved 2279, reused 0, downloaded 1956, added 1981
+Progress: resolved 2279, reused 0, downloaded 1957, added 1981
+Progress: resolved 2279, reused 0, downloaded 1958, added 1982
+Progress: resolved 2279, reused 0, downloaded 1959, added 1983
+Progress: resolved 2279, reused 0, downloaded 1960, added 1985
+Progress: resolved 2279, reused 0, downloaded 1961, added 1985
+Progress: resolved 2279, reused 0, downloaded 1961, added 1986
+Progress: resolved 2279, reused 0, downloaded 1962, added 1986
+Progress: resolved 2279, reused 0, downloaded 1962, added 1987
+Progress: resolved 2279, reused 0, downloaded 1963, added 1987
+Progress: resolved 2279, reused 0, downloaded 1964, added 1988
+Progress: resolved 2279, reused 0, downloaded 1964, added 1989
+Progress: resolved 2279, reused 0, downloaded 1965, added 1989
+Progress: resolved 2279, reused 0, downloaded 1966, added 1990
+Progress: resolved 2279, reused 0, downloaded 1967, added 1991
+Progress: resolved 2279, reused 0, downloaded 1968, added 1992
+Progress: resolved 2279, reused 0, downloaded 1970, added 1995
+Progress: resolved 2279, reused 0, downloaded 1971, added 1996
+Progress: resolved 2279, reused 0, downloaded 1972, added 1996
+Progress: resolved 2279, reused 0, downloaded 1974, added 1999
+Progress: resolved 2279, reused 0, downloaded 1975, added 1999
+Progress: resolved 2279, reused 0, downloaded 1975, added 2000
+Progress: resolved 2279, reused 0, downloaded 1976, added 2000
+Progress: resolved 2279, reused 0, downloaded 1976, added 2001
+Progress: resolved 2279, reused 0, downloaded 1977, added 2002
+Progress: resolved 2279, reused 0, downloaded 1978, added 2002
+Progress: resolved 2279, reused 0, downloaded 1978, added 2003
+Progress: resolved 2279, reused 0, downloaded 1979, added 2004
+Progress: resolved 2279, reused 0, downloaded 1982, added 2007
+Progress: resolved 2279, reused 0, downloaded 1983, added 2007
+Progress: resolved 2279, reused 0, downloaded 1983, added 2008
+Progress: resolved 2279, reused 0, downloaded 1984, added 2008
+Progress: resolved 2279, reused 0, downloaded 1986, added 2011
+Progress: resolved 2279, reused 0, downloaded 1987, added 2012
+Progress: resolved 2279, reused 0, downloaded 1988, added 2013
+Progress: resolved 2279, reused 0, downloaded 1989, added 2014
+Progress: resolved 2279, reused 0, downloaded 1991, added 2016
+Progress: resolved 2279, reused 0, downloaded 1992, added 2017
+Progress: resolved 2279, reused 0, downloaded 1994, added 2019
+Progress: resolved 2279, reused 0, downloaded 1996, added 2021
+Progress: resolved 2279, reused 0, downloaded 1997, added 2021
+Progress: resolved 2279, reused 0, downloaded 1998, added 2023
+Progress: resolved 2279, reused 0, downloaded 1999, added 2024
+Progress: resolved 2279, reused 0, downloaded 2002, added 2027
+Progress: resolved 2279, reused 0, downloaded 2005, added 2030
+Progress: resolved 2279, reused 0, downloaded 2006, added 2031
+Progress: resolved 2279, reused 0, downloaded 2007, added 2031
+Progress: resolved 2279, reused 0, downloaded 2008, added 2035
+Progress: resolved 2279, reused 0, downloaded 2009, added 2036
+Progress: resolved 2279, reused 0, downloaded 2011, added 2038
+Progress: resolved 2279, reused 0, downloaded 2014, added 2041
+Progress: resolved 2279, reused 0, downloaded 2015, added 2042
+Progress: resolved 2279, reused 0, downloaded 2017, added 2044
+Progress: resolved 2279, reused 0, downloaded 2020, added 2047
+Progress: resolved 2279, reused 0, downloaded 2023, added 2050
+Progress: resolved 2279, reused 0, downloaded 2024, added 2051
+Progress: resolved 2279, reused 0, downloaded 2026, added 2053
+Progress: resolved 2279, reused 0, downloaded 2028, added 2055
+Progress: resolved 2279, reused 0, downloaded 2030, added 2057
+Progress: resolved 2279, reused 0, downloaded 2032, added 2059
+Progress: resolved 2279, reused 0, downloaded 2034, added 2061
+Progress: resolved 2279, reused 0, downloaded 2035, added 2061
+Progress: resolved 2279, reused 0, downloaded 2036, added 2063
+Progress: resolved 2279, reused 0, downloaded 2037, added 2063
+Progress: resolved 2279, reused 0, downloaded 2038, added 2065
+Progress: resolved 2279, reused 0, downloaded 2040, added 2067
+Progress: resolved 2279, reused 0, downloaded 2042, added 2069
+Progress: resolved 2279, reused 0, downloaded 2045, added 2071
+Progress: resolved 2279, reused 0, downloaded 2047, added 2074
+Progress: resolved 2279, reused 0, downloaded 2050, added 2077
+Progress: resolved 2279, reused 0, downloaded 2051, added 2078
+Progress: resolved 2279, reused 0, downloaded 2052, added 2079
+Progress: resolved 2279, reused 0, downloaded 2056, added 2083
+Progress: resolved 2279, reused 0, downloaded 2058, added 2085
+Progress: resolved 2279, reused 0, downloaded 2067, added 2094
+Progress: resolved 2279, reused 0, downloaded 2069, added 2096
+Progress: resolved 2279, reused 0, downloaded 2070, added 2096
+Progress: resolved 2279, reused 0, downloaded 2070, added 2097
+Progress: resolved 2279, reused 0, downloaded 2071, added 2098
+Progress: resolved 2279, reused 0, downloaded 2073, added 2100
+Progress: resolved 2279, reused 0, downloaded 2074, added 2100
+Progress: resolved 2279, reused 0, downloaded 2075, added 2102
+Progress: resolved 2279, reused 0, downloaded 2076, added 2102
+Progress: resolved 2279, reused 0, downloaded 2077, added 2104
+Progress: resolved 2279, reused 0, downloaded 2078, added 2104
+Progress: resolved 2279, reused 0, downloaded 2078, added 2105
+Progress: resolved 2279, reused 0, downloaded 2079, added 2105
+Progress: resolved 2279, reused 0, downloaded 2080, added 2107
+Progress: resolved 2279, reused 0, downloaded 2081, added 2108
+Progress: resolved 2279, reused 0, downloaded 2082, added 2108
+Progress: resolved 2279, reused 0, downloaded 2082, added 2109
+Progress: resolved 2279, reused 0, downloaded 2083, added 2109
+Progress: resolved 2279, reused 0, downloaded 2083, added 2110
+Progress: resolved 2279, reused 0, downloaded 2084, added 2110
+Progress: resolved 2279, reused 0, downloaded 2084, added 2111
+Progress: resolved 2279, reused 0, downloaded 2085, added 2111
+Progress: resolved 2279, reused 0, downloaded 2085, added 2112
+Progress: resolved 2279, reused 0, downloaded 2086, added 2112
+Progress: resolved 2279, reused 0, downloaded 2087, added 2114
+Progress: resolved 2279, reused 0, downloaded 2088, added 2114
+Progress: resolved 2279, reused 0, downloaded 2088, added 2115
+Progress: resolved 2279, reused 0, downloaded 2089, added 2116
+Progress: resolved 2279, reused 0, downloaded 2090, added 2116
+Progress: resolved 2279, reused 0, downloaded 2090, added 2117
+Progress: resolved 2279, reused 0, downloaded 2091, added 2117
+Progress: resolved 2279, reused 0, downloaded 2091, added 2118
+Progress: resolved 2279, reused 0, downloaded 2092, added 2119
+Progress: resolved 2279, reused 0, downloaded 2093, added 2119
+Progress: resolved 2279, reused 0, downloaded 2093, added 2120
+Progress: resolved 2279, reused 0, downloaded 2094, added 2120
+Progress: resolved 2279, reused 0, downloaded 2094, added 2121
+Progress: resolved 2279, reused 0, downloaded 2095, added 2121
+Progress: resolved 2279, reused 0, downloaded 2096, added 2123
+Progress: resolved 2279, reused 0, downloaded 2097, added 2123
+Progress: resolved 2279, reused 0, downloaded 2097, added 2124
+Progress: resolved 2279, reused 0, downloaded 2098, added 2125
+Progress: resolved 2279, reused 0, downloaded 2099, added 2126
+Progress: resolved 2279, reused 0, downloaded 2100, added 2126
+Progress: resolved 2279, reused 0, downloaded 2100, added 2127
+Progress: resolved 2279, reused 0, downloaded 2101, added 2127
+Progress: resolved 2279, reused 0, downloaded 2102, added 2129
+Progress: resolved 2279, reused 0, downloaded 2103, added 2130
+Progress: resolved 2279, reused 0, downloaded 2104, added 2130
+Progress: resolved 2279, reused 0, downloaded 2107, added 2134
+Progress: resolved 2279, reused 0, downloaded 2108, added 2134
+Progress: resolved 2279, reused 0, downloaded 2108, added 2135
+Progress: resolved 2279, reused 0, downloaded 2109, added 2135
+Progress: resolved 2279, reused 0, downloaded 2111, added 2138
+Progress: resolved 2279, reused 0, downloaded 2112, added 2138
+Progress: resolved 2279, reused 0, downloaded 2112, added 2139
+Progress: resolved 2279, reused 0, downloaded 2113, added 2140
+Progress: resolved 2279, reused 0, downloaded 2115, added 2142
+Progress: resolved 2279, reused 0, downloaded 2116, added 2143
+Progress: resolved 2279, reused 0, downloaded 2119, added 2146
+Progress: resolved 2279, reused 0, downloaded 2122, added 2149
+Progress: resolved 2279, reused 0, downloaded 2123, added 2150
+Progress: resolved 2279, reused 0, downloaded 2126, added 2153
+Progress: resolved 2279, reused 0, downloaded 2128, added 2155
+Progress: resolved 2279, reused 0, downloaded 2129, added 2155
+Progress: resolved 2279, reused 0, downloaded 2130, added 2157
+Progress: resolved 2279, reused 0, downloaded 2131, added 2157
+Progress: resolved 2279, reused 0, downloaded 2133, added 2160
+Progress: resolved 2279, reused 0, downloaded 2135, added 2162
+Progress: resolved 2279, reused 0, downloaded 2137, added 2164
+Progress: resolved 2279, reused 0, downloaded 2138, added 2165
+Progress: resolved 2279, reused 0, downloaded 2139, added 2165
+Progress: resolved 2279, reused 0, downloaded 2139, added 2166
+Progress: resolved 2279, reused 0, downloaded 2140, added 2166
+Progress: resolved 2279, reused 0, downloaded 2142, added 2169
+Progress: resolved 2279, reused 0, downloaded 2144, added 2171
+Progress: resolved 2279, reused 0, downloaded 2148, added 2175
+Progress: resolved 2279, reused 0, downloaded 2150, added 2177
+Progress: resolved 2279, reused 0, downloaded 2151, added 2177
+Progress: resolved 2279, reused 0, downloaded 2151, added 2178
+Progress: resolved 2279, reused 0, downloaded 2152, added 2178
+Progress: resolved 2279, reused 0, downloaded 2152, added 2179
+Progress: resolved 2279, reused 0, downloaded 2153, added 2179
+Progress: resolved 2279, reused 0, downloaded 2155, added 2182
+Progress: resolved 2279, reused 0, downloaded 2156, added 2182
+Progress: resolved 2279, reused 0, downloaded 2156, added 2183
+Progress: resolved 2279, reused 0, downloaded 2157, added 2183
+Progress: resolved 2279, reused 0, downloaded 2159, added 2187
+Progress: resolved 2279, reused 0, downloaded 2160, added 2188
+Progress: resolved 2279, reused 0, downloaded 2161, added 2189
+Progress: resolved 2279, reused 0, downloaded 2162, added 2189
+Progress: resolved 2279, reused 0, downloaded 2162, added 2190
+Progress: resolved 2279, reused 0, downloaded 2163, added 2190
+Progress: resolved 2279, reused 0, downloaded 2164, added 2192
+Progress: resolved 2279, reused 0, downloaded 2166, added 2194
+Progress: resolved 2279, reused 0, downloaded 2168, added 2196
+Progress: resolved 2279, reused 0, downloaded 2169, added 2197
+Progress: resolved 2279, reused 0, downloaded 2171, added 2199
+Progress: resolved 2279, reused 0, downloaded 2173, added 2201
+Progress: resolved 2279, reused 0, downloaded 2175, added 2203
+Progress: resolved 2279, reused 0, downloaded 2176, added 2204
+Progress: resolved 2279, reused 0, downloaded 2177, added 2205
+Progress: resolved 2279, reused 0, downloaded 2178, added 2205
+Progress: resolved 2279, reused 0, downloaded 2178, added 2206
+Progress: resolved 2279, reused 0, downloaded 2179, added 2207
+Progress: resolved 2279, reused 0, downloaded 2180, added 2207
+Progress: resolved 2279, reused 0, downloaded 2180, added 2208
+Progress: resolved 2279, reused 0, downloaded 2181, added 2208
+Progress: resolved 2279, reused 0, downloaded 2181, added 2209
+Progress: resolved 2279, reused 0, downloaded 2182, added 2210
+Progress: resolved 2279, reused 0, downloaded 2183, added 2210
+Progress: resolved 2279, reused 0, downloaded 2185, added 2213
+Progress: resolved 2279, reused 0, downloaded 2189, added 2217
+Progress: resolved 2279, reused 0, downloaded 2190, added 2218
+Progress: resolved 2279, reused 0, downloaded 2191, added 2219
+Progress: resolved 2279, reused 0, downloaded 2192, added 2219
+Progress: resolved 2279, reused 0, downloaded 2192, added 2220
+Progress: resolved 2279, reused 0, downloaded 2193, added 2220
+Progress: resolved 2279, reused 0, downloaded 2194, added 2222
+Progress: resolved 2279, reused 0, downloaded 2195, added 2222
+Progress: resolved 2279, reused 0, downloaded 2196, added 2224
+Progress: resolved 2279, reused 0, downloaded 2197, added 2225
+Progress: resolved 2279, reused 0, downloaded 2198, added 2225
+Progress: resolved 2279, reused 0, downloaded 2198, added 2226
+Progress: resolved 2279, reused 0, downloaded 2199, added 2227
+Progress: resolved 2279, reused 0, downloaded 2200, added 2227
+Progress: resolved 2279, reused 0, downloaded 2200, added 2228
+Progress: resolved 2279, reused 0, downloaded 2201, added 2228
+Progress: resolved 2279, reused 0, downloaded 2201, added 2229
+Progress: resolved 2279, reused 0, downloaded 2202, added 2230
+Progress: resolved 2279, reused 0, downloaded 2204, added 2232
+Progress: resolved 2279, reused 0, downloaded 2205, added 2233
+Progress: resolved 2279, reused 0, downloaded 2208, added 2236
+Progress: resolved 2279, reused 0, downloaded 2209, added 2237
+Progress: resolved 2279, reused 0, downloaded 2211, added 2239
+Progress: resolved 2279, reused 0, downloaded 2214, added 2242
+Progress: resolved 2279, reused 0, downloaded 2216, added 2244
+Progress: resolved 2279, reused 0, downloaded 2218, added 2246
+Progress: resolved 2279, reused 0, downloaded 2219, added 2246
+Progress: resolved 2279, reused 0, downloaded 2220, added 2248
+Progress: resolved 2279, reused 0, downloaded 2221, added 2248
+Progress: resolved 2279, reused 0, downloaded 2222, added 2250
+Progress: resolved 2279, reused 0, downloaded 2223, added 2250
+Progress: resolved 2279, reused 0, downloaded 2223, added 2251
+Progress: resolved 2279, reused 0, downloaded 2224, added 2251
+Progress: resolved 2279, reused 0, downloaded 2225, added 2253
+Progress: resolved 2279, reused 0, downloaded 2226, added 2253
+Progress: resolved 2279, reused 0, downloaded 2227, added 2255
+Progress: resolved 2279, reused 0, downloaded 2229, added 2257
+Progress: resolved 2279, reused 0, downloaded 2230, added 2258
+Progress: resolved 2279, reused 0, downloaded 2231, added 2258
+Progress: resolved 2279, reused 0, downloaded 2233, added 2262
+Progress: resolved 2279, reused 0, downloaded 2235, added 2263
+Progress: resolved 2279, reused 0, downloaded 2235, added 2264
+Progress: resolved 2279, reused 0, downloaded 2236, added 2264
+Progress: resolved 2279, reused 0, downloaded 2236, added 2265
+Progress: resolved 2279, reused 0, downloaded 2237, added 2265
+Progress: resolved 2279, reused 0, downloaded 2238, added 2267
+Progress: resolved 2279, reused 0, downloaded 2239, added 2268
+Progress: resolved 2279, reused 0, downloaded 2240, added 2268
+Progress: resolved 2279, reused 0, downloaded 2240, added 2269
+Progress: resolved 2279, reused 0, downloaded 2241, added 2269
+Progress: resolved 2279, reused 0, downloaded 2241, added 2270
+Progress: resolved 2279, reused 0, downloaded 2242, added 2270
+Progress: resolved 2279, reused 0, downloaded 2242, added 2271
+Progress: resolved 2279, reused 0, downloaded 2243, added 2271
+Progress: resolved 2279, reused 0, downloaded 2243, added 2272
+Progress: resolved 2279, reused 0, downloaded 2244, added 2272
+Progress: resolved 2279, reused 0, downloaded 2244, added 2273
+Progress: resolved 2279, reused 0, downloaded 2245, added 2273
+Progress: resolved 2279, reused 0, downloaded 2245, added 2274
+Progress: resolved 2279, reused 0, downloaded 2246, added 2274
+Progress: resolved 2279, reused 0, downloaded 2246, added 2275
+Progress: resolved 2279, reused 0, downloaded 2247, added 2275
+Progress: resolved 2279, reused 0, downloaded 2247, added 2276
+Progress: resolved 2279, reused 0, downloaded 2248, added 2276
+Progress: resolved 2279, reused 0, downloaded 2248, added 2277
+Progress: resolved 2279, reused 0, downloaded 2249, added 2277
+Progress: resolved 2279, reused 0, downloaded 2249, added 2278
+Progress: resolved 2279, reused 0, downloaded 2250, added 2278
+Progress: resolved 2279, reused 0, downloaded 2250, added 2279, done
+.../node_modules/msw postinstall$ node -e "import('./config/scripts/postinstall.js').catch(() => void 0)"
+.../node_modules/msw postinstall$ node -e "import('./config/scripts/postinstall.js').catch(() => void 0)"
+.../esbuild@0.28.1/node_modules/esbuild postinstall$ node install.js
+.../node_modules/@swc/core postinstall$ node postinstall.js
+.../esbuild@0.25.12/node_modules/esbuild postinstall$ node install.js
+.../node_modules/msw postinstall: Done
+.../node_modules/msw postinstall: Done
+.../esbuild@0.28.1/node_modules/esbuild postinstall: Done
+.../esbuild@0.25.12/node_modules/esbuild postinstall: Done
+.../sharp@0.34.5/node_modules/sharp install$ node install/check.js || npm run build
+.../sharp@0.34.5/node_modules/sharp install: Done
+.../node_modules/@swc/core postinstall: Done
+.../node_modules/better-sqlite3 install$ prebuild-install || node-gyp rebuild --release
+.../node_modules/workerd postinstall$ node install.js
+.../node_modules/workerd postinstall: Done
+.../node_modules/electron postinstall$ node install.js
+.../node_modules/electron-winstaller install$ node ./script/select-7z-arch.js
+.../node_modules/@parcel/watcher install$ node scripts/build-from-source.js
+.../node_modules/electron-winstaller install: Selecting 7-Zip for arch x64
+.../node_modules/electron-winstaller install: Done
+.../node_modules/@parcel/watcher install: Done
+.../node_modules/better-sqlite3 install: Done
+.../node_modules/node-pty install$ node scripts/prebuild.js || node-gyp rebuild
+.../node_modules/node-pty install: [32m> Checking prebuilds...[0m
+.../node_modules/node-pty install: Done
+.../node_modules/node-pty postinstall$ node scripts/post-install.js
+.../node_modules/node-pty postinstall: [32m> Cleaning release folder...[0m
+.../node_modules/node-pty postinstall: [32m> Moving conpty.dll...[0m
+.../node_modules/node-pty postinstall:   Using os.arch(): x64
+.../node_modules/node-pty postinstall:   Found version 1.25.260303002
+.../node_modules/node-pty postinstall:   Copying C:\Users\olege\Work\bb\node_modules\.pnpm\node-pty@1.2.0-beta.15\node_modules\node-pty\third_party\conpty\1.25.260303002\win10-x64\conpty.dll -> C:\Users\olege\Work\bb\node_modules\.pnpm\node-pty@1.2.0-beta.15\node_modules\node-pty\build\Release\conpty\conpty.dll
+.../node_modules/node-pty postinstall:   Copying C:\Users\olege\Work\bb\node_modules\.pnpm\node-pty@1.2.0-beta.15\node_modules\node-pty\third_party\conpty\1.25.260303002\win10-x64\OpenConsole.exe -> C:\Users\olege\Work\bb\node_modules\.pnpm\node-pty@1.2.0-beta.15\node_modules\node-pty\build\Release\conpty\OpenConsole.exe
+.../node_modules/node-pty postinstall: Done
+.../node_modules/dtrace-provider install$ node-gyp rebuild || node suppress-error.js
+.../node_modules/dtrace-provider install: C:\Users\olege\Work\bb\node_modules\.pnpm\dtrace-provider@0.8.8\node_modules\dtrace-provider>if not defined npm_config_node_gyp (node "C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node-gyp-bin\\..\node_modules\node-gyp\bin\node-gyp.js" rebuild )  else (node "C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node_modules\node-gyp\bin\node-gyp.js" rebuild ) 
+.../node_modules/dtrace-provider install: gyp info it worked if it ends with ok
+.../node_modules/dtrace-provider install: gyp info using node-gyp@10.2.0
+.../node_modules/dtrace-provider install: gyp info using node@22.19.0 | win32 | x64
+.../node_modules/protobufjs postinstall$ node scripts/postinstall
+.../node_modules/protobufjs postinstall: Done
+.../node_modules/dtrace-provider install: gyp info find Python using Python version 3.14.0 found at "C:\Users\olege\AppData\Local\Programs\Python\Python314\python.exe"
+.../core-js@3.49.0/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
+.../core-js@3.49.0/node_modules/core-js postinstall: Thank you for using core-js ( https://github.com/zloirock/core-js ) for polyfilling JavaScript standard library!
+.../core-js@3.49.0/node_modules/core-js postinstall: The project needs your help! Please consider supporting core-js:
+.../core-js@3.49.0/node_modules/core-js postinstall: > https://opencollective.com/core-js 
+.../core-js@3.49.0/node_modules/core-js postinstall: > https://patreon.com/zloirock 
+.../core-js@3.49.0/node_modules/core-js postinstall: > https://boosty.to/zloirock 
+.../core-js@3.49.0/node_modules/core-js postinstall: > bitcoin: bc1qlea7544qtsmj2rayg0lthvza9fau63ux0fstcz 
+.../core-js@3.49.0/node_modules/core-js postinstall: I highly recommend reading this: https://github.com/zloirock/core-js/blob/master/docs/2023-02-14-so-whats-next.md 
+.../core-js@3.49.0/node_modules/core-js postinstall: Done
+.../esbuild@0.18.20/node_modules/esbuild postinstall$ node install.js
+.../esbuild@0.18.20/node_modules/esbuild postinstall: Done
+.../esbuild@0.19.12/node_modules/esbuild postinstall$ node install.js
+.../esbuild@0.19.12/node_modules/esbuild postinstall: Done
+.../node_modules/dtrace-provider install: gyp http GET https://nodejs.org/download/release/v22.19.0/node-v22.19.0-headers.tar.gz
+.../node_modules/dtrace-provider install: gyp http 200 https://nodejs.org/download/release/v22.19.0/node-v22.19.0-headers.tar.gz
+.../node_modules/dtrace-provider install: gyp http GET https://nodejs.org/download/release/v22.19.0/SHASUMS256.txt
+.../node_modules/dtrace-provider install: gyp http GET https://nodejs.org/download/release/v22.19.0/win-x64/node.lib
+.../node_modules/dtrace-provider install: gyp http 200 https://nodejs.org/download/release/v22.19.0/SHASUMS256.txt
+.../node_modules/dtrace-provider install: gyp http 200 https://nodejs.org/download/release/v22.19.0/win-x64/node.lib
+.../node_modules/dtrace-provider install: gyp ERR! find VS 
+.../node_modules/dtrace-provider install: gyp ERR! find VS msvs_version not set from command line or npm config
+.../node_modules/dtrace-provider install: gyp ERR! find VS VCINSTALLDIR not set, not running in VS Command Prompt
+.../node_modules/dtrace-provider install: gyp ERR! find VS could not use PowerShell to find Visual Studio 2017 or newer, try re-running with '--loglevel silly' for more details.
+.../node_modules/dtrace-provider install: gyp ERR! find VS 
+.../node_modules/dtrace-provider install: gyp ERR! find VS Failure details: undefined
+.../node_modules/dtrace-provider install: gyp ERR! find VS unknown version "undefined" found at "C:\Program Files\Microsoft Visual Studio\18\Community"
+.../node_modules/dtrace-provider install: gyp ERR! find VS could not find a version of Visual Studio 2017 or newer to use
+.../node_modules/dtrace-provider install: gyp ERR! find VS not looking for VS2017 as it is only supported up to Node.js 21
+.../node_modules/dtrace-provider install: gyp ERR! find VS not looking for VS2017 as it is only supported up to Node.js 21
+.../node_modules/dtrace-provider install: gyp ERR! find VS not looking for VS2017 as it is only supported up to Node.js 21
+.../node_modules/dtrace-provider install: gyp ERR! find VS not looking for VS2015 as it is only supported up to Node.js 18
+.../node_modules/dtrace-provider install: gyp ERR! find VS not looking for VS2013 as it is only supported up to Node.js 8
+.../node_modules/dtrace-provider install: gyp ERR! find VS 
+.../node_modules/dtrace-provider install: gyp ERR! find VS **************************************************************
+.../node_modules/dtrace-provider install: gyp ERR! find VS You need to install the latest version of Visual Studio
+.../node_modules/dtrace-provider install: gyp ERR! find VS including the "Desktop development with C++" workload.
+.../node_modules/dtrace-provider install: gyp ERR! find VS For more information consult the documentation at:
+.../node_modules/dtrace-provider install: gyp ERR! find VS https://github.com/nodejs/node-gyp#on-windows
+.../node_modules/dtrace-provider install: gyp ERR! find VS **************************************************************
+.../node_modules/dtrace-provider install: gyp ERR! find VS 
+.../node_modules/dtrace-provider install: gyp ERR! configure error 
+.../node_modules/dtrace-provider install: gyp ERR! stack Error: Could not find any Visual Studio installation to use
+.../node_modules/dtrace-provider install: gyp ERR! stack at VisualStudioFinder.fail (C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node_modules\node-gyp\lib\find-visualstudio.js:118:11)
+.../node_modules/dtrace-provider install: gyp ERR! stack at VisualStudioFinder.findVisualStudio (C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node_modules\node-gyp\lib\find-visualstudio.js:74:17)
+.../node_modules/dtrace-provider install: gyp ERR! stack at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+.../node_modules/dtrace-provider install: gyp ERR! stack at async createBuildDir (C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node_modules\node-gyp\lib\configure.js:112:18)
+.../node_modules/dtrace-provider install: gyp ERR! stack at async run (C:\Users\olege\AppData\Local\node\corepack\v1\pnpm\9.15.0\dist\node_modules\node-gyp\bin\node-gyp.js:81:18)
+.../node_modules/dtrace-provider install: gyp ERR! System Windows_NT 10.0.26200
+.../node_modules/dtrace-provider install: gyp ERR! command "C:\\nvm4w\\nodejs\\node.exe" "C:\\Users\\olege\\AppData\\Local\\node\\corepack\\v1\\pnpm\\9.15.0\\dist\\node_modules\\node-gyp\\bin\\node-gyp.js" "rebuild"
+.../node_modules/dtrace-provider install: gyp ERR! cwd C:\Users\olege\Work\bb\node_modules\.pnpm\dtrace-provider@0.8.8\node_modules\dtrace-provider
+.../node_modules/dtrace-provider install: gyp ERR! node -v v22.19.0
+.../node_modules/dtrace-provider install: gyp ERR! node-gyp -v v10.2.0
+.../node_modules/dtrace-provider install: gyp ERR! not ok 
+.../node_modules/dtrace-provider install: Done
+.../node_modules/electron postinstall: Done
+.../node_modules/@google/genai preinstall$ echo 'preinstall: no-op'
+.../node_modules/@google/genai preinstall: 'preinstall: no-op'
+.../node_modules/@google/genai preinstall: Done
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-app. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\bb-app\dist\bb-app.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-server. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\bb-app\dist\bb-server.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\bb-app\dist\bb.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\bb-app\dist\bb-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-archive-codex-tmp-bb-sessions. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\archive-codex-tmp-bb-sessions.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-request-dev-restart. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\request-dev-restart.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-reset-bb-data. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\reset-bb-data.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-run-cli. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\run-cli.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-run-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\run-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-seed-perf-db. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\seed-perf-db.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-archive-codex-tmp-bb-sessions. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\archive-codex-tmp-bb-sessions.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-request-dev-restart. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\request-dev-restart.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-reset-bb-data. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\reset-bb-data.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-run-cli. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\run-cli.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-run-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\run-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-seed-perf-db. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\packages\scripts\dist\commands\seed-perf-db.js.EXE'
+
+devDependencies:
++ @vitest/coverage-v8 4.1.1
++ cross-env 10.1.0
++ dotenv-cli 11.0.0
++ esbuild 0.28.1
++ http-proxy-3 1.23.3
++ oxfmt 0.64.0
++ oxlint 1.79.0
++ rimraf 6.1.3
++ tsx 4.23.1
++ turbo 2.10.12
++ typescript <- @typescript/typescript6 6.0.2
++ typescript-7 <- typescript 7.0.2
++ vitest 4.1.1
+
+. prepare$ turbo run generate:templates generate:plugin-scaffold generate generate:bb-official-marketplace --filter=@bb/templates --filter=@bb/plugin-build --filter=@bb/server --output-logs=errors-only --summarize=false
+. prepare: Attention:
+. prepare: Turborepo now collects completely anonymous telemetry regarding usage.
+. prepare: This information is used to shape the Turborepo roadmap and prioritize features.
+. prepare: You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+. prepare: https://turborepo.dev/docs/telemetry
+. prepare: • turbo 2.10.12
+. prepare:    • Packages in scope: @bb/plugin-build, @bb/server, @bb/templates
+. prepare:    • Running generate:templates, generate:plugin-scaffold, generate, generate:bb-official-marketplace in 3 packages
+. prepare:    • Remote caching disabled
+. prepare:  Tasks:    4 successful, 4 total
+. prepare: Cached:    0 cached, 4 total
+. prepare:   Time:    8.659s 
+. prepare: Done
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-app. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\desktop\node_modules\bb-app\dist\bb-app.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\desktop\node_modules\bb-app\dist\bb.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-server. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\desktop\node_modules\bb-app\dist\bb-server.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\desktop\node_modules\.bin\bb-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\desktop\node_modules\bb-app\dist\bb-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-archive-codex-tmp-bb-sessions. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\archive-codex-tmp-bb-sessions.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-request-dev-restart. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\request-dev-restart.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-reset-bb-data. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\reset-bb-data.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-run-cli. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\run-cli.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-run-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\run-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\host-daemon\node_modules\.bin\bb-script-seed-perf-db. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\host-daemon\node_modules\@bb\scripts\dist\commands\seed-perf-db.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-archive-codex-tmp-bb-sessions. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\archive-codex-tmp-bb-sessions.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-request-dev-restart. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\request-dev-restart.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-reset-bb-data. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\reset-bb-data.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-run-cli. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\run-cli.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-run-host-daemon. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\run-host-daemon.js.EXE'
+ WARN  Failed to create bin at C:\Users\olege\Work\bb\apps\server\node_modules\.bin\bb-script-seed-perf-db. ENOENT: no such file or directory, stat 'C:\Users\olege\Work\bb\apps\server\node_modules\@bb\scripts\dist\commands\seed-perf-db.js.EXE'
+Done in 57m 33.2s
+EXIT=0

@@ -1,0 +1,584 @@
+Task 8c live measurement: run-dev-app command on native Windows
+Reference desktop, Windows 11 Pro 10.0.26200, Node v22.19.0, pnpm 9.15.0
+Repo: C:\Users\olege\Work\bb, branch windows-native/phase-0
+Date: 2026-09-11
+
+================================================================
+1. Baseline: pnpm dev:status / pnpm dev:stop with nothing running
+================================================================
+Shell: PowerShell 7 (pwsh)
+
+> pnpm dev:status
+Dev session: stopped
+Desktop session: stopped
+(full thirteen-line block printed correctly)
+
+> pnpm dev:stop
+[dev-app] desktop: not running
+[dev-app] dev server: not running
+
+Both as expected.
+
+================================================================
+2. pnpm dev:desktop (run 1, cold caches) -- from PowerShell,
+   run_in_background, started 20:56:15, log task-8c-ps-dev-desktop-run1.log
+   (first attempt, via Start-Job, produced no output -- Start-Job's
+   child runspace did not honor the relative log path / Set-Location;
+   the job process exited immediately without doing any work. Abandoned
+   Start-Job; switched to running the pnpm command directly under the
+   PowerShell tool's own run_in_background, which behaved correctly.)
+================================================================
+
+================================================================
+3. pnpm dev:desktop (run 2, warm caches) -- from PowerShell, direct
+   run_in_background invocation
+================================================================
+Start: 2026-09-11 20:58:00
+End:   2026-09-11 20:58:21
+Elapsed: 21 seconds (pnpm install --frozen-lockfile: ~7s fully cached;
+  ensure-native-modules: instant; plugin-sdk build: FULL TURBO cache hit;
+  dev server: started, "Host daemon started" observed in dev.log)
+
+Outcome: dev server started successfully. Desktop stage FAILED:
+
+  [dev-app] Starting dev server, log C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\dev-app\dev.log
+  [dev-app] Starting desktop, log C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\dev-app\desktop.log
+  [dev-app] desktop app failed to start; see C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\dev-app\desktop.log
+  Usage: pnpm dev:app <command> [flags] (shortcuts: pnpm dev:desktop | pnpm dev:status | pnpm dev:stop)
+  ...
+  ELIFECYCLE  Command failed with exit code 1.
+  EXITCODE:1
+
+desktop.log root cause (from `pnpm exec turbo run dev --filter=@bb/desktop`,
+which fans out into a `prepare:bundled` step across every bundled plugin):
+
+  Error: manifest bb.server escapes the plugin directory: "./server.ts"
+      at readPluginServerConfig (.../packages/plugin-build/dist/cli.js:18345:11)
+
+Traced to packages/plugin-build/src/plugin-manifest.ts:
+
+  export function resolveManifestPath(rootDir, entry, label) {
+    ...
+    const resolved = resolve(rootDir, entry);
+    if (resolved !== rootDir && !resolved.startsWith(rootDir + "/")) {
+      throw new Error(`manifest ${label} escapes the plugin directory: "${entry}"`);
+    }
+    return resolved;
+  }
+
+`resolve()` returns a Windows path with backslashes; the containment check
+compares against `rootDir + "/"` (forward slash), so it can never match on
+Windows and every plugin server/host manifest is rejected as "escaping the
+plugin directory". This is a pre-existing bug in @bb/plugin-build, entirely
+unrelated to packages/scripts/src/commands/run-dev-app.ts or
+dev-app-launcher.ts (Tasks 8a/8b, not touched by this task). It reproduced
+identically in both attempts (bash-driven and PowerShell-driven), so it is
+not a shell-specific artifact. This is treated as a measurement per the
+task brief's guidance for "DESKTOP session fails for a reason inside the
+desktop app itself", not a defect in Task 8c.
+
+Cleanup after run 2: dev server + host daemon + vite processes were left
+running (see section 5 below on the dev-session pid-tracking finding);
+manually taskkill'd before continuing.
+
+================================================================
+4. Dev-server-only path verification (per brief's DESKTOP-failure
+   fallback), from PowerShell
+================================================================
+
+> pnpm dev:app current
+Start: 21:00:05  End: 21:00:23 (18s, warm caches)
+Final status block printed by the command itself:
+  Dev session: running
+  Desktop session: stopped
+EXITCODE:0
+
+> pnpm dev:status   (fresh, separate process invocation immediately after)
+  Dev session: stopped        <-- see concern in section 5
+  Desktop session: stopped
+
+> Invoke-WebRequest http://127.0.0.1:23813/health
+  STATUS: 200  BODY: {"ok":true}
+
+> pnpm dev:app env
+  export BB_SERVER_URL=http://127.0.0.1:23813
+  export BB_HOST_DAEMON_PORT=31813
+  export BB_PROJECT_ID=proj_personal
+  unset BB_THREAD_ID
+  unset BB_ENVIRONMENT_ID
+  unset BB_THREAD_STORAGE
+
+> pnpm dev:app env --powershell
+  $env:BB_SERVER_URL = "http://127.0.0.1:23813"
+  $env:BB_HOST_DAEMON_PORT = "31813"
+  $env:BB_PROJECT_ID = "proj_personal"
+  Remove-Item Env:BB_THREAD_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:BB_ENVIRONMENT_ID -ErrorAction SilentlyContinue
+  Remove-Item Env:BB_THREAD_STORAGE -ErrorAction SilentlyContinue
+
+> pnpm dev:stop
+  [dev-app] desktop: not running
+  [dev-app] dev server: not running
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813
+  All three ports still LISTENING under different PIDs than the ones
+  `pnpm dev:app current` recorded -- dev:stop did not actually stop
+  anything. Manually taskkill'd the three PIDs; ports then verified
+  free. See concern in section 5.
+
+================================================================
+5. Concern: dev-session PID tracking goes stale almost immediately
+   on Windows (packages/scripts/src/lib/dev-app-launcher.ts,
+   Task 8a/8b scope, not modified by this task)
+================================================================
+Reproduced 3 times (once via Git Bash, twice via native PowerShell),
+consistently:
+
+1. `pnpm dev:app current` (or the dev-server phase of `dev:desktop`)
+   starts the dev server, writes the pid file
+   (~/.bb-dev/<instance>/dev-supervisors/dev-app-dev.pid), waits for
+   "Host daemon started", and its own final status print correctly
+   shows "Dev session: running".
+2. The underlying `pnpm run dev` process tree (Vite, @bb/server,
+   @bb/host-daemon, managed by scripts/dev-supervisor.mjs with its own
+   auto-restart) keeps running and serving traffic indefinitely --
+   confirmed via `Invoke-WebRequest .../health` returning 200 minutes
+   later, after closing the window that started it, and even after the
+   individual server/host-daemon PIDs were taskkill'd (the supervisor
+   spawned replacements automatically).
+3. Within seconds of `pnpm dev:app current` (or `dev:desktop`)
+   returning, a *separate* `pnpm dev:status` invocation already
+   reports "Dev session: stopped": the PID recorded in
+   dev-app-dev.pid has already exited (`tasklist` shows no such
+   process), even though the actual dev server, vite and host daemon
+   remain alive under different, untracked PIDs.
+4. As a direct consequence, `pnpm dev:stop` cannot find a live PID to
+   stop and reports "not running" while real listeners remain on all
+   three instance ports (23813, 31813, 15813) -- confirmed repeatedly.
+
+Likely root cause (not fixed, out of this task's five-file scope):
+`startLoggedProcess` in packages/scripts/src/lib/dev-app-launcher.ts
+spawns with `detached: request.platform !== "win32"`, i.e.
+`detached: false` on Windows. Node's child_process docs recommend
+`detached: true` (CREATE_NEW_PROCESS_GROUP) specifically on Windows so
+a spawned child survives the parent's console/process lifecycle;
+`false` leaves the immediate "pnpm run dev" child tied to a console
+session that goes away once the short-lived run-dev-app.ts process
+exits, while grandchild processes (server/host-daemon, which use their
+own detached spawns inside scripts/dev-supervisor.mjs) survive
+independently and re-parent themselves as untracked orphans.
+
+Net effect: the dev server itself is fully usable and durable on
+Windows (satisfying the spirit of observations 2 and 3 below), but
+`pnpm dev:status` / `pnpm dev:stop`'s PID-file bookkeeping is
+unreliable within seconds of every "current"/"desktop" run. This is a
+Task 8a/8b (dev-app-launcher.ts / pid-file.ts) concern; it is reported
+here rather than patched, since this task's commit is scoped to five
+specific files and packages/scripts/src/lib/dev-app-launcher.ts is not
+one of them.
+
+================================================================
+6. Three required observations
+================================================================
+
+(1) Console window while pnpm dev:desktop ran:
+    Snapshotted all processes with a non-empty MainWindowTitle before
+    and during a dev:desktop / dev:app current run (via
+    `Get-Process | Where-Object MainWindowTitle -ne ''`). No new
+    console/cmd/node-titled window appeared beyond the PowerShell
+    window(s) I deliberately opened myself. windowsHide is working as
+    intended for the spawned background processes.
+
+(2) Sessions still running after the launcher process exits:
+    The tracked "Dev session" status flips to "stopped" within seconds
+    (see section 5), but the actual dev server keeps running and
+    answering health checks well after the launcher process that
+    started it has exited. Desktop was never reached successfully in
+    this environment (see section 3), so it could not be measured for
+    survival; its failure is at the plugin-build/prepare stage, before
+    Electron is spawned.
+
+(3) Sessions survived closing the PowerShell window that ran
+    pnpm dev:desktop:
+    Opened a separate, visible PowerShell window with:
+      Start-Process pwsh -ArgumentList '-NoExit','-Command','cd C:\Users\olege\Work\bb; pnpm dev:app current'
+    waited for "Host daemon started" to appear in dev.log (confirming
+    the command had finished inside that window), then forcibly closed
+    that window with `Stop-Process -Id <pid> -Force`. From my own,
+    separate shell immediately afterward:
+      - `pnpm dev:status` still printed "Dev session: stopped" (same
+        PID-tracking staleness as section 5, unrelated to the window
+        closing).
+      - `Get-NetTCPConnection` on all three instance ports still showed
+        them LISTENING.
+      - `Invoke-WebRequest http://127.0.0.1:23813/health` returned
+        200 {"ok":true}.
+    So the actual dev session survived the PowerShell window closing;
+    only the status/stop bookkeeping was already stale before the
+    window was closed.
+
+(Note: the first attempt to script observation 3 via
+`Start-Process ... -ArgumentList` with a trailing
+`"DONE_MARKER" | Out-File ...` clause never wrote the marker file --
+likely a PowerShell argument-quoting issue with the embedded double
+quotes inside the single-quoted -ArgumentList element. Verified
+directly via the process tree and dev.log timestamps instead of
+relying on the marker.)
+
+================================================================
+7. Final clean-machine check
+================================================================
+> pnpm dev:stop
+  [dev-app] desktop: not running
+  [dev-app] dev server: not running
+  (bookkeeping already stale; did not touch the real orphans)
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813
+  (initially still listening under untracked PIDs -- taskkill'd them)
+
+> taskkill /PID <server> /T /F
+> taskkill /PID <host-daemon> /T /F
+> taskkill /PID <vite> /T /F
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813   -> empty
+> tasklist /FI "IMAGENAME eq electron.exe" /FO CSV     -> no tasks
+> netstat -ano | findstr ":23813 :31813 :15813"        -> only a
+  harmless TIME_WAIT remnant with no owning process
+
+Machine left clean.
+
+================================================================
+8. Automated test suite / build (see task-8c-report.md for full
+   transcript excerpts)
+================================================================
+RED:   pnpm exec turbo run test --filter=@bb/scripts -- run-dev-app
+       4 failed, 1 passed (Cannot find module ...run-dev-app.ts)
+GREEN: pnpm exec turbo run test --filter=@bb/scripts -- run-dev-app
+       5 passed
+BUILD: pnpm exec turbo run build --filter=@bb/scripts &&
+       ls packages/scripts/dist/commands/run-dev-app.js
+       built 8 entries; dist/commands/run-dev-app.js exists (42381 bytes)
+
+================================================================
+9. After the session-host fix (fix round 1)
+================================================================
+Root cause confirmed: on Windows, libuv assigns every non-detached
+spawned child to a kill-on-close job object (with silent breakaway for
+grandchildren), so the previous `detached: request.platform !== "win32"`
+branch (false on win32) tied the tracked "pnpm run dev" process to a
+console/job that went away once the short-lived run-dev-app.ts process
+exited, while its grandchildren (server/host-daemon/vite, which
+self-detach inside scripts/dev-supervisor.mjs) survived as untracked
+orphans.
+
+Fix: on win32, `startLoggedProcess` now spawns a small, `detached: true`,
+`windowsHide: true` Node "session host" (packages/scripts/src/commands
+/run-dev-app-session-host.ts, run via the same `node --conditions=source
+--import tsx` / `node dist/...` invocation as the caller) whose own child
+(the real dev-server or desktop command) is spawned NOT detached, with
+stdio piped into the log file. The host survives the launcher exiting;
+its own child sits inside the host's job and dies with it, so
+`taskkill /PID <host> /T /F` now tears down host + child (and any
+console/conhost it created) together. POSIX now always passes
+`detached: true` too (previously conditional), unchanged in effect since
+POSIX already relied on detached process groups for stop/signal delivery.
+
+Debugging note: the first attempt at the fix used the *target child's*
+`cwd` as the session host's own spawn cwd (as directed). This broke the
+`dev-app-launcher.test.ts` "tracked processes" tests, whose `cwd` is a
+bare `mkdtempSync` temp directory: `node --conditions=source --import tsx
+<script>` fails to resolve the `tsx` loader package when launched from a
+directory with no `node_modules` in its ancestry (confirmed directly:
+`cd <tempdir-with-no-node_modules> && node --conditions=source --import
+tsx -e "..."` throws `ERR_MODULE_NOT_FOUND: Cannot find package 'tsx'`),
+so the host process died within ~1s without ever writing the log, and
+`pnpm exec turbo run test -- dev-app-launcher` hung until the vitest test
+timeout. Root repo cwd (`C:\Users\olege\Work\bb`) always has `tsx`
+resolvable, so this never affects production usage (`run-dev-app.ts`
+always passes `cwd: repoRoot`); only the unit tests' synthetic temp `cwd`
+triggered it. Fixed by pointing the two affected tests' `startLoggedProcess`
+calls at the real repo root (`monorepoRoot`, resolved from the test file's
+own location) instead of the scratch temp directory -- the target
+`node -e` child doesn't care what directory it runs in, it only needed a
+directory where `tsx` resolves for the host process spawned from it.
+
+Re-measurement, PowerShell 7, from a clean machine (no leftover
+listeners on 23813/31813/15813, no electron.exe, verified beforehand):
+
+> pnpm dev:app current
+  Start: 21:38:10  End: 21:38:27 (17s, warm caches)
+  Final status block printed by the command itself:
+    Dev session: running
+    Desktop session: stopped
+  EXITCODE:0
+
+  (waited 10+ seconds)
+
+> pnpm dev:status   (fresh, separate PowerShell invocation)
+  Dev session: running          <-- fixed; previously "stopped"
+  Desktop session: stopped
+
+> netstat -ano | findstr ":23813"
+  TCP    127.0.0.1:23813        0.0.0.0:0              LISTENING       36420
+  TCP    127.0.0.1:23813        127.0.0.1:51266        ESTABLISHED     36420
+
+> Invoke-WebRequest http://127.0.0.1:23813/health
+  STATUS: 200  BODY: {"ok":true}
+
+> Get-Process node,cmd,conhost | Where-Object { $_.MainWindowHandle -ne 0 }
+  (empty -- no visible console window for the session host, its cmd/conhost,
+  or the dev server tree)
+
+> pnpm dev:stop
+  [dev-app] desktop: not running
+  [dev-app] dev server: stopped     <-- fixed; previously "not running"
+                                          while real listeners remained
+
+> netstat -ano | findstr ":23813 :31813 :15813"
+  (only a harmless TIME_WAIT remnant with no owning process)
+
+> pnpm dev:status   (after stop)
+  Dev session: stopped
+  Desktop session: stopped
+
+> tasklist /FI "IMAGENAME eq electron.exe" /FO CSV
+  No tasks are running which match the specified criteria.
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813
+  (empty)
+
+Machine left clean. `--desktop` was not re-run in this fix round (the
+plugin-build manifest-path failure from section 3 is tracked separately
+and is unrelated to the session-host change).
+
+================================================================
+10. Desktop after the plugin-build fix (Task 11a)
+================================================================
+
+Fix applied: `packages/plugin-build/src/plugin-manifest.ts` --
+`resolveManifestPath` and the bb.branding icon/logo symlink check now
+compare against `rootDir + sep` / `realRoot + sep` (platform separator)
+instead of a hardcoded "/". Package suite: `pnpm exec turbo run test
+--filter=@bb/plugin-build` -- Test Files 7 failed | 3 passed (10), Tests
+30 failed | 108 passed | 2 skipped (140); the two new `resolveManifestPath`
+tests pass and no failure traces back to the two lines this task changed.
+
+Re-measurement, from a clean machine (verified via `pnpm dev:status`
+beforehand: both sessions stopped):
+
+> pnpm dev:desktop
+  Start ~22:01:49  End 22:03:02 (~73s, warm Turbo caches)
+  [dev-app] desktop app failed to start; see .../dev-app/desktop.log
+  EXITCODE:1
+
+`desktop.log` tail (packages/plugin-build/dist/cli.js was rebuilt with
+this task's fix -- @bb/plugin-build:build showed "cache miss" -- so this
+is the fix's actual effect on the reference desktop, not a stale build):
+
+  bb-plugin-inline-vis:prepare:bundled: Error: manifest bb.server escapes
+  the plugin directory: "./server.ts"
+      at readPluginServerConfig (.../plugin-build/dist/cli.js:18345:11)
+      at async buildPluginServer (.../plugin-build/dist/cli.js:18361:55)
+      at async preparePluginRuntime (.../plugin-build/dist/cli.js:19001:5)
+  bb-plugin-side-chat:prepare:bundled: Error: manifest bb.server escapes
+  the plugin directory: "./server.ts"  (same trace)
+  bb-plugin-github:prepare:bundled: Error: manifest bb.server escapes
+  the plugin directory: "./server.ts"  (same trace)
+  bb-plugin-provider-acp:prepare:bundled: Error: manifest
+  bb.branding.experimental_icons["cursor"] escapes the plugin directory
+  through a symlink
+      at validatePluginBuildManifest (.../plugin-build/dist/cli.js:17449:13)
+      at async readPluginServerConfig (.../plugin-build/dist/cli.js:18334:20)
+  Tasks: 9 successful, 45 total; Failed: bb-plugin-inline-vis#prepare:bundled
+
+Root cause of the remaining failure: `readPluginServerConfig` in
+`packages/plugin-build/src/build-plugin-server.ts` (line ~96) has its own,
+independent copy of the same hardcoded `rootDir + "/"` containment check
+for the `bb.server` field -- it does not call `resolveManifestPath`, so
+Task 11a's fix does not reach it. The same pattern also exists, unfixed,
+in `packages/plugin-build/src/build-plugin-host.ts` (~line 327, bb.host)
+and `packages/plugin-build/src/build-plugin-app.ts` (~line 287, bb.app),
+and a second, sibling instance inside plugin-manifest.ts itself (line 111,
+the `bb.branding.experimental_icons` symlink check -- the
+`bb-plugin-provider-acp` failure above), which Task 11a's brief did not
+name and this task therefore left unchanged. The plugin-bundling step
+(`prepare:bundled` inside `pnpm dev:desktop`) still fails before Electron
+ever starts; no window opened. This is a measurement, not a fix -- outside
+the two files (packages/plugin-build/src/plugin-manifest.ts and its test)
+this task's brief named.
+
+> pnpm dev:status (after the failed launch)
+  Dev session: running
+  Desktop session: stopped
+
+> pnpm dev:stop
+  [dev-app] desktop: not running
+  [dev-app] dev server: stopped
+
+> tasklist /FI "IMAGENAME eq electron.exe"
+  No tasks are running which match the specified criteria.
+
+> Get-NetTCPConnection -LocalPort 15813,23813,31813
+  (empty)
+
+Machine left clean.
+
+================================================================
+11. Desktop after fixing every separator check (Task 11a, fix round 2)
+================================================================
+
+Controller ruling: fixed the four remaining hardcoded `rootDir + "/"` /
+`realRoot + "/"` containment checks in `packages/plugin-build/src`
+(`plugin-manifest.ts:111`, `build-plugin-app.ts:287`,
+`build-plugin-host.ts:327`, `build-plugin-server.ts:97`), each now
+comparing against `+ sep`. `grep -rn '+ "/"' packages/plugin-build/src`
+returns nothing -- no hardcoded "/" containment check remains anywhere in
+the package, tests included.
+
+Package suite after the batch fix: `pnpm exec turbo run test
+--filter=@bb/plugin-build` -- Test Files 1 failed | 9 passed (10), Tests 1
+failed | 140 passed | 2 skipped (143). The one remaining failure is
+`toolchain.test.ts > keys the cache directory on the pinned versions`,
+unrelated to this bug (hardcodes `dir.startsWith("/data/")`, a Unix
+absolute-path assumption) -- same pre-existing failure as before this
+round, confirmed not new.
+
+Note: before this round's test run, four stale `plugins/.bundled-stage-*`
+directories (gitignored build scratch from earlier interrupted
+`prepare:bundled` runs, two from this session's fix-round-1 desktop
+failure and two older) were colliding with pnpm's workspace scan
+("Failed to add workspace ... it already exists at
+plugins\.bundled-stage-*\package.json") and blocking any `pnpm`/`turbo`
+command. Removed them (`rm -rf plugins/.bundled-stage-*`) before
+re-running tests; this is gitignored scratch, not tracked content.
+
+Re-measurement, from a clean machine (verified via `pnpm dev:status`
+beforehand: both sessions stopped):
+
+> pnpm dev:desktop
+  Start ~22:21:27
+  [dev-app] Timed out after 120000 ms waiting for desktop app  (at
+  22:23:27, ~120s -- the launcher's own wait window; per the brief this is
+  expected on a cold Electron main/preview build and the underlying build
+  keeps running detached)
+  EXITCODE:1 (from the launcher's own timeout, not a build failure)
+
+  Rather than immediately stopping and relaunching warm, polled the
+  still-running detached build (`pnpm dev:status`, the desktop.log tail,
+  and `tasklist /FI "IMAGENAME eq electron.exe"`) and let it finish in
+  place -- it was progressing cleanly (plugin bundling, then
+  `@bb/bundled-plugins`, `@bb/app`, `bb-app:build`, `@bb/desktop:dev`)
+  with no errors.
+
+  By ~22:24:41 (about 74s after the launcher's timeout, ~3m14s total):
+    @bb/desktop:dev: bb-app:build ... built Electron entries
+    @bb/desktop:dev: @bb/desktop: instance work-bb-21d97a8d7c85
+    @bb/desktop:dev: @bb/desktop: server http://127.0.0.1:23813
+    @bb/desktop:dev: @bb/desktop: daemon http://127.0.0.1:31813
+    @bb/desktop:dev: @bb/desktop: app http://localhost:15813 (Vite dev
+      server -- live reload)
+    @bb/desktop:dev: Desktop auto-install is disabled: only the Linux
+      AppImage build can replace itself. Version checks still report new
+      releases.
+    @bb/desktop:dev: [desktop] connect server sync skipped (not-paired)
+
+> tasklist /FI "IMAGENAME eq electron.exe"
+  4 electron.exe processes running.
+
+> Get-Process electron | Select-Object Id, MainWindowTitle, MainWindowHandle
+  PID 39972: MainWindowTitle "bb", MainWindowHandle 462560 (non-zero --
+  a real, visible top-level window; the other 3 PIDs are Electron's
+  renderer/GPU/utility subprocesses, MainWindowHandle 0 as expected)
+
+RESULT: the Electron desktop window opened successfully. Plugin bundling,
+`@bb/app`/`bb-app` build, and Electron main/preload startup all completed
+without error. This is the first successful `pnpm dev:desktop` run on
+this machine across Phase 0.
+
+> pnpm dev:status (with the window open)
+  Dev session: running
+  Desktop session: running
+
+> pnpm dev:stop
+  [dev-app] desktop: stopped
+  [dev-app] dev server: stopped
+
+> tasklist /FI "IMAGENAME eq electron.exe"
+  No tasks are running which match the specified criteria.
+
+> Get-NetTCPConnection -LocalPort 15813,23813,31813
+  Only TIME_WAIT rows with OwningProcess 0 (harmless closed-connection
+  remnants); no LISTENING state on any of the three ports; no live
+  listener to kill.
+
+Machine left clean. No orphan process needed to be `taskkill`ed.
+
+================================================================
+12. Task 10 re-measurement: window-close survival with the current
+    (session-host) launcher, PowerShell 7
+================================================================
+Baseline check before starting: `pnpm dev:status` reported both
+sessions stopped, so `pnpm dev:stop` was not needed first.
+
+> pnpm dev:status
+  Dev session: stopped
+  Desktop session: stopped
+
+Started a separate, visible PowerShell window at 23:16:34:
+
+> Start-Process pwsh -ArgumentList '-NoExit','-Command','cd C:\Users\olege\Work\bb; pnpm dev:app current'
+  PID: 29196
+
+Polled `pnpm dev:status` from this shell every 5s; it reported
+"Dev session: running" at 23:16:52 (about 18s after launch):
+
+> pnpm dev:status
+  Dev session: running
+  Desktop session: stopped
+
+> Invoke-WebRequest http://127.0.0.1:23813/health
+  STATUS: 200  BODY: {"ok":true}
+
+Force-closed the window that started the session at 23:17:16:
+
+> Stop-Process -Id 29196 -Force
+  (process confirmed gone immediately after)
+
+Waited 10s, then from this (separate) shell at 23:17:37:
+
+> pnpm dev:status
+  Dev session: running
+  Desktop session: stopped
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813
+  127.0.0.1:31813  Listen        PID 45040
+  127.0.0.1:23813  Listen        PID 31940
+  127.0.0.1:23813  Established   PID 31940 (x2, existing health-check
+                                   connections)
+  127.0.0.1:15813  Listen        PID 43000
+
+> Invoke-WebRequest http://127.0.0.1:23813/health
+  STATUS: 200  BODY: {"ok":true}
+
+RESULT: the dev session survived closing the PowerShell window that
+started it. `pnpm dev:status` bookkeeping stayed accurate too (still
+"running", not stale) -- unlike the pre-session-host measurements in
+section 3, the tracked status now agrees with reality.
+
+Cleanup:
+
+> pnpm dev:stop
+  [dev-app] desktop: not running
+  [dev-app] dev server: stopped
+
+> pnpm dev:status
+  Dev session: stopped
+  Desktop session: stopped
+
+> Get-NetTCPConnection -LocalPort 23813,31813,15813
+  (empty)
+
+> tasklist /FI "IMAGENAME eq electron.exe"
+  INFO: No tasks are running which match the specified criteria.
+
+Machine left clean.
