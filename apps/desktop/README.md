@@ -12,8 +12,12 @@ From the repo root, the full source dev loop is:
 pnpm dev:desktop
 ```
 
-That starts the source dev server and the Electron shell through
-`scripts/bb-dev-app`. To run only the desktop package task directly:
+That starts the source dev server and the Electron shell through the Node
+launcher `packages/scripts/src/commands/run-dev-app.ts` (`pnpm dev:status`,
+`pnpm dev:stop` and `pnpm dev:app <command>` drive the same sessions; logs
+live under `~/.bb-dev/<checkout-instance>/dev-app/`). It works from
+PowerShell as well as POSIX shells and needs Node 22.19 or newer on the 22
+line. To run only the desktop package task directly:
 
 ```bash
 pnpm exec turbo run dev --filter=@bb/desktop
