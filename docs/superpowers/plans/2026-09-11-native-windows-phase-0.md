@@ -1851,7 +1851,14 @@ export async function followLogFile(args: {
 }
 ```
 
-Why the platform split: on Windows `detached` maps to `DETACHED_PROCESS`, which makes `CREATE_NO_WINDOW` (what `windowsHide` sets) ineffective, and a console-less parent hands every console grandchild a fresh visible console. A non-detached child with `windowsHide` gets its own hidden console that its children inherit, is not attached to the launcher's console (so a later Ctrl+C in that PowerShell window does not reach it), and Windows never kills children when a parent exits. Task 8c measures this.
+Amendment after measurement on the reference desktop (2026-09-11): the "not detached + `windowsHide`" spawn above is wrong on Windows. libuv places every non-detached child in a kill-on-close job object (with silent breakaway for grandchildren), so the tracked leader died seconds after the launcher exited while its grandchildren survived orphaned. A detached child, on the other hand, has no console, and a console grandchild it spawns without `CREATE_NO_WINDOW` gets a fresh visible window. The measured design that satisfies both constraints is a Windows session host:
+
+- On win32, `startLoggedProcess` spawns `node <run-dev-app-session-host> <logPath> <command> <args...>` with `detached: true`, `windowsHide: true`, `stdio: "ignore"`, and records the host's pid. The host is described by a new required-on-win32 field `windowsSessionHost?: { command: string; args: string[] }` on `StartLoggedProcessArgs`; the command file passes `{ command: process.execPath, args: [...process.execArgv, sessionHostPath] }`, where `sessionHostPath` is `run-dev-app-session-host` next to `run-dev-app` with the same extension (`.ts` under tsx, `.js` in `dist`).
+- The host (`packages/scripts/src/commands/run-dev-app-session-host.ts`, one screen of code) calls the lib's exported `runSessionHost({ args, command, cwd, env, logPath }): Promise<number>`, which opens the log, spawns the real command through `spawnPortableProcess` with `stdio: ["ignore", fd, fd]` and `windowsHide: true` (not detached, so the child sits in the host's job and dies with it), closes the fd, and resolves with the child's exit code; the host process exits with that code.
+- `stopTrackedProcess` on win32 is unchanged: `taskkill /PID <host> /T /F` terminates host, `cmd.exe` shim, `conhost`, and every descendant (measured with a probe: all four processes ended, no visible window at any point, the leader survived the launcher's exit).
+- POSIX keeps the direct detached group-leader spawn.
+
+Task 8c re-measures `pnpm dev:app current` → launcher exits → `pnpm dev:status` still `running` → `pnpm dev:stop` leaves no listener, and records it in `qa/windows/phase-0/20-dev-app.txt`.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
