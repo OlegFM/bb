@@ -35,7 +35,8 @@ what has been measured on native Windows and what is known not to work.
 
 ## Native add-ons
 
-Measured on Windows 11 Pro 10.0.26200 (see `qa/windows/phase-0/11-native-modules.md`):
+Measured on Windows 11 Pro 10.0.26200 (see `qa/windows/phase-0/11-native-modules.md`
+and `12-prebuild-inventory.md`):
 
 - `better-sqlite3@12.10.0` installs a `win32-x64` prebuild for Node ABI 137
   (Node 24) and 127 (Node 22).
@@ -72,13 +73,16 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   desktop session running instead of relaunching.
 - `pnpm install` prints `WARN Failed to create bin ... .EXE` for every
   workspace bin whose `dist/` has not been built yet; pnpm cannot create the
-  `.bin` shim until the package builds. Turbo tasks do not depend on these
-  shims.
+  `.bin` shim until the package builds. Everything measured in this phase
+  ran after an install that printed them (`10-install.txt`, then
+  `20-dev-app.txt`).
 - The `bb/no-tmp-path-literal` lint rule runs only in packages with a `lint`
   script (`@bb/app`, `@bb/mobile`); the vitest configs are covered by
   `packages/scripts/test/vitest-config-tmp-literals.test.mjs` instead.
-- The Windows CI leg is not required and does not use the Turbo cache; its
-  test step records a baseline and never fails the job.
+- The Windows CI leg (`windows-x64` in `.github/workflows/ci.yml`) is not a
+  required check and carries no Turbo cache; its test step runs with
+  `continue-on-error: true`, so it records a baseline and never fails the
+  job.
 
 ## Evidence
 
