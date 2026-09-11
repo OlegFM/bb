@@ -1,8 +1,11 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { validatePluginBuildManifest } from "./plugin-manifest.js";
+import {
+  resolveManifestPath,
+  validatePluginBuildManifest,
+} from "./plugin-manifest.js";
 
 const SVG =
   '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h4v4z"/></svg>';
@@ -229,5 +232,27 @@ describe("validatePluginBuildManifest: bb.branding assets", () => {
     await expect(
       validatePluginBuildManifest(manifest, dir, join(dir, "package.json")),
     ).rejects.toThrow(/bb\.branding\.experimental_icons\.Receipt/);
+  });
+});
+
+describe("resolveManifestPath", () => {
+  const rootDir = resolve("plugins", "example");
+
+  it("accepts nested entries using the platform separator", () => {
+    expect(resolveManifestPath(rootDir, "./server.ts", "bb.server")).toBe(
+      resolve(rootDir, "server.ts"),
+    );
+    expect(
+      resolveManifestPath(rootDir, "icons/logo.svg", "bb.branding.logo"),
+    ).toBe(resolve(rootDir, "icons", "logo.svg"));
+  });
+
+  it("rejects entries that leave the plugin directory, including sibling prefixes", () => {
+    expect(() =>
+      resolveManifestPath(rootDir, "../outside.ts", "bb.server"),
+    ).toThrow("escapes the plugin directory");
+    expect(() =>
+      resolveManifestPath(rootDir, "../example-2/server.ts", "bb.server"),
+    ).toThrow("escapes the plugin directory");
   });
 });
