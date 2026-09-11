@@ -6,7 +6,8 @@
   "main": "dist/main.js",
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "win32"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
