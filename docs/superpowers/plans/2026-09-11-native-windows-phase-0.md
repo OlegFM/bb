@@ -2833,3 +2833,129 @@ Confirm all of the following before calling Phase 0 done:
 - `pnpm exec turbo run test --filter=@bb/scripts --filter=bb-app` is green on a POSIX machine or in the upstream-style Ubuntu job (no regression from Tasks 1 to 9).
 
 Then merge `windows-native/phase-0` into the fork's `main` and open Phase 1 planning.
+
+---
+
+### Task 11b: Resolve registry imports with POSIX paths in the plugin-registry build script
+
+Added by the Phase 0 gate (Task 11): on the reference desktop `pnpm exec turbo run build typecheck` fails only in `@bb/plugin-registry#typecheck`, and `@bb/plugin-registry#test` crashes before vitest, both with `Error: item name collision: "toggle" from both components\ui\toggle.tsx and components/ui/toggle.tsx` thrown at `packages/plugin-registry/scripts/build-registry.mjs:152`.
+
+**Files:**
+- Modify: `packages/plugin-registry/scripts/build-registry.mjs:55-58`
+
+**Interfaces:**
+- Consumes: `registry.json` `uiItems` and import specifiers, both POSIX-style (`components/ui/<name>.tsx`, `./toggle`, `@/lib/utils`).
+- Produces: `resolveLocal` returns POSIX-style app-src-relative paths on every platform, so `--check` passes on Windows and the generated `r/` output is byte-identical to a POSIX build.
+
+Root cause: `resolveLocal` builds relative-import candidates with `path.join(path.dirname(importerRel), specifier)`; on win32 that returns `components\ui\toggle`, which no longer equals the POSIX `components/ui/toggle.tsx` that `uiItems` seeds, so the same file is seen twice under two spellings and `itemNameFor` reports a collision.
+
+- [ ] **Step 1: Reproduce**
+
+Run: `pnpm exec turbo run typecheck --filter=@bb/plugin-registry`
+Expected: FAIL with the collision error above (save the output to `.superpowers/sdd/2026-09-11-native-windows-phase-0/task-11b-red.log`).
+
+- [ ] **Step 2: Use the POSIX path API for the relative-import join**
+
+Replace lines 56-58 of `packages/plugin-registry/scripts/build-registry.mjs`:
+
+```js
+    base = path.normalize(
+      path.join(path.dirname(importerRel), specifier),
+    );
+```
+
+with
+
+```js
+    base = path.posix.normalize(
+      path.posix.join(path.posix.dirname(importerRel), specifier),
+    );
+```
+
+No other line changes; `path.basename` (lines 106 and 115) already accepts forward slashes on win32, and `path.join(srcRoot, candidate)` on line 70 only feeds `existsSync`, which accepts mixed separators.
+
+- [ ] **Step 3: Verify**
+
+Run: `pnpm exec turbo run typecheck test --filter=@bb/plugin-registry`
+Expected: `--check` passes, `typecheck` passes; vitest runs (record its `Test Files`/`Tests` lines; pre-existing Windows failures inside vitest are baseline, not this task's regression). Then `git status --short packages/plugin-registry/` must show nothing under `packages/plugin-registry/r/`: the generated registry is unchanged, which proves the Windows output now matches the committed POSIX output.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add packages/plugin-registry/scripts/build-registry.mjs
+git commit -m "Resolve registry imports with POSIX paths in build-registry.mjs
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11c: Run CI on pushes to `windows-native/**` branches
+
+Added by the Phase 0 gate (Task 11): on the fork `gh workflow run ci.yml --ref windows-native/phase-0 -R OlegFM/bb` answers `HTTP 404: workflow ci.yml not found on the default branch` because GitHub registers a fork's workflow only after an event triggers it (`version-lockstep.yml`, which has a bare `push:` trigger, was registered by the branch push; `ci.yml`, which only pushes on `main`, was not). A push trigger for the phase branches runs `ci.yml`, including the `windows-x64` job, on every push of this branch and registers the workflow for later dispatches.
+
+**Files:**
+- Modify: `.github/workflows/ci.yml:4-7`
+- Test: `packages/scripts/test/ci-workflow.test.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `packages/scripts/test/ci-workflow.test.ts`:
+
+```ts
+it("runs CI on pushes to native Windows phase branches", () => {
+  const workflow = readFileSync(
+    resolve(repoRoot, ".github", "workflows", "ci.yml"),
+    "utf8",
+  );
+  const pushBranches = /on:\n  push:\n    branches:\n((?:      - .+\n)+)/u.exec(
+    workflow,
+  )?.[1];
+
+  expect(pushBranches).toContain('      - "windows-native/**"\n');
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- ci-workflow`
+Expected: FAIL (`pushBranches` is `      - main\n`).
+
+- [ ] **Step 3: Add the branch pattern**
+
+In `.github/workflows/ci.yml`, change
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+```
+
+to
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+      - "windows-native/**"
+  pull_request:
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- ci-workflow`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add .github/workflows/ci.yml packages/scripts/test/ci-workflow.test.ts
+git commit -m "Run CI on pushes to windows-native branches
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
