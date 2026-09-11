@@ -24,6 +24,10 @@ child.onData((chunk) => {
 });
 child.onExit(({ exitCode }) => {
   const ok = output.includes("conpty-ok");
-  process.stdout.write(`node-pty ${ok ? "ok" : "FAILED"} (exit ${exitCode}, pid ${child.pid})\n`);
-  process.exitCode = ok ? 0 : 1;
+  process.stdout.write(
+    `node-pty ${ok ? "ok" : "FAILED"} (exit ${exitCode}, pid ${child.pid})\n`,
+    () => {
+      process.exit(ok ? 0 : 1);
+    },
+  );
 });
