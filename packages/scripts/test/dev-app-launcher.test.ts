@@ -169,7 +169,6 @@ describe("formatDevAppStatus", () => {
     const paths = resolveDevAppPaths(config, {});
     const status = formatDevAppStatus({
       branch: "main (abc1234)",
-      codexVersion: "codex-cli 0.50.0",
       config,
       desktopState: "stopped",
       devState: "running",
@@ -183,7 +182,6 @@ describe("formatDevAppStatus", () => {
       `Repo: ${repoRoot}`,
       "Branch: main (abc1234)",
       "Node: v22.19.0 (ABI 127) at /n/node",
-      "Codex: codex-cli 0.50.0",
       `Instance: ${config.instanceId}`,
       `Data dir: ${config.dataDir}`,
       `App: http://localhost:${config.ports.appPort}`,

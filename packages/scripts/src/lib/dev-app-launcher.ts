@@ -40,7 +40,6 @@ export type DevAppProcessState = "running" | "stopped";
 
 export interface DevAppStatusArgs {
   branch: string;
-  codexVersion: string;
   config: DevInstanceConfig;
   desktopState: DevAppProcessState;
   devState: DevAppProcessState;
@@ -191,7 +190,6 @@ export function formatDevAppStatus(args: DevAppStatusArgs): string {
     `Repo: ${args.config.repoRoot}`,
     `Branch: ${args.branch}`,
     `Node: ${args.nodeVersion} (ABI ${args.nodeAbi}) at ${args.execPath}`,
-    `Codex: ${args.codexVersion}`,
     `Instance: ${args.config.instanceId}`,
     `Data dir: ${args.config.dataDir}`,
     `App: http://localhost:${args.config.ports.appPort}`,

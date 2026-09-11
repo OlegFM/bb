@@ -208,18 +208,15 @@ async function printStatus(
   config: DevInstanceConfig,
   paths: DevAppPaths,
 ): Promise<void> {
-  const [branchName, commit, codexVersion, devState, desktopState] =
-    await Promise.all([
-      captureCommandOutput("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
-      captureCommandOutput("git", ["rev-parse", "--short", "HEAD"]),
-      captureCommandOutput("codex", ["--version"]),
-      readTrackedProcessState({ pidPath: paths.devPidPath, serviceName: "dev server" }),
-      readTrackedProcessState({ pidPath: paths.desktopPidPath, serviceName: "desktop" }),
-    ]);
+  const [branchName, commit, devState, desktopState] = await Promise.all([
+    captureCommandOutput("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
+    captureCommandOutput("git", ["rev-parse", "--short", "HEAD"]),
+    readTrackedProcessState({ pidPath: paths.devPidPath, serviceName: "dev server" }),
+    readTrackedProcessState({ pidPath: paths.desktopPidPath, serviceName: "desktop" }),
+  ]);
   process.stdout.write(
     `${formatDevAppStatus({
       branch: `${branchName ?? "unknown"} (${commit ?? "unknown"})`,
-      codexVersion: codexVersion ?? "not installed",
       config,
       desktopState,
       devState,
