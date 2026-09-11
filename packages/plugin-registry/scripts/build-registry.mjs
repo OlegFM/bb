@@ -53,8 +53,8 @@ function resolveLocal(specifier, importerRel) {
   if (specifier.startsWith("@/")) {
     base = specifier.slice(2);
   } else if (specifier.startsWith(".")) {
-    base = path.normalize(
-      path.join(path.dirname(importerRel), specifier),
+    base = path.posix.normalize(
+      path.posix.join(path.posix.dirname(importerRel), specifier),
     );
   } else {
     return null;
