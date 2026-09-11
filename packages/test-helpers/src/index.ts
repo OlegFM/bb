@@ -26,3 +26,4 @@ export type {
   CorpusThreadRow,
   ListCorpusThreadsArgs,
 } from "./provider-corpus.js";
+export { tmpRoot } from "./tmp-root.js";

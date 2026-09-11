@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   defineWorkspaceTestConfig,
   sharedWorkerProjects,
@@ -7,7 +9,7 @@ export default defineWorkspaceTestConfig({
   test: {
     silent: "passed-only",
     env: {
-      BB_DATA_DIR: "/tmp/bb-server-test",
+      BB_DATA_DIR: join(tmpdir(), "bb-server-test"),
       BB_SERVER_PORT: "49161",
       BB_HOST_DAEMON_PORT: "49162",
     },
