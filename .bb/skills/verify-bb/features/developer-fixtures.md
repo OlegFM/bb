@@ -11,7 +11,7 @@ typechecks and package tests use Turbo with the applicable package filter.
 ## Source
 
 - `apps/demo-server/package.json`
-- `scripts/bb-dev-app`
+- `packages/scripts/src/commands/run-dev-app.ts`
 - `scripts/bb-cloud-dev.mjs`
 - `packages/plugin-api-map/src/surfaces.ts`
 

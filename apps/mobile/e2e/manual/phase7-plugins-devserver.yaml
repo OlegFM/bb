@@ -1,5 +1,5 @@
-# Phase 7 plugins against the checkout's dev server (`scripts/bb-dev-app
-# current`; server port 20304 for this worktree — edit SERVER_URL for another
+# Phase 7 plugins against the checkout's dev server (`pnpm dev:app current`;
+# server port 20304 for this worktree — edit SERVER_URL for another
 # checkout), which runs the real builtin plugins. Read-mostly: opens the
 # Automations detail (settings-less builtin → "no settings" state, Updates →
 # "bundled" note, logs viewer), the default-enabled provider-retry settings,

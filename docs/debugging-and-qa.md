@@ -12,16 +12,15 @@
 
 ## Local Dev QA Launcher
 
-Use `scripts/bb-dev-app` when validating changes in the desktop dev app or helping QA from this checkout:
+Use `pnpm dev:app <command>` when validating changes in the desktop dev app or helping QA from this checkout. It runs `packages/scripts/src/commands/run-dev-app.ts`, which works from PowerShell and POSIX shells alike:
 
-- `pnpm dev:status` runs `scripts/bb-dev-app status` to print the active branch, Node runtime, dev URLs, data dir, and logs.
-- `scripts/bb-dev-app current` restarts the dev server on the current branch.
-- `scripts/bb-dev-app main` fetches `origin/main`, fast-forwards `main`, and launches the dev server from this checkout.
-- `scripts/bb-dev-app branch <branch>` switches to a local branch, or creates it from `origin/<branch>`, then launches the dev server.
-- `pnpm dev:stop` runs `scripts/bb-dev-app stop` to stop the launcher-managed dev server and desktop.
-- `scripts/bb-dev-app logs dev` and `scripts/bb-dev-app logs desktop` follow logs.
+- `pnpm dev:status` (`pnpm dev:app status`) prints the active branch, Node runtime, dev URLs, data dir, and logs.
+- `pnpm dev:app current` restarts the dev server on the checked-out branch. Switch branches with `git` first; the launcher does not fetch or check out.
+- `pnpm dev:stop` (`pnpm dev:app stop`) stops the launcher-managed dev server and desktop.
+- `pnpm --silent dev:app env` prints `export` lines that target this checkout's dev server; `--powershell` prints `$env:` lines. Use `eval "$(pnpm --silent dev:app env)"` in bash and `pnpm --silent dev:app env --powershell | Out-String | Invoke-Expression` in PowerShell.
+- `pnpm dev:app logs dev` and `pnpm dev:app logs desktop` follow logs.
 
-By default the launcher starts only the dev server (web frontend, server, host daemon) and prints the URL without opening a browser. Pass `--open` to open the browser after startup. Pass `--desktop` (e.g. `scripts/bb-dev-app current --desktop`) to also launch the Electron desktop shell — only do this when the user is testing a desktop-only change.
+By default the launcher starts only the dev server (web frontend, server, host daemon) and prints the URL without opening a browser. Pass `--open` to open the browser after startup. Pass `--desktop` (`pnpm dev:desktop`, or `pnpm dev:app current --desktop`) to also launch the Electron desktop shell — only do this when the user is testing a desktop-only change.
 
 The launcher uses the Node executable from the caller's `PATH`. It does not select another installed Node version. The `.nvmrc` file pins the primary development runtime to Node 22.19.0. Node 24 and Node 26 remain compatibility targets. Desktop development requires Node 22.19 or newer in the Node 22 release line.
 

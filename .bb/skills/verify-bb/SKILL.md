@@ -68,7 +68,7 @@ node --version
 npm install -g dev-browser@next
 dev-browser --version
 dev-browser --help
-scripts/bb-dev-app status
+pnpm --silent dev:app status
 ```
 
 If Chrome is missing, run `dev-browser install`. The browser CLI accepts
@@ -88,7 +88,7 @@ or adopt the existing data.
 ```bash
 export BB_VERIFY_RUN="$(mktemp -d /tmp/bb-verification-XXXXXX)"
 export BB_VERIFY_BROWSER="verify-bb-$(basename "$BB_VERIFY_RUN")"
-scripts/bb-dev-app status > "$BB_VERIFY_RUN/before-launch.txt"
+pnpm --silent dev:app status > "$BB_VERIFY_RUN/before-launch.txt"
 command -v lsof >/dev/null || exit 1
 for BB_VERIFY_PORT in $(sed -nE 's/^(App|Server|Host daemon): http:\/\/[^:]+:([0-9]+)$/\2/p' "$BB_VERIFY_RUN/before-launch.txt"); do
   if lsof -nP -iTCP:"$BB_VERIFY_PORT" -sTCP:LISTEN; then
@@ -101,7 +101,7 @@ test -n "$BB_VERIFY_DATA_DIR" && test -n "$BB_VERIFY_APP_URL" || exit 1
 mkdir "$BB_VERIFY_DATA_DIR" || exit 1
 printf '%s\n' "$BB_VERIFY_RUN" > "$BB_VERIFY_DATA_DIR/verify-bb-owner"
 git rev-parse HEAD > "$BB_VERIFY_RUN/source-commit.txt"
-scripts/bb-dev-app current > "$BB_VERIFY_RUN/launch.log" 2>&1
+pnpm --silent dev:app current > "$BB_VERIFY_RUN/launch.log" 2>&1
 ```
 
 All three ports must be unoccupied before `current`, which stops listeners
@@ -128,8 +128,8 @@ use an isolated checkout and keep the serving checkout's data/ports stable.
 ## Doctor
 
 ```bash
-scripts/bb-dev-app status
-eval "$(scripts/bb-dev-app env)"
+pnpm --silent dev:app status
+eval "$(pnpm --silent dev:app env)"
 unset BB_CLI BB_CLI_REEXEC
 curl -fsS "$BB_SERVER_URL/health"
 curl -fsS "http://127.0.0.1:$BB_HOST_DAEMON_PORT/health"
@@ -144,7 +144,7 @@ check its PID's command and working directory with `ps` and `lsof -p <pid>`.
 A responding port alone does not establish instance ownership. Record the
 current source commit and whether the tree is dirty with the launch evidence.
 
-`scripts/bb-dev-app env` deliberately clears the parent thread context,
+`pnpm dev:app env` deliberately clears the parent thread context,
 including `BB_THREAD_STORAGE`. Save the evidence location before evaluating
 it. It targets the dev server and daemon. In that isolated shell, unset both
 `BB_CLI` and `BB_CLI_REEXEC`, then use `node apps/cli/dist/index.js` for CLI
@@ -223,8 +223,8 @@ the checkout's listeners again before invoking the launcher stop command.
 ```bash
 test "$(cat "$BB_VERIFY_DATA_DIR/verify-bb-owner")" = "$BB_VERIFY_RUN" || exit 1
 dev-browser stop "$BB_VERIFY_BROWSER"
-scripts/bb-dev-app stop
-scripts/bb-dev-app status > "$BB_VERIFY_RUN/after-stop.txt"
+pnpm dev:stop
+pnpm --silent dev:app status > "$BB_VERIFY_RUN/after-stop.txt"
 test -s "$BB_VERIFY_RUN/source-commit.txt"
 ```
 

@@ -6,7 +6,7 @@ Status: **2026-09-05: 12 partial/blocked**. See [the audit](../MAINTENANCE.md) a
 
 Use a graphical macOS or Linux test host with the source desktop build. Follow
 the main launch preflight and fresh-store marker, then use
-`scripts/bb-dev-app current --desktop` in place of the web-only launch. Confirm
+`pnpm dev:desktop` in place of the web-only launch. Confirm
 that Electron and its owned runtime use this checkout's isolated store. Browser
 automation against the web app cannot prove native menu, window, or update behavior.
 Native actions need OS/Electron automation and inspected screenshots.

@@ -321,7 +321,7 @@ EXPO_PUBLIC_BB_SERVER_URL=http://127.0.0.1:<port> pnpm dev   # Metro (dev-client
 ```
 
 The iOS Simulator shares the Mac loopback, so `pnpm dev` (repo root) or
-`scripts/bb-dev-app current` gives a server URL that works as-is. Physical
+`pnpm dev:app current` gives a server URL that works as-is. Physical
 phones need a Tailscale Serve URL, bb connect, or a temporary
 `BB_SERVER_BIND_HOST=0.0.0.0`.
 
@@ -759,7 +759,7 @@ payload.apns` with `{"aps":{"alert":{…}},"body":{"kind":"turn-finished",
   installed list is empty (the flow asserts the empty state) while the
   catalog / marketplaces / skills routes work. `e2e/manual/phase7-plugins-
 devserver.yaml` drives the same screens against the checkout's dev server
-  (`scripts/bb-dev-app current`; real builtin plugins, read-mostly) and is not
+  (`pnpm dev:app current`; real builtin plugins, read-mostly) and is not
   part of `pnpm e2e:ios`.
 
 ## Share sheet and haptics (Phase 7)
