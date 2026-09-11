@@ -117,11 +117,37 @@ const noComments = {
   },
 };
 
+const tmpPathPattern = /^\/tmp(?:\/|$)/u;
+
+const noTmpPathLiteral = {
+  create(context) {
+    function checkStringValue(node, value) {
+      if (typeof value === "string" && tmpPathPattern.test(value)) {
+        context.report({
+          node,
+          message:
+            "Hardcoded /tmp paths break on Windows. Use os.tmpdir() (tmpRoot() from @bb/test-helpers in tests).",
+        });
+      }
+    }
+
+    return {
+      Literal(node) {
+        checkStringValue(node, node.value);
+      },
+      TemplateElement(node) {
+        checkStringValue(node, node.value.cooked ?? node.value.raw);
+      },
+    };
+  },
+};
+
 export const rules = {
   "no-blocking-child-process-call": noBlockingChildProcessCall,
   "no-comments": noComments,
   "no-native-title-on-button": noNativeTitleOnButton,
   "no-native-title-with-aria-label": noNativeTitleWithAriaLabel,
+  "no-tmp-path-literal": noTmpPathLiteral,
 };
 
 export default {

@@ -9,7 +9,8 @@
     "builtin": true
   },
   "rules": {
-    "bb/no-comments": "error"
+    "bb/no-comments": "error",
+    "bb/no-tmp-path-literal": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",
@@ -25,6 +26,17 @@
     "packages/plugin-sdk/bundled-types/**"
   ],
   "overrides": [
+    {
+      "files": [
+        "**/*.test.{ts,tsx,mjs}",
+        "**/test/**",
+        "**/__tests__/**",
+        "**/*.stories.tsx"
+      ],
+      "rules": {
+        "bb/no-tmp-path-literal": "off"
+      }
+    },
     {
       "files": [
         "packages/domain/src/native-roots.ts",
