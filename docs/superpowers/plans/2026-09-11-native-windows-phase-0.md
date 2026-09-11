@@ -44,9 +44,10 @@
 | `tests/qa/scripts/run-root-command.mjs`, `tests/qa/package.json` | Cross-platform parent-PID lookup and `.cmd`-safe spawn |
 | `.gitattributes` | CRLF for `*.cmd` and `*.bat` |
 | `packages/scripts/src/lib/dev-app-launcher.ts` | Pure helpers and process control for the dev launcher |
-| `packages/scripts/src/commands/run-dev-app.ts` | `current`, `status`, `stop`, `help` entry point |
+| `packages/scripts/src/commands/run-dev-app.ts` | `current`, `status`, `stop`, `env`, `logs`, `help` entry point |
 | `packages/scripts/test/dev-app-launcher.test.ts`, `packages/scripts/test/run-dev-app.test.mjs` | Launcher tests (replaces `bb-dev-app.test.mjs`) |
-| `packages/scripts/package.json`, root `package.json`, `apps/desktop/README.md` | Wire the launcher, delete `scripts/bb-dev-app` |
+| `packages/scripts/package.json`, root `package.json`, `apps/desktop/README.md` | Wire the launcher behind `dev:app`, `dev:desktop`, `dev:status`, `dev:stop` |
+| `docs/debugging-and-qa.md`, `apps/mobile/README.md`, `.bb/skills/verify-bb/**`, `.bb/skills/plugin-guide-maintenance/SKILL.md` | Reference sweep before `scripts/bb-dev-app` is deleted |
 | `.github/workflows/ci.yml`, `packages/scripts/test/ci-workflow.test.ts` | Non-required `windows-x64` job |
 | `docs/platform-windows.md`, `docs/platform-support.md` | Prerequisites, measurements, known limitations |
 | `qa/windows/phase-0/*`, `qa/windows/scripts/summarize-turbo-run.mjs` | Evidence and the baseline summariser |
@@ -1018,8 +1019,9 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `DevInstanceConfig` from `@bb/config/runtime` (`dataDir`, `ports.appPort`, `ports.serverPort`, `ports.hostDaemonPort`, `serverUrl`, `repoRoot`, `instanceId`).
-- Produces (used by Tasks 8b and 8c):
-  - `parseDevAppArgs(argv: readonly string[]): DevAppArgs` where `DevAppArgs = { command: "current" | "help" | "status" | "stop"; desktop: boolean; open: boolean }`
+- Produces (used by Tasks 8b, 8c and 8d):
+  - `parseDevAppArgs(argv: readonly string[]): DevAppArgs` where `DevAppArgs = { command: "current" | "env" | "help" | "logs" | "status" | "stop"; desktop: boolean; logTarget: "desktop" | "dev"; open: boolean; powershell: boolean }`
+  - `formatDevAppEnv(config: DevInstanceConfig, shell: "posix" | "powershell"): string` (the six lines the bash launcher's `env` printed, in the requested shell's syntax)
   - `resolveDevAppPaths(config: DevInstanceConfig, env: NodeJS.ProcessEnv): DevAppPaths` where `DevAppPaths = { desktopLogPath; desktopPidPath; desktopUserDataDir; devLogPath; devPidPath; logRoot }` (all `string`)
   - `assertDesktopNodeRuntime(args: { execPath: string; version: string }): void`
   - `resolveOpenUrlCommand(platform: NodeJS.Platform, url: string): { command: string; args: string[] }`
@@ -1039,6 +1041,7 @@ import {
   DEV_SERVER_READY_PATTERN,
   assertDesktopNodeRuntime,
   desktopReadyPattern,
+  formatDevAppEnv,
   formatDevAppStatus,
   parseDevAppArgs,
   resolveDevAppPaths,
@@ -1049,21 +1052,68 @@ const homeDir = join("/", "home", "dev");
 const repoRoot = join(homeDir, "work", "bb");
 const config = resolveDevInstanceConfig({ homeDir, repoRoot });
 
+const defaults = {
+  desktop: false,
+  logTarget: "dev",
+  open: false,
+  powershell: false,
+} as const;
+
 describe("parseDevAppArgs", () => {
   it("defaults to help and accepts flags anywhere", () => {
-    expect(parseDevAppArgs([])).toEqual({ command: "help", desktop: false, open: false });
+    expect(parseDevAppArgs([])).toEqual({ ...defaults, command: "help" });
     expect(parseDevAppArgs(["--desktop", "current", "--open"])).toEqual({
+      ...defaults,
       command: "current",
       desktop: true,
       open: true,
     });
-    expect(parseDevAppArgs(["status"])).toEqual({ command: "status", desktop: false, open: false });
-    expect(parseDevAppArgs(["--help"])).toEqual({ command: "help", desktop: false, open: false });
+    expect(parseDevAppArgs(["status"])).toEqual({ ...defaults, command: "status" });
+    expect(parseDevAppArgs(["--help"])).toEqual({ ...defaults, command: "help" });
+    expect(parseDevAppArgs(["env", "--powershell"])).toEqual({
+      ...defaults,
+      command: "env",
+      powershell: true,
+    });
+  });
+
+  it("takes an optional log target for logs", () => {
+    expect(parseDevAppArgs(["logs"])).toEqual({ ...defaults, command: "logs" });
+    expect(parseDevAppArgs(["logs", "desktop"])).toEqual({
+      ...defaults,
+      command: "logs",
+      logTarget: "desktop",
+    });
+    expect(() => parseDevAppArgs(["logs", "launcher"])).toThrow("Unknown log target: launcher");
   });
 
   it("rejects unknown commands and stray arguments", () => {
     expect(() => parseDevAppArgs(["main"])).toThrow("Unknown command: main");
     expect(() => parseDevAppArgs(["stop", "extra"])).toThrow("Unexpected arguments: extra");
+  });
+});
+
+describe("formatDevAppEnv", () => {
+  it("prints the six launcher env lines for a POSIX shell", () => {
+    expect(formatDevAppEnv(config, "posix").split("\n")).toEqual([
+      `export BB_SERVER_URL=${config.serverUrl}`,
+      `export BB_HOST_DAEMON_PORT=${config.ports.hostDaemonPort}`,
+      "export BB_PROJECT_ID=proj_personal",
+      "unset BB_THREAD_ID",
+      "unset BB_ENVIRONMENT_ID",
+      "unset BB_THREAD_STORAGE",
+    ]);
+  });
+
+  it("prints the same lines for PowerShell", () => {
+    expect(formatDevAppEnv(config, "powershell").split("\n")).toEqual([
+      `$env:BB_SERVER_URL = "${config.serverUrl}"`,
+      `$env:BB_HOST_DAEMON_PORT = "${config.ports.hostDaemonPort}"`,
+      '$env:BB_PROJECT_ID = "proj_personal"',
+      "Remove-Item Env:BB_THREAD_ID -ErrorAction SilentlyContinue",
+      "Remove-Item Env:BB_ENVIRONMENT_ID -ErrorAction SilentlyContinue",
+      "Remove-Item Env:BB_THREAD_STORAGE -ErrorAction SilentlyContinue",
+    ]);
   });
 });
 
@@ -1177,13 +1227,25 @@ Create `packages/scripts/src/lib/dev-app-launcher.ts`:
 import { join } from "node:path";
 import type { DevInstanceConfig } from "@bb/config/runtime";
 
-export type DevAppCommand = "current" | "help" | "status" | "stop";
+export type DevAppCommand =
+  | "current"
+  | "env"
+  | "help"
+  | "logs"
+  | "status"
+  | "stop";
+
+export type DevAppLogTarget = "desktop" | "dev";
 
 export interface DevAppArgs {
   command: DevAppCommand;
   desktop: boolean;
+  logTarget: DevAppLogTarget;
   open: boolean;
+  powershell: boolean;
 }
+
+export type DevAppEnvShell = "posix" | "powershell";
 
 export interface DevAppPaths {
   desktopLogPath: string;
@@ -1223,35 +1285,78 @@ export function desktopReadyPattern(appPort: number): RegExp {
   return new RegExp(`@bb/desktop: app http://localhost:${appPort}(?![0-9])`, "u");
 }
 
+function parseLogTarget(word: string | undefined): DevAppLogTarget {
+  if (word === undefined || word === "dev") {
+    return "dev";
+  }
+  if (word === "desktop") {
+    return "desktop";
+  }
+  throw new Error(`Unknown log target: ${word}`);
+}
+
 export function parseDevAppArgs(argv: readonly string[]): DevAppArgs {
-  let desktop = false;
-  let open = false;
+  const flags = { desktop: false, open: false, powershell: false };
   const positional: string[] = [];
   for (const arg of argv) {
     if (arg === "--desktop") {
-      desktop = true;
+      flags.desktop = true;
     } else if (arg === "--open") {
-      open = true;
+      flags.open = true;
+    } else if (arg === "--powershell") {
+      flags.powershell = true;
     } else {
       positional.push(arg);
     }
   }
   const [commandWord = "help", ...rest] = positional;
+  if (commandWord === "logs") {
+    const [targetWord, ...extra] = rest;
+    if (extra.length > 0) {
+      throw new Error(`Unexpected arguments: ${extra.join(" ")}`);
+    }
+    return { ...flags, command: "logs", logTarget: parseLogTarget(targetWord) };
+  }
   if (rest.length > 0) {
     throw new Error(`Unexpected arguments: ${rest.join(" ")}`);
   }
   switch (commandWord) {
     case "current":
+    case "env":
     case "status":
     case "stop":
-      return { command: commandWord, desktop, open };
+      return { ...flags, command: commandWord, logTarget: "dev" };
     case "help":
     case "-h":
     case "--help":
-      return { command: "help", desktop, open };
+      return { ...flags, command: "help", logTarget: "dev" };
     default:
       throw new Error(`Unknown command: ${commandWord}`);
   }
+}
+
+export function formatDevAppEnv(
+  config: DevInstanceConfig,
+  shell: DevAppEnvShell,
+): string {
+  const assignments: Array<[string, string]> = [
+    ["BB_SERVER_URL", config.serverUrl],
+    ["BB_HOST_DAEMON_PORT", String(config.ports.hostDaemonPort)],
+    ["BB_PROJECT_ID", "proj_personal"],
+  ];
+  const removals = ["BB_THREAD_ID", "BB_ENVIRONMENT_ID", "BB_THREAD_STORAGE"];
+  if (shell === "powershell") {
+    return [
+      ...assignments.map(([key, value]) => `$env:${key} = "${value}"`),
+      ...removals.map(
+        (key) => `Remove-Item Env:${key} -ErrorAction SilentlyContinue`,
+      ),
+    ].join("\n");
+  }
+  return [
+    ...assignments.map(([key, value]) => `export ${key}=${value}`),
+    ...removals.map((key) => `unset ${key}`),
+  ].join("\n");
 }
 
 export function resolveDevAppPaths(
@@ -1323,13 +1428,13 @@ export function formatDevAppStatus(args: DevAppStatusArgs): string {
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `pnpm exec turbo run test --filter=@bb/scripts -- dev-app-launcher`
-Expected: PASS (5 describe blocks).
+Expected: PASS (7 describe blocks).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add packages/scripts/src/lib/dev-app-launcher.ts packages/scripts/test/dev-app-launcher.test.ts
-git commit -m "Add dev launcher argument, path and status helpers
+git commit -m "Add dev launcher argument, path, env and status helpers
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1350,10 +1455,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   - `waitForLogPattern(args: { description: string; failurePatterns: readonly RegExp[]; logPath: string; pollIntervalMs?: number; readyPattern: RegExp; timeoutMs: number }): Promise<void>`
   - `readTrackedProcessState(args: { pidPath: string; serviceName: string }): Promise<DevAppProcessState>`
   - `stopTrackedProcess(args: { pidPath: string; platform: NodeJS.Platform; serviceName: string }): Promise<"not-running" | "stopped">`
+  - `followLogFile(args: { logPath: string; pollIntervalMs?: number; signal: AbortSignal; write: (chunk: string) => void }): Promise<void>` (prints what the file already holds, then every appended chunk, until the signal aborts; a missing file is waited for, not an error)
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `packages/scripts/test/dev-app-launcher.test.ts` (add `mkdtempSync`, `rmSync` from `node:fs`, `tmpdir` from `node:os`, and `readTrackedProcessState`, `startLoggedProcess`, `stopTrackedProcess`, `waitForLogPattern` to the imports):
+Append to `packages/scripts/test/dev-app-launcher.test.ts` (add `appendFileSync`, `mkdtempSync`, `rmSync`, `writeFileSync` from `node:fs`, `tmpdir` from `node:os`, and `followLogFile`, `readTrackedProcessState`, `startLoggedProcess`, `stopTrackedProcess`, `waitForLogPattern` to the imports):
 
 ```ts
 describe("tracked processes", () => {
@@ -1426,6 +1532,37 @@ describe("tracked processes", () => {
         }),
       ).rejects.toThrow(`Timed out after 200 ms waiting for dev server; see ${logPath}`);
       await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("followLogFile", () => {
+  it("replays existing content, streams appended chunks, and stops on abort", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "dev.log");
+    const chunks: string[] = [];
+    const controller = new AbortController();
+    try {
+      const following = followLogFile({
+        logPath,
+        pollIntervalMs: 20,
+        signal: controller.signal,
+        write: (chunk) => {
+          chunks.push(chunk);
+        },
+      });
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      writeFileSync(logPath, "first line\n");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      appendFileSync(logPath, "second line\n");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      controller.abort();
+      await following;
+
+      expect(chunks.join("")).toBe("first line\nsecond line\n");
+      expect(chunks.length).toBeGreaterThanOrEqual(2);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -1669,6 +1806,43 @@ export async function stopTrackedProcess(args: {
   await rm(args.pidPath, { force: true });
   return "stopped";
 }
+
+export async function followLogFile(args: {
+  logPath: string;
+  pollIntervalMs?: number;
+  signal: AbortSignal;
+  write: (chunk: string) => void;
+}): Promise<void> {
+  const pollIntervalMs = args.pollIntervalMs ?? 500;
+  let offset = 0;
+  while (!args.signal.aborted) {
+    let handle;
+    try {
+      handle = await open(args.logPath, "r");
+    } catch (error) {
+      if (!isErrnoCode(error, "ENOENT")) {
+        throw error;
+      }
+      await sleep(pollIntervalMs);
+      continue;
+    }
+    try {
+      const { size } = await handle.stat();
+      if (size < offset) {
+        offset = 0;
+      }
+      if (size > offset) {
+        const buffer = Buffer.alloc(size - offset);
+        await handle.read(buffer, 0, buffer.length, offset);
+        offset = size;
+        args.write(buffer.toString("utf8"));
+      }
+    } finally {
+      await handle.close();
+    }
+    await sleep(pollIntervalMs);
+  }
+}
 ```
 
 Why the platform split: on Windows `detached` maps to `DETACHED_PROCESS`, which makes `CREATE_NO_WINDOW` (what `windowsHide` sets) ineffective, and a console-less parent hands every console grandchild a fresh visible console. A non-detached child with `windowsHide` gets its own hidden console that its children inherit, is not attached to the launcher's console (so a later Ctrl+C in that PowerShell window does not reach it), and Windows never kills children when a parent exits. Task 8c measures this.
@@ -1692,17 +1866,18 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 8c: `run-dev-app` command replaces `scripts/bb-dev-app`
+### Task 8c: `run-dev-app` command and root scripts
 
 **Files:**
 - Create: `packages/scripts/src/commands/run-dev-app.ts`
 - Modify: `packages/scripts/package.json` (`bin`), root `package.json:19-21`, `apps/desktop/README.md:7-17`
-- Delete: `scripts/bb-dev-app`
-- Test: `packages/scripts/test/run-dev-app.test.mjs` (replaces `packages/scripts/test/bb-dev-app.test.mjs`)
+- Test: `packages/scripts/test/run-dev-app.test.mjs`
+
+`scripts/bb-dev-app` and its test `packages/scripts/test/bb-dev-app.test.mjs` stay in place until Task 8d has rewritten every reference to them.
 
 **Interfaces:**
 - Consumes: everything Task 8a and 8b produce; `resolveCurrentDevInstanceConfig(repoRoot)` and `stripThreadContextEnv(env)` from `@bb/config/runtime`; `runScriptProcess(request)` from `../lib/process-helpers.js`; `spawnPortableOutputProcess` from `@bb/process-utils`.
-- Produces: `node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts <current|status|stop|help> [--desktop] [--open]` and the built `dist/commands/run-dev-app.js`.
+- Produces: `node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts <current|env|logs|status|stop|help> [--desktop] [--open] [--powershell] [dev|desktop]`, the built `dist/commands/run-dev-app.js`, and the root scripts `dev:app` (the launcher itself, for any subcommand), `dev:desktop`, `dev:status`, `dev:stop`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1765,6 +1940,17 @@ describe("run-dev-app", () => {
     expect(result.stderr).toContain("Usage: pnpm dev:desktop");
   });
 
+  it("prints shell-specific env lines", () => {
+    const posix = runDevApp(["env"], {});
+    const powershell = runDevApp(["env", "--powershell"], {});
+
+    expect(posix.status).toBe(0);
+    expect(posix.stdout.split("\n")[0]).toMatch(/^export BB_SERVER_URL=http:\/\/127\.0\.0\.1:\d+$/u);
+    expect(posix.stdout).toContain("unset BB_THREAD_STORAGE");
+    expect(powershell.status).toBe(0);
+    expect(powershell.stdout.split("\n")[0]).toMatch(/^\$env:BB_SERVER_URL = "http:\/\/127\.0\.0\.1:\d+"$/u);
+  });
+
   it("pins the root engine floor for primary development", () => {
     const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
     const nodePin = readFileSync(join(repoRoot, ".nvmrc"), "utf8").trim();
@@ -1774,12 +1960,10 @@ describe("run-dev-app", () => {
 });
 ```
 
-Delete `packages/scripts/test/bb-dev-app.test.mjs`.
-
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm exec turbo run test --filter=@bb/scripts -- run-dev-app`
-Expected: FAIL; the first three cases exit non-zero with `Cannot find module`.
+Expected: FAIL; the first four cases exit non-zero with `Cannot find module`.
 
 - [ ] **Step 3: Write the command**
 
@@ -1805,6 +1989,8 @@ import {
   DEV_SERVER_READY_TIMEOUT_MS,
   assertDesktopNodeRuntime,
   desktopReadyPattern,
+  followLogFile,
+  formatDevAppEnv,
   formatDevAppStatus,
   parseDevAppArgs,
   readTrackedProcessState,
@@ -1821,10 +2007,12 @@ const commandsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(commandsDir, "..", "..", "..", "..");
 
 const USAGE = [
-  "Usage: pnpm dev:desktop | pnpm dev:status | pnpm dev:stop",
-  "  run-dev-app current [--desktop] [--open]   restart the source dev loop for this checkout",
-  "  run-dev-app status                         print instance, ports and session state",
-  "  run-dev-app stop                           stop the dev server and desktop sessions",
+  "Usage: pnpm dev:app <command> [flags] (shortcuts: pnpm dev:desktop | pnpm dev:status | pnpm dev:stop)",
+  "  current [--desktop] [--open]   restart the source dev loop for this checkout",
+  "  status                         print instance, ports and session state",
+  "  stop                           stop the dev server and desktop sessions",
+  "  env [--powershell]             print shell lines that target this checkout's dev server",
+  "  logs [dev|desktop]             follow a session log",
 ].join("\n");
 
 function log(message: string): void {
@@ -2021,6 +2209,25 @@ async function main(): Promise<void> {
     await stopAll(paths);
     return;
   }
+  if (args.command === "env") {
+    process.stdout.write(
+      `${formatDevAppEnv(config, args.powershell ? "powershell" : "posix")}\n`,
+    );
+    return;
+  }
+  if (args.command === "logs") {
+    const controller = new AbortController();
+    process.once("SIGINT", () => controller.abort());
+    process.once("SIGTERM", () => controller.abort());
+    await followLogFile({
+      logPath: args.logTarget === "desktop" ? paths.desktopLogPath : paths.devLogPath,
+      signal: controller.signal,
+      write: (chunk) => {
+        process.stdout.write(chunk);
+      },
+    });
+    return;
+  }
   if (args.desktop) {
     assertDesktopNodeRuntime({
       execPath: process.execPath,
@@ -2054,34 +2261,30 @@ main().catch((error: unknown) => {
     "bb-script-run-dev-app": "./dist/commands/run-dev-app.js",
 ```
 
-Root `package.json` lines 19-21 become:
+Root `package.json` lines 19-21 become these four lines:
 
 ```json
+    "dev:app": "cross-env NODE_ENV=development node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts",
     "dev:desktop": "cross-env NODE_ENV=development node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts current --desktop",
     "dev:status": "cross-env NODE_ENV=development node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts status",
     "dev:stop": "cross-env NODE_ENV=development node --conditions=source --import tsx packages/scripts/src/commands/run-dev-app.ts stop",
-```
-
-Delete the bash script:
-
-```bash
-git rm scripts/bb-dev-app
 ```
 
 In `apps/desktop/README.md` replace lines 15-16 ("That starts the source dev server and the Electron shell through `scripts/bb-dev-app`.") with:
 
 ```markdown
 That starts the source dev server and the Electron shell through the Node
-launcher `packages/scripts/src/commands/run-dev-app.ts` (`pnpm dev:status`
-and `pnpm dev:stop` drive the same sessions; logs live under
-`~/.bb-dev/<checkout-instance>/dev-app/`). It works from PowerShell as well
-as POSIX shells and needs Node 22.19 or newer on the 22 line.
+launcher `packages/scripts/src/commands/run-dev-app.ts` (`pnpm dev:status`,
+`pnpm dev:stop` and `pnpm dev:app <command>` drive the same sessions; logs
+live under `~/.bb-dev/<checkout-instance>/dev-app/`). It works from
+PowerShell as well as POSIX shells and needs Node 22.19 or newer on the 22
+line.
 ```
 
 - [ ] **Step 5: Run the tests, the build and a live cycle**
 
 Run: `pnpm exec turbo run test --filter=@bb/scripts -- run-dev-app`
-Expected: PASS (4 cases).
+Expected: PASS (5 cases).
 
 Run: `pnpm exec turbo run build --filter=@bb/scripts && ls packages/scripts/dist/commands/run-dev-app.js`
 Expected: the built entry exists.
@@ -2113,12 +2316,114 @@ Run on macOS or Linux (any contributor machine): the same three commands behave 
 
 ```bash
 git add packages/scripts/src/commands/run-dev-app.ts packages/scripts/package.json package.json apps/desktop/README.md packages/scripts/test/run-dev-app.test.mjs
-git commit -m "Replace the bash dev-app launcher with a Node supervisor
+git commit -m "Add a Node dev-app launcher behind pnpm dev:app
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-(`git rm scripts/bb-dev-app` and the deleted test are already staged.)
+---
+
+### Task 8d: Reference sweep and removal of the bash launcher
+
+**Files:**
+- Modify: `docs/debugging-and-qa.md:13-24`, `apps/mobile/README.md:324`, `apps/mobile/README.md:762`, `apps/mobile/e2e/manual/phase7-plugins-devserver.yaml:1-2`, `.bb/skills/verify-bb/SKILL.md:71,91,104,131,132,147,226,227`, `.bb/skills/verify-bb/features/desktop.md:9`, `.bb/skills/verify-bb/features/developer-fixtures.md:14`, `.bb/skills/plugin-guide-maintenance/SKILL.md:114`
+- Delete: `scripts/bb-dev-app`, `packages/scripts/test/bb-dev-app.test.mjs`
+
+**Interfaces:**
+- Consumes: the root scripts `dev:app`, `dev:desktop`, `dev:status`, `dev:stop` from Task 8c and the launcher's `env --powershell` and `logs` subcommands.
+- Produces: no reference to `scripts/bb-dev-app` outside `docs/superpowers/` and the historical record `.bb/skills/verify-bb/validation-2026-09-05.json`.
+
+- [ ] **Step 1: Apply the replacement mapping**
+
+| Old invocation | New invocation |
+|---|---|
+| `scripts/bb-dev-app status` (captured to a file) | `pnpm --silent dev:app status` |
+| `scripts/bb-dev-app status` (interactive) | `pnpm --silent dev:app status` |
+| `scripts/bb-dev-app current` | `pnpm dev:app current` (captured: `pnpm --silent dev:app current`) |
+| `scripts/bb-dev-app current --desktop` | `pnpm dev:desktop` |
+| `eval "$(scripts/bb-dev-app env)"` | `eval "$(pnpm --silent dev:app env)"` |
+| `scripts/bb-dev-app stop` | `pnpm dev:stop` |
+| `scripts/bb-dev-app logs dev` / `logs desktop` | `pnpm dev:app logs dev` / `pnpm dev:app logs desktop` |
+| `scripts/bb-dev-app main`, `scripts/bb-dev-app branch <b>` | removed; switch branches with `git`, then `pnpm dev:app current` |
+| `scripts/bb-dev-app` as a source pointer | `packages/scripts/src/commands/run-dev-app.ts` |
+
+`--silent` matters wherever output is captured: without it pnpm prints its own `> bb@… dev:app` banner into the file.
+
+Replace the "Local Dev QA Launcher" block in `docs/debugging-and-qa.md` (from the heading through the paragraph that ends "desktop-only change.") with:
+
+```markdown
+## Local Dev QA Launcher
+
+Use `pnpm dev:app <command>` when validating changes in the desktop dev app or helping QA from this checkout. It runs `packages/scripts/src/commands/run-dev-app.ts`, which works from PowerShell and POSIX shells alike:
+
+- `pnpm dev:status` (`pnpm dev:app status`) prints the active branch, Node runtime, dev URLs, data dir, and logs.
+- `pnpm dev:app current` restarts the dev server on the checked-out branch. Switch branches with `git` first; the launcher does not fetch or check out.
+- `pnpm dev:stop` (`pnpm dev:app stop`) stops the launcher-managed dev server and desktop.
+- `pnpm --silent dev:app env` prints `export` lines that target this checkout's dev server; `--powershell` prints `$env:` lines. Use `eval "$(pnpm --silent dev:app env)"` in bash and `pnpm --silent dev:app env --powershell | Out-String | Invoke-Expression` in PowerShell.
+- `pnpm dev:app logs dev` and `pnpm dev:app logs desktop` follow logs.
+
+By default the launcher starts only the dev server (web frontend, server, host daemon) and prints the URL without opening a browser. Pass `--open` to open the browser after startup. Pass `--desktop` (`pnpm dev:desktop`, or `pnpm dev:app current --desktop`) to also launch the Electron desktop shell — only do this when the user is testing a desktop-only change.
+```
+
+Leave the paragraph that starts "The launcher uses the Node executable from the caller's `PATH`" and everything after it unchanged.
+
+`.bb/skills/verify-bb/SKILL.md`, exact new lines:
+
+```
+71:  pnpm --silent dev:app status
+91:  pnpm --silent dev:app status > "$BB_VERIFY_RUN/before-launch.txt"
+104: pnpm --silent dev:app current > "$BB_VERIFY_RUN/launch.log" 2>&1
+131: pnpm --silent dev:app status
+132: eval "$(pnpm --silent dev:app env)"
+147: `pnpm dev:app env` deliberately clears the parent thread context,
+226: pnpm dev:stop
+227: pnpm --silent dev:app status > "$BB_VERIFY_RUN/after-stop.txt"
+```
+
+`.bb/skills/verify-bb/features/desktop.md` line 9: `` `pnpm dev:desktop` in place of the web-only launch. Confirm``
+
+`.bb/skills/verify-bb/features/developer-fixtures.md` line 14: ``- `packages/scripts/src/commands/run-dev-app.ts` ``
+
+`.bb/skills/plugin-guide-maintenance/SKILL.md` line 114: `` `pnpm dev:app current`; inspect the affected entry and reachable actions``
+
+`apps/mobile/README.md` line 324: `` `pnpm dev:app current` gives a server URL that works as-is. Physical`` and line 762: ``  (`pnpm dev:app current`; real builtin plugins, read-mostly) and is not``
+
+`apps/mobile/e2e/manual/phase7-plugins-devserver.yaml` lines 1-2:
+
+```yaml
+# Phase 7 plugins against the checkout's dev server (`pnpm dev:app current`;
+# server port 20304 for this worktree — edit SERVER_URL for another
+```
+
+- [ ] **Step 2: Confirm nothing else points at the bash launcher**
+
+Run: `grep -rn "bb-dev-app" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.superpowers .`
+Expected: only `docs/superpowers/` files and `.bb/skills/verify-bb/validation-2026-09-05.json` (a dated validation record; leave it).
+
+- [ ] **Step 3: Delete the bash launcher and its test**
+
+```bash
+git rm scripts/bb-dev-app packages/scripts/test/bb-dev-app.test.mjs
+```
+
+- [ ] **Step 4: Run the suites that read the touched files**
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts --filter=@bb/plugin-api-map`
+Expected: PASS (`@bb/plugin-api-map#test` declares `.bb/skills/plugin-guide-maintenance/**` as an input, so it reruns; `@bb/scripts` no longer has the bash test).
+
+Run on the reference desktop: `pnpm --silent dev:app env --powershell | Out-String | Invoke-Expression; $env:BB_SERVER_URL`
+Expected: the checkout's server URL prints.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/debugging-and-qa.md apps/mobile/README.md apps/mobile/e2e/manual/phase7-plugins-devserver.yaml .bb/skills/verify-bb/SKILL.md .bb/skills/verify-bb/features/desktop.md .bb/skills/verify-bb/features/developer-fixtures.md .bb/skills/plugin-guide-maintenance/SKILL.md
+git commit -m "Point docs and skills at pnpm dev:app and remove the bash launcher
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+(The two deletions are already staged by `git rm`.)
 
 ---
 
