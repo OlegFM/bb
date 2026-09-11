@@ -165,7 +165,7 @@ describe("readiness patterns", () => {
 });
 
 describe("formatDevAppStatus", () => {
-  it("prints the thirteen status lines", () => {
+  it("prints the twelve status lines", () => {
     const paths = resolveDevAppPaths(config, {});
     const status = formatDevAppStatus({
       branch: "main (abc1234)",
