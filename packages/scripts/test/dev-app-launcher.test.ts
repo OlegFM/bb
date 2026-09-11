@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -255,6 +255,28 @@ describe("tracked processes", () => {
         }),
       ).rejects.toThrow(`Timed out after 200 ms waiting for dev server; see ${logPath}`);
       await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects when the process cannot be spawned and leaves no pid file", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "child.log");
+    const pidPath = join(tempRoot, "child.pid");
+    try {
+      await expect(
+        startLoggedProcess({
+          args: ["-e", "console.log('unreachable')"],
+          command: process.execPath,
+          cwd: join(tempRoot, "definitely-missing-cwd"),
+          env: process.env,
+          logPath,
+          pidPath,
+          platform: process.platform,
+        }),
+      ).rejects.toThrow();
+      expect(existsSync(pidPath)).toBe(false);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

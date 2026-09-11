@@ -256,12 +256,20 @@ export async function startLoggedProcess(
       stdio: ["ignore", logHandle.fd, logHandle.fd],
       windowsHide: true,
     });
-    if (child.pid === undefined) {
+    const pid = await new Promise<number>((resolvePromise, rejectPromise) => {
+      child.once("error", rejectPromise);
+      child.once("spawn", () => {
+        child.off("error", rejectPromise);
+        child.on("error", () => {});
+        resolvePromise(child.pid ?? -1);
+      });
+    });
+    if (pid <= 0) {
       throw new Error(`Failed to start ${request.command}`);
     }
     child.unref();
-    await writePidFile({ pid: child.pid, pidPath: request.pidPath });
-    return child.pid;
+    await writePidFile({ pid, pidPath: request.pidPath });
+    return pid;
   } finally {
     await logHandle.close();
   }
@@ -332,9 +340,17 @@ async function waitForProcessGone(pid: number, timeoutMs: number): Promise<boole
 function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(-pid, signal);
+    return;
   } catch (error) {
     if (!isErrnoCode(error, "ESRCH")) {
-      process.kill(pid, signal);
+      throw error;
+    }
+  }
+  try {
+    process.kill(pid, signal);
+  } catch (error) {
+    if (!isErrnoCode(error, "ESRCH")) {
+      throw error;
     }
   }
 }
@@ -352,6 +368,20 @@ function runTaskkill(pid: number): Promise<void> {
     child.once("error", rejectPromise);
     child.once("exit", () => resolvePromise());
   });
+}
+
+async function stopWindowsProcessTree(pid: number): Promise<boolean> {
+  await runTaskkill(pid);
+  return waitForProcessGone(pid, STOP_GRACE_MS);
+}
+
+async function stopPosixProcessGroup(pid: number): Promise<boolean> {
+  signalProcessGroup(pid, "SIGTERM");
+  if (await waitForProcessGone(pid, STOP_GRACE_MS)) {
+    return true;
+  }
+  signalProcessGroup(pid, "SIGKILL");
+  return waitForProcessGone(pid, STOP_GRACE_MS);
 }
 
 export async function stopTrackedProcess(args: {
@@ -373,15 +403,14 @@ export async function stopTrackedProcess(args: {
     }
     throw error;
   }
-  if (args.platform === "win32") {
-    await runTaskkill(pid);
-    await waitForProcessGone(pid, STOP_GRACE_MS);
-  } else {
-    signalProcessGroup(pid, "SIGTERM");
-    if (!(await waitForProcessGone(pid, STOP_GRACE_MS))) {
-      signalProcessGroup(pid, "SIGKILL");
-      await waitForProcessGone(pid, STOP_GRACE_MS);
-    }
+  const gone =
+    args.platform === "win32"
+      ? await stopWindowsProcessTree(pid)
+      : await stopPosixProcessGroup(pid);
+  if (!gone) {
+    throw new Error(
+      `${args.serviceName} (pid ${pid}) is still running after stop; see ${args.pidPath}`,
+    );
   }
   await rm(args.pidPath, { force: true });
   return "stopped";
