@@ -127,7 +127,9 @@ Not available on the phone (use the web app or desktop for these):
 
 - workspace-owned QA helpers under [`tests/qa/`](../tests/qa/)
 - dev restart internals that are not part of the shipped product path
-- native Windows PowerShell, CMD, and host-daemon runtime flows
+- native Windows PowerShell, CMD, and host-daemon runtime flows; the in-progress
+  native port and its measured state are tracked in
+  [platform-windows.md](platform-windows.md)
 
 ## Dependency Policy
 
