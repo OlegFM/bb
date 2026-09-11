@@ -1,5 +1,11 @@
-import { join } from "node:path";
+import { mkdir, open, readFile, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { DevInstanceConfig } from "@bb/config/runtime";
+import {
+  spawnPortableOutputProcess,
+  spawnPortableProcess,
+} from "@bb/process-utils";
+import { readRunningPid, writePidFile } from "./pid-file.js";
 
 export type DevAppCommand =
   | "current"
@@ -196,4 +202,224 @@ export function formatDevAppStatus(args: DevAppStatusArgs): string {
     `Desktop session: ${args.desktopState}`,
     `Logs: ${args.paths.devLogPath}, ${args.paths.desktopLogPath}`,
   ].join("\n");
+}
+
+export interface StartLoggedProcessArgs {
+  args: string[];
+  command: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  logPath: string;
+  pidPath: string;
+  platform: NodeJS.Platform;
+}
+
+export interface WaitForLogPatternArgs {
+  description: string;
+  failurePatterns: readonly RegExp[];
+  logPath: string;
+  pollIntervalMs?: number;
+  readyPattern: RegExp;
+  timeoutMs: number;
+}
+
+const STOP_GRACE_MS = 5_000;
+const STOP_POLL_MS = 100;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, ms);
+  });
+}
+
+function isErrnoCode(error: unknown, code: string): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === code
+  );
+}
+
+export async function startLoggedProcess(
+  request: StartLoggedProcessArgs,
+): Promise<number> {
+  await mkdir(dirname(request.logPath), { recursive: true });
+  await rm(request.logPath, { force: true });
+  const logHandle = await open(request.logPath, "a");
+  try {
+    const child = spawnPortableProcess({
+      args: request.args,
+      command: request.command,
+      cwd: request.cwd,
+      detached: request.platform !== "win32",
+      env: request.env,
+      stdio: ["ignore", logHandle.fd, logHandle.fd],
+      windowsHide: true,
+    });
+    if (child.pid === undefined) {
+      throw new Error(`Failed to start ${request.command}`);
+    }
+    child.unref();
+    await writePidFile({ pid: child.pid, pidPath: request.pidPath });
+    return child.pid;
+  } finally {
+    await logHandle.close();
+  }
+}
+
+export async function waitForLogPattern(
+  args: WaitForLogPatternArgs,
+): Promise<void> {
+  const deadline = Date.now() + args.timeoutMs;
+  const pollIntervalMs = args.pollIntervalMs ?? 1_000;
+  while (Date.now() <= deadline) {
+    let text = "";
+    try {
+      text = await readFile(args.logPath, "utf8");
+    } catch (error) {
+      if (!isErrnoCode(error, "ENOENT")) {
+        throw error;
+      }
+    }
+    if (args.readyPattern.test(text)) {
+      return;
+    }
+    if (args.failurePatterns.some((pattern) => pattern.test(text))) {
+      throw new Error(`${args.description} failed to start; see ${args.logPath}`);
+    }
+    await sleep(pollIntervalMs);
+  }
+  throw new Error(
+    `Timed out after ${args.timeoutMs} ms waiting for ${args.description}; see ${args.logPath}`,
+  );
+}
+
+export async function readTrackedProcessState(args: {
+  pidPath: string;
+  serviceName: string;
+}): Promise<DevAppProcessState> {
+  try {
+    await readRunningPid(args);
+    return "running";
+  } catch {
+    return "stopped";
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (isErrnoCode(error, "ESRCH")) {
+      return false;
+    }
+    return true;
+  }
+}
+
+async function waitForProcessGone(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (!isProcessAlive(pid)) {
+      return true;
+    }
+    await sleep(STOP_POLL_MS);
+  }
+  return !isProcessAlive(pid);
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (!isErrnoCode(error, "ESRCH")) {
+      process.kill(pid, signal);
+    }
+  }
+}
+
+function runTaskkill(pid: number): Promise<void> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawnPortableOutputProcess({
+      args: ["/PID", String(pid), "/T", "/F"],
+      command: "taskkill.exe",
+      cwd: process.cwd(),
+      env: process.env,
+    });
+    child.stdout.resume();
+    child.stderr.resume();
+    child.once("error", rejectPromise);
+    child.once("exit", () => resolvePromise());
+  });
+}
+
+export async function stopTrackedProcess(args: {
+  pidPath: string;
+  platform: NodeJS.Platform;
+  serviceName: string;
+}): Promise<"not-running" | "stopped"> {
+  let pid: number;
+  try {
+    pid = await readRunningPid({ pidPath: args.pidPath, serviceName: args.serviceName });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.startsWith("No running ") ||
+      message.startsWith("Stale PID file") ||
+      message.startsWith("Invalid PID file")
+    ) {
+      return "not-running";
+    }
+    throw error;
+  }
+  if (args.platform === "win32") {
+    await runTaskkill(pid);
+    await waitForProcessGone(pid, STOP_GRACE_MS);
+  } else {
+    signalProcessGroup(pid, "SIGTERM");
+    if (!(await waitForProcessGone(pid, STOP_GRACE_MS))) {
+      signalProcessGroup(pid, "SIGKILL");
+      await waitForProcessGone(pid, STOP_GRACE_MS);
+    }
+  }
+  await rm(args.pidPath, { force: true });
+  return "stopped";
+}
+
+export async function followLogFile(args: {
+  logPath: string;
+  pollIntervalMs?: number;
+  signal: AbortSignal;
+  write: (chunk: string) => void;
+}): Promise<void> {
+  const pollIntervalMs = args.pollIntervalMs ?? 500;
+  let offset = 0;
+  while (!args.signal.aborted) {
+    let handle;
+    try {
+      handle = await open(args.logPath, "r");
+    } catch (error) {
+      if (!isErrnoCode(error, "ENOENT")) {
+        throw error;
+      }
+      await sleep(pollIntervalMs);
+      continue;
+    }
+    try {
+      const { size } = await handle.stat();
+      if (size < offset) {
+        offset = 0;
+      }
+      if (size > offset) {
+        const buffer = Buffer.alloc(size - offset);
+        await handle.read(buffer, 0, buffer.length, offset);
+        offset = size;
+        args.write(buffer.toString("utf8"));
+      }
+    } finally {
+      await handle.close();
+    }
+    await sleep(pollIntervalMs);
+  }
 }

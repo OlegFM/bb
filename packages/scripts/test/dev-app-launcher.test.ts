@@ -1,3 +1,5 @@
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveDevInstanceConfig } from "@bb/config/runtime";
@@ -6,11 +8,16 @@ import {
   DEV_SERVER_READY_PATTERN,
   assertDesktopNodeRuntime,
   desktopReadyPattern,
+  followLogFile,
   formatDevAppEnv,
   formatDevAppStatus,
   parseDevAppArgs,
+  readTrackedProcessState,
   resolveDevAppPaths,
   resolveOpenUrlCommand,
+  startLoggedProcess,
+  stopTrackedProcess,
+  waitForLogPattern,
 } from "../src/lib/dev-app-launcher.js";
 
 const homeDir = join("/", "home", "dev");
@@ -175,5 +182,112 @@ describe("formatDevAppStatus", () => {
       "Desktop session: stopped",
       `Logs: ${paths.devLogPath}, ${paths.desktopLogPath}`,
     ]);
+  });
+});
+
+describe("tracked processes", () => {
+  it("starts a detached logged child, reports it, and stops its tree", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "child.log");
+    const pidPath = join(tempRoot, "child.pid");
+    try {
+      const pid = await startLoggedProcess({
+        args: ["-e", "console.log('child ready'); setInterval(() => {}, 1000)"],
+        command: process.execPath,
+        cwd: tempRoot,
+        env: process.env,
+        logPath,
+        pidPath,
+        platform: process.platform,
+      });
+      expect(pid).toBeGreaterThan(0);
+
+      await waitForLogPattern({
+        description: "child",
+        failurePatterns: [],
+        logPath,
+        pollIntervalMs: 50,
+        readyPattern: /child ready/u,
+        timeoutMs: 15_000,
+      });
+      expect(await readTrackedProcessState({ pidPath, serviceName: "child" })).toBe("running");
+
+      expect(await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" })).toBe("stopped");
+      expect(await readTrackedProcessState({ pidPath, serviceName: "child" })).toBe("stopped");
+      expect(await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" })).toBe("not-running");
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails fast on a failure pattern and times out otherwise", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "child.log");
+    const pidPath = join(tempRoot, "child.pid");
+    try {
+      await startLoggedProcess({
+        args: ["-e", "console.log('port 1 is unavailable'); setInterval(() => {}, 1000)"],
+        command: process.execPath,
+        cwd: tempRoot,
+        env: process.env,
+        logPath,
+        pidPath,
+        platform: process.platform,
+      });
+      await expect(
+        waitForLogPattern({
+          description: "dev server",
+          failurePatterns: [/port .* is unavailable/u],
+          logPath,
+          pollIntervalMs: 50,
+          readyPattern: /never/u,
+          timeoutMs: 15_000,
+        }),
+      ).rejects.toThrow(`dev server failed to start; see ${logPath}`);
+      await expect(
+        waitForLogPattern({
+          description: "dev server",
+          failurePatterns: [],
+          logPath,
+          pollIntervalMs: 50,
+          readyPattern: /never/u,
+          timeoutMs: 200,
+        }),
+      ).rejects.toThrow(`Timed out after 200 ms waiting for dev server; see ${logPath}`);
+      await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("followLogFile", () => {
+  it("replays existing content, streams appended chunks, and stops on abort", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "dev.log");
+    const chunks: string[] = [];
+    const controller = new AbortController();
+    try {
+      const following = followLogFile({
+        logPath,
+        pollIntervalMs: 20,
+        signal: controller.signal,
+        write: (chunk) => {
+          chunks.push(chunk);
+        },
+      });
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      writeFileSync(logPath, "first line\n");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      appendFileSync(logPath, "second line\n");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      controller.abort();
+      await following;
+
+      expect(chunks.join("")).toBe("first line\nsecond line\n");
+      expect(chunks.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

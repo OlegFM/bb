@@ -22,6 +22,7 @@ interface PortableSpawnRequest {
   detached?: boolean;
   env?: NodeJS.ProcessEnv;
   stdio?: StdioOptions;
+  windowsHide?: boolean;
 }
 
 export type PortableChildProcess = ChildProcess;
@@ -140,6 +141,7 @@ export function spawnPortableProcess(
     detached: request.detached,
     env: request.env,
     stdio: request.stdio,
+    windowsHide: request.windowsHide,
   });
 }
 
