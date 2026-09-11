@@ -159,3 +159,7 @@ One row per package whose `test` task failed (37 packages). Counts parsed from e
 | bb-plugin-provider-pi | 16/11 | 42/113 |
 | bb-plugin-tasks | 1/35 | 1/387 |
 | bb-plugin-workflows | 1/13 | 1/221 |
+
+## Addendum: `@bb/sdk` re-run in isolation (controller, 2026-09-12 02:05)
+
+`pnpm exec turbo run test --filter=@bb/sdk --output-logs=errors-only --force` on the same HEAD (363e830c0 tree) passed with `EXIT=0` (Turbo footer: `Tasks: 4 successful, 4 total`, no failing task; log kept in the SDD workspace as `controller-sdk-test.log`). The `pass → fail` change above therefore reflects a run-to-run flake under full-suite load, not a regression from Tasks 11b–11e; table 2's `@bb/sdk` row stays as measured in the full run.
