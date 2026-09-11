@@ -2673,6 +2673,73 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
+### Task 11a: Fix the Windows path-separator check in plugin-build manifest validation
+
+Added after Task 8c's measurement: `pnpm dev:desktop` fails on Windows before Electron starts because bundling the builtin plugins throws `manifest bb.server escapes the plugin directory: "./server.ts"` for every plugin.
+
+**Files:**
+- Modify: `packages/plugin-build/src/plugin-manifest.ts:2,27,79`
+- Test: `packages/plugin-build/src/plugin-manifest.test.ts`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `resolveManifestPath` and the symlink check accept nested entries on Windows; the Task 11 build gate can pass.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `packages/plugin-build/src/plugin-manifest.test.ts` (import `resolve` from `node:path` and `resolveManifestPath` from `./plugin-manifest.js` if the file does not already):
+
+```ts
+describe("resolveManifestPath", () => {
+  const rootDir = resolve("plugins", "example");
+
+  it("accepts nested entries using the platform separator", () => {
+    expect(resolveManifestPath(rootDir, "./server.ts", "bb.server")).toBe(
+      resolve(rootDir, "server.ts"),
+    );
+    expect(
+      resolveManifestPath(rootDir, "icons/logo.svg", "bb.branding.logo"),
+    ).toBe(resolve(rootDir, "icons", "logo.svg"));
+  });
+
+  it("rejects entries that leave the plugin directory, including sibling prefixes", () => {
+    expect(() =>
+      resolveManifestPath(rootDir, "../outside.ts", "bb.server"),
+    ).toThrow("escapes the plugin directory");
+    expect(() =>
+      resolveManifestPath(rootDir, "../example-2/server.ts", "bb.server"),
+    ).toThrow("escapes the plugin directory");
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails on Windows**
+
+Run: `pnpm exec turbo run test --filter=@bb/plugin-build -- -t "resolveManifestPath"`
+Expected on the reference desktop: the first case FAILS with `manifest bb.server escapes the plugin directory: "./server.ts"` because `resolve()` returns backslash paths and the check compares against `rootDir + "/"`. On macOS/Linux both cases already pass; the Windows CI leg from Task 9 is the regression guard.
+
+- [ ] **Step 3: Use the platform separator in both containment checks**
+
+`packages/plugin-build/src/plugin-manifest.ts` line 2 becomes `import { isAbsolute, resolve, sep } from "node:path";`, line 27 becomes `if (resolved !== rootDir && !resolved.startsWith(rootDir + sep)) {` and line 79 becomes `if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {`.
+
+- [ ] **Step 4: Run the package suite and re-measure the desktop launch**
+
+Run: `pnpm exec turbo run test --filter=@bb/plugin-build`
+Expected: PASS on the reference desktop.
+
+Run on the reference desktop: `pnpm dev:desktop`, then `pnpm dev:status`, then `pnpm dev:stop`. Append the outcome (Electron window or the first failing task's log tail, and the final status) under a heading "Desktop after the plugin-build fix" in `qa/windows/phase-0/20-dev-app.txt`. A desktop-app failure past the plugin bundling step is recorded, not fixed (Windows Desktop is Phase 4).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/plugin-build/src/plugin-manifest.ts packages/plugin-build/src/plugin-manifest.test.ts
+git commit -m "Compare plugin manifest paths with the platform separator
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 11: Phase gate and evidence
 
 **Files:**
