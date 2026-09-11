@@ -59,4 +59,6 @@ Downloaded via `gh run download 34654743994 -R OlegFM/bb -n windows-x64-test-res
 | @bb/process-utils | fail (1) |
 | @bb/scripts | fail (1) |
 
+Source: C:\Users\olege\AppData\Local\Temp\claude\C--Users-olege-Work-bb\fae45475-6759-4fe1-972b-fb198493f6ff\scratchpad\ci-artifact-fix1\3JCZ5sQNuyXoxFaMJ3y5fbGHGj6.json
+
 5 packages have a `test` task in this filter set; 4 fail (`@bb/desktop`, `@bb/host-daemon`, `@bb/process-utils`, `@bb/scripts`) and 1 passes (`@bb/domain`) — matches this task's full local Windows run in `31-test-baseline.md` (the same four packages fail there too), so the CI leg's narrower baseline is consistent with the fuller local measurement.

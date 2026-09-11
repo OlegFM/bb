@@ -12,18 +12,18 @@ pnpm exec turbo run test --continue --summarize --output-logs=errors-only 2>&1 |
 node qa/windows/scripts/summarize-turbo-run.mjs | Tee-Object qa/windows/phase-0/31-test-baseline.md
 ```
 
-Run in the background (90-minute cap, watched by a stall monitor for 15 minutes of no log growth). Finished normally in 10m42.812s — no stall. `EXIT=1` (turbo's own summary exit code — expected; failing test tasks are the baseline, not a gate failure).
+Run in the background (90-minute cap, watched by a stall monitor for 15 minutes of no log growth). Finished normally in 10m42.812s — no stall. `EXIT=1` (turbo's own summary exit code — expected; failing test tasks are the baseline, not a gate failure). Provenance: the `EXIT=` line preserved in `31-test-output-tail.txt` came from `"EXIT=$LASTEXITCODE" | Add-Content` run in the real PowerShell session immediately after the Turbo pipeline above; the header, tables, and surrounding prose in this file itself were composed directly by the agent from that run's output and the summariser's output, not produced by piping into this file as the command block's second line might suggest.
 
 `31-test-output.txt` was 2,147,395 bytes, over the 2 MB threshold; deleted and replaced with `31-test-output-tail.txt` (last 200 lines) after both tables below were extracted. The run summary JSON (`.turbo/runs/3JCZa7TiuAFLh046hYvAUA4NlUP.json`, 1,252,975 bytes) is over the 1 MB threshold, so it was **not** copied into the repo.
 
-Turbo footer: `Tasks: 52 successful, 90 total`, `Cached: 50 cached, 90 total`, `Time: 10m42.812s`. 37 of 81 packages with a `test` task failed (down from 38).
+Turbo footer: `Tasks: 52 successful, 90 total`, `Cached: 50 cached, 90 total`, `Time: 10m42.812s`. 38 of 81 packages with a `test` task failed (unchanged from the previous run's 38: `@bb/plugin-registry` went fail → pass and `@bb/sdk` went pass → fail).
 
 ## Previous run (9ca4e933a, pre-fix) for comparison
 
 38 of 81 failed. Full tables in that commit's version of this file (`git show 9ca4e933a:qa/windows/phase-0/31-test-baseline.md`). Notable deltas from Tasks 11b/11d/11e:
 
 - **`@bb/plugin-registry`: fail → pass.** It used to crash before vitest even ran (`build-registry.mjs --check` item-name collision); Task 11b's `path.posix` fix resolved that, and its `test` task is no longer in the failing list at all.
-- **`@bb/scripts`: still fails, counts changed** (was 6 files / 15 tests failed; now 5 files / 10 tests failed). Task 11d removed the `codex` literal from `run-dev-app.ts` (fixing the provider-literal-ratchet failure this task's POSIX check found), and Task 11e made the ratchet CLI's own ratchet ratchet-CLI tests actually spawn the CLI on Windows instead of skipping/faking it, which changed which of that file's sub-tests pass. Net: fewer failures than before, but not zero — the remaining ones are pre-existing Windows-specific issues (see Table 2 below), not something this task's fix rounds targeted.
+- **`@bb/scripts`: still fails, counts changed** (was 6 files / 15 tests failed; now 5 files / 10 tests failed). Task 11d removed the `codex` literal from `run-dev-app.ts` (fixing the provider-literal-ratchet failure this task's POSIX check found), and Task 11e made the ratchet CLI's own tests actually spawn the CLI on Windows instead of skipping/faking it, which changed which of that file's sub-tests pass. Net: fewer failures than before, but not zero — the remaining ones are pre-existing Windows-specific issues (see Table 2 below), not something this task's fix rounds targeted.
 - **`@bb/sdk`: pass → fail** (1 file / 1 test now fails, `1/103`). New in this run; not something either fix round targeted or explained. Recorded here as an observed change, not investigated further (out of this task's scope to fix or root-cause product code).
 - All other previously-failing packages are still failing at roughly the same magnitude (see Table 2); this task did not investigate whether their individual counts moved by a test or two run-to-run.
 
@@ -117,7 +117,7 @@ Source: C:\Users\olege\Work\bb\.turbo\runs\3JCZa7TiuAFLh046hYvAUA4NlUP.json
 
 ## Table 2: failing-test detail per failing package (vitest summary lines)
 
-One row per package whose `test` task failed (37 packages). Counts parsed from each package's `Test Files` / `Tests` vitest summary line in the (now-deleted) `31-test-output.txt` with the same small script used in the original run, not hand-transcribed.
+One row per package whose `test` task failed (38 packages). Counts parsed from each package's `Test Files` / `Tests` vitest summary line in the (now-deleted) `31-test-output.txt` with the same small script used in the original run, not hand-transcribed.
 
 | package | test files (failed/passed) | tests (failed/passed) |
 |---|---|---|
@@ -162,4 +162,4 @@ One row per package whose `test` task failed (37 packages). Counts parsed from e
 
 ## Addendum: `@bb/sdk` re-run in isolation (controller, 2026-09-12 02:05)
 
-`pnpm exec turbo run test --filter=@bb/sdk --output-logs=errors-only --force` on the same HEAD (363e830c0 tree) passed with `EXIT=0` (Turbo footer: `Tasks: 4 successful, 4 total`, no failing task; log kept in the SDD workspace as `controller-sdk-test.log`). The `pass → fail` change above therefore reflects a run-to-run flake under full-suite load, not a regression from Tasks 11b–11e; table 2's `@bb/sdk` row stays as measured in the full run.
+`pnpm exec turbo run test --filter=@bb/sdk --output-logs=errors-only --force` on the same HEAD (363e830c0 tree) passed: the log kept in the SDD workspace as `controller-sdk-test.log` holds the Turbo footer `Tasks: 4 successful, 4 total` with no failing task, and the controller's shell printed `EXIT=0` for the command (that line is not in the log). The `pass → fail` change above therefore reflects a run-to-run flake under full-suite load, not a regression from Tasks 11b–11e; table 2's `@bb/sdk` row stays as measured in the full run.
