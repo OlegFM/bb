@@ -3025,3 +3025,55 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
+
+### Task 11e: Run the provider-literal ratchet CLI on Windows
+
+Added from Task 11d's report: `scripts/check-provider-literal-ratchet.mjs:381` guards its entrypoint with `import.meta.url === \`file://${process.argv[1]}\``. On win32 `import.meta.url` is `file:///C:/Users/...` while `process.argv[1]` is `C:\Users\...`, so the CLI exits 0 without checking anything, and `packages/scripts/test/provider-literal-ratchet.test.mjs` (which spawns the CLI) cannot exercise it there. Task 11d also left a stale test title behind.
+
+**Files:**
+- Modify: `scripts/check-provider-literal-ratchet.mjs:381` and its `node:url` import
+- Modify: `packages/scripts/test/dev-app-launcher.test.ts` (the test titled "prints the thirteen status lines")
+
+**Interfaces:**
+- Produces: `node scripts/check-provider-literal-ratchet.mjs` performs the check on every platform; exported functions unchanged.
+
+- [ ] **Step 1: Reproduce**
+
+Run in Git Bash: `node scripts/check-provider-literal-ratchet.mjs; echo "EXIT=$?"`
+Expected: no output at all, then `EXIT=0` (the guard never matched). Save to `.superpowers/sdd/2026-09-11-native-windows-phase-0/task-11e-red.log`.
+
+- [ ] **Step 2: Compare file URLs, not strings**
+
+In `scripts/check-provider-literal-ratchet.mjs` change the `node:url` import to include `pathToFileURL` (keep the named imports sorted: `import { fileURLToPath, pathToFileURL } from "node:url";`) and replace line 381 with:
+
+```js
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exit(main());
+```
+
+This is the same guard `scripts/precompress-app-dist.mjs:150` already uses.
+
+- [ ] **Step 3: Verify the CLI now runs**
+
+Run in Git Bash: `node scripts/check-provider-literal-ratchet.mjs; echo "EXIT=$?"`
+Expected: the ratchet prints its comparison against `scripts/provider-literal-baseline.json` and exits 0 (Task 11d removed the only new literal). Save to `task-11e-green.log`.
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- provider-literal-ratchet`
+Expected: the CLI-spawning tests now execute for real. Record the `Test Files`/`Tests` lines; failures whose assertion compares POSIX-style fixture keys (for example `packages/core/a.ts`) against win32 separators are Windows baseline, not this task's regression — list each failing test name with its first assertion line in the report.
+
+- [ ] **Step 4: Fix the stale test title**
+
+In `packages/scripts/test/dev-app-launcher.test.ts` rename the test "prints the thirteen status lines" to "prints the twelve status lines".
+
+Run: `pnpm exec turbo run test --filter=@bb/scripts -- dev-app-launcher`
+Expected: PASS (16 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/check-provider-literal-ratchet.mjs packages/scripts/test/dev-app-launcher.test.ts
+git commit -m "Run the provider-literal ratchet CLI on Windows and fix a stale test title
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
