@@ -2588,8 +2588,10 @@ what has been measured on native Windows and what is known not to work.
 ## Prerequisites for a source checkout
 
 - Windows 11 x64 (build 26100 or newer).
-- Node 22.19.x from `.nvmrc` (for example `winget install Schniz.fnm`, then
-  `fnm install 22.19.0`), pnpm 9.15.0 through `corepack enable`.
+- Node 22.19.x from `.nvmrc` through any Node manager whose switch is global
+  (nvm-windows: `nvm install 22.19.0 && nvm use 22.19.0`; fnm works too but
+  only in shells that evaluate its env), then pnpm 9.15.0 through
+  `corepack enable`.
 - Git for Windows 2.52 or newer with `git config --global core.longpaths true`
   and `core.symlinks true`; `LongPathsEnabled` set to `1` under
   `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`; Developer Mode enabled
