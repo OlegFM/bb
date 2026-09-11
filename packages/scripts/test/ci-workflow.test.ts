@@ -72,3 +72,15 @@ it("keeps the Windows baseline leg non-blocking", () => {
     ),
   ).toBe(true);
 });
+
+it("runs CI on pushes to native Windows phase branches", () => {
+  const workflow = readFileSync(
+    resolve(repoRoot, ".github", "workflows", "ci.yml"),
+    "utf8",
+  );
+  const pushBranches = /on:\n  push:\n    branches:\n((?:      - .+\n)+)/u.exec(
+    workflow,
+  )?.[1];
+
+  expect(pushBranches).toContain('      - "windows-native/**"\n');
+});
