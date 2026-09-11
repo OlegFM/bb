@@ -212,6 +212,7 @@ export interface StartLoggedProcessArgs {
   logPath: string;
   pidPath: string;
   platform: NodeJS.Platform;
+  windowsSessionHost?: { command: string; args: string[] };
 }
 
 export interface WaitForLogPatternArgs {
@@ -240,9 +241,56 @@ function isErrnoCode(error: unknown, code: string): boolean {
   );
 }
 
+async function finishStartedProcess(args: {
+  child: ReturnType<typeof spawnPortableProcess>;
+  command: string;
+  pidPath: string;
+}): Promise<number> {
+  const pid = await new Promise<number>((resolvePromise, rejectPromise) => {
+    args.child.once("error", rejectPromise);
+    args.child.once("spawn", () => {
+      args.child.off("error", rejectPromise);
+      args.child.on("error", () => {});
+      resolvePromise(args.child.pid ?? -1);
+    });
+  });
+  if (pid <= 0) {
+    throw new Error(`Failed to start ${args.command}`);
+  }
+  args.child.unref();
+  await writePidFile({ pid, pidPath: args.pidPath });
+  return pid;
+}
+
 export async function startLoggedProcess(
   request: StartLoggedProcessArgs,
 ): Promise<number> {
+  if (request.platform === "win32") {
+    if (request.windowsSessionHost === undefined) {
+      throw new Error("windowsSessionHost is required on win32");
+    }
+    await mkdir(dirname(request.logPath), { recursive: true });
+    await rm(request.logPath, { force: true });
+    const child = spawnPortableProcess({
+      args: [
+        ...request.windowsSessionHost.args,
+        request.logPath,
+        request.command,
+        ...request.args,
+      ],
+      command: request.windowsSessionHost.command,
+      cwd: request.cwd,
+      detached: true,
+      env: request.env,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return finishStartedProcess({
+      child,
+      command: request.windowsSessionHost.command,
+      pidPath: request.pidPath,
+    });
+  }
   await mkdir(dirname(request.logPath), { recursive: true });
   await rm(request.logPath, { force: true });
   const logHandle = await open(request.logPath, "a");
@@ -251,28 +299,52 @@ export async function startLoggedProcess(
       args: request.args,
       command: request.command,
       cwd: request.cwd,
-      detached: request.platform !== "win32",
+      detached: true,
       env: request.env,
       stdio: ["ignore", logHandle.fd, logHandle.fd],
       windowsHide: true,
     });
-    const pid = await new Promise<number>((resolvePromise, rejectPromise) => {
-      child.once("error", rejectPromise);
-      child.once("spawn", () => {
-        child.off("error", rejectPromise);
-        child.on("error", () => {});
-        resolvePromise(child.pid ?? -1);
-      });
+    return await finishStartedProcess({
+      child,
+      command: request.command,
+      pidPath: request.pidPath,
     });
-    if (pid <= 0) {
-      throw new Error(`Failed to start ${request.command}`);
-    }
-    child.unref();
-    await writePidFile({ pid, pidPath: request.pidPath });
-    return pid;
   } finally {
     await logHandle.close();
   }
+}
+
+export async function runSessionHost(request: {
+  args: string[];
+  command: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  logPath: string;
+}): Promise<number> {
+  await mkdir(dirname(request.logPath), { recursive: true });
+  const logHandle = await open(request.logPath, "a");
+  let child: ReturnType<typeof spawnPortableProcess>;
+  try {
+    child = spawnPortableProcess({
+      args: request.args,
+      command: request.command,
+      cwd: request.cwd,
+      env: request.env,
+      stdio: ["ignore", logHandle.fd, logHandle.fd],
+      windowsHide: true,
+    });
+  } finally {
+    await logHandle.close();
+  }
+  return new Promise((resolvePromise) => {
+    child.once("error", (error) => {
+      process.stderr.write(`${error.message}\n`);
+      resolvePromise(1);
+    });
+    child.once("exit", (code, signal) => {
+      resolvePromise(signal !== null ? 1 : (code ?? 1));
+    });
+  });
 }
 
 export async function waitForLogPattern(

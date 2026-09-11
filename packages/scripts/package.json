@@ -9,6 +9,7 @@
     "bb-script-reset-bb-data": "./dist/commands/reset-bb-data.js",
     "bb-script-run-cli": "./dist/commands/run-cli.js",
     "bb-script-run-dev-app": "./dist/commands/run-dev-app.js",
+    "bb-script-run-dev-app-session-host": "./dist/commands/run-dev-app-session-host.js",
     "bb-script-run-host-daemon": "./dist/commands/run-host-daemon.js",
     "bb-script-seed-perf-db": "./dist/commands/seed-perf-db.js"
   },

@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveDevInstanceConfig } from "@bb/config/runtime";
 import {
@@ -23,6 +24,17 @@ import {
 const homeDir = join("/", "home", "dev");
 const repoRoot = join(homeDir, "work", "bb");
 const config = resolveDevInstanceConfig({ homeDir, repoRoot });
+
+const monorepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const windowsSessionHost = {
+  command: process.execPath,
+  args: [
+    "--conditions=source",
+    "--import",
+    "tsx",
+    join(monorepoRoot, "packages", "scripts", "src", "commands", "run-dev-app-session-host.ts"),
+  ],
+};
 
 const defaults = {
   desktop: false,
@@ -194,11 +206,12 @@ describe("tracked processes", () => {
       const pid = await startLoggedProcess({
         args: ["-e", "console.log('child ready'); setInterval(() => {}, 1000)"],
         command: process.execPath,
-        cwd: tempRoot,
+        cwd: monorepoRoot,
         env: process.env,
         logPath,
         pidPath,
         platform: process.platform,
+        windowsSessionHost,
       });
       expect(pid).toBeGreaterThan(0);
 
@@ -218,7 +231,7 @@ describe("tracked processes", () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("fails fast on a failure pattern and times out otherwise", async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
@@ -228,11 +241,12 @@ describe("tracked processes", () => {
       await startLoggedProcess({
         args: ["-e", "console.log('port 1 is unavailable'); setInterval(() => {}, 1000)"],
         command: process.execPath,
-        cwd: tempRoot,
+        cwd: monorepoRoot,
         env: process.env,
         logPath,
         pidPath,
         platform: process.platform,
+        windowsSessionHost,
       });
       await expect(
         waitForLogPattern({
@@ -258,7 +272,7 @@ describe("tracked processes", () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("rejects when the process cannot be spawned and leaves no pid file", async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
@@ -274,6 +288,7 @@ describe("tracked processes", () => {
           logPath,
           pidPath,
           platform: process.platform,
+          windowsSessionHost,
         }),
       ).rejects.toThrow();
       expect(existsSync(pidPath)).toBe(false);

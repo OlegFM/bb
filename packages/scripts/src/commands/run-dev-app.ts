@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   resolveCurrentDevInstanceConfig,
@@ -33,6 +33,14 @@ import { runScriptProcess } from "../lib/process-helpers.js";
 
 const commandsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(commandsDir, "..", "..", "..", "..");
+
+const sessionHostPath = fileURLToPath(
+  new URL(`./run-dev-app-session-host${extname(fileURLToPath(import.meta.url))}`, import.meta.url),
+);
+const windowsSessionHost = {
+  command: process.execPath,
+  args: [...process.execArgv, sessionHostPath],
+};
 
 const USAGE = [
   "Usage: pnpm dev:app <command> [flags] (shortcuts: pnpm dev:desktop | pnpm dev:status | pnpm dev:stop)",
@@ -146,6 +154,7 @@ async function startDevServer(paths: DevAppPaths): Promise<void> {
     logPath: paths.devLogPath,
     pidPath: paths.devPidPath,
     platform: process.platform,
+    windowsSessionHost,
   });
   await waitForLogPattern({
     description: "dev server",
@@ -169,6 +178,7 @@ async function startDesktop(
     logPath: paths.desktopLogPath,
     pidPath: paths.desktopPidPath,
     platform: process.platform,
+    windowsSessionHost,
   });
   await waitForLogPattern({
     description: "desktop app",
