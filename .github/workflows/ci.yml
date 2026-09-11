@@ -236,3 +236,73 @@ jobs:
 
       - name: Smoke bb-app tarball
         run: pnpm exec turbo run smoke:tarball --filter=bb-app --cache-dir=.turbo/cache --output-logs=new-only
+
+  # Non-required: native Windows is a port in progress (see
+  # docs/superpowers/specs/2026-09-11-native-windows-port-design.md), so this
+  # leg reports a per-package failing-test baseline instead of gating merges.
+  # It bypasses ./.github/actions/setup-workspace because install-pnpm.sh has
+  # no MINGW64_NT case and no pnpm-win-x64 checksum, and it carries no Turbo
+  # cache for the same reason the macOS legs do not.
+  windows-x64:
+    name: Windows x64 (windows-2025, Node 22.x)
+    # Pinned rather than windows-latest so the toolchain the port is measured
+    # against changes only when we choose it.
+    runs-on: windows-2025
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Load native add-ons
+        run: node qa/windows/scripts/conpty-load-check.mjs
+
+      - name: Typecheck and build
+        run: >-
+          pnpm exec turbo run typecheck build
+          --filter=@bb/domain
+          --filter=@bb/process-utils
+          --filter=@bb/host-daemon
+          --filter=@bb/desktop
+          --filter=@bb/scripts
+          --output-logs=new-only
+
+      # continue-on-error, not `|| true`: the step still renders as failed in
+      # the run summary, so the baseline stays visible while the job stays
+      # green. --continue so one package's failures do not hide the others'.
+      - name: Test (Windows baseline)
+        id: windows-test
+        continue-on-error: true
+        run: >-
+          pnpm exec turbo run test
+          --filter=@bb/domain
+          --filter=@bb/process-utils
+          --filter=@bb/host-daemon
+          --filter=@bb/desktop
+          --filter=@bb/scripts
+          --continue
+          --summarize
+          --output-logs=new-only
+
+      - name: Upload Windows test run summaries
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-x64-test-results
+          path: .turbo/runs/*.json
+          if-no-files-found: warn

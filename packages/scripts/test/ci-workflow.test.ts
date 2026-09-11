@@ -57,3 +57,18 @@ it("rejects a pnpm version that disagrees with the root manifest", () => {
     "pnpm version mismatch: package.json declares 9.15.1, but the action requested 9.15.0",
   );
 });
+
+it("keeps the Windows baseline leg non-blocking", () => {
+  const workflow = readFileSync(
+    resolve(repoRoot, ".github", "workflows", "ci.yml"),
+    "utf8",
+  );
+  const windowsJob = workflow.slice(workflow.indexOf("\n  windows-x64:\n"));
+
+  expect(windowsJob).toContain("runs-on: windows-2025");
+  expect(
+    /- name: Test \(Windows baseline\)\n\s+id: windows-test\n\s+continue-on-error: true/u.test(
+      windowsJob,
+    ),
+  ).toBe(true);
+});
