@@ -26,6 +26,10 @@ Scope owner: OlegFM/bb fork, intended for later upstream slicing into get-bb/bb.
   `packages/host-workspace/src/provisioning.ts` after the donor's base);
   environment provisioning was consolidated in #3443; a dry-run merge of the
   donor onto `main` conflicts in 22 files.
+- Review: an adversarial Codex review of this document (2026-09-11) found
+  three fail-open decisions (secret ACLs, junction mutations, forced kill by
+  bare PID) and an under-specified `path_key` migration. All four are folded
+  into §4, §5, §6 and the phase gates below.
 
 ## 1. Goal
 
@@ -106,13 +110,44 @@ Windows host from macOS, so contracts validate shape permissively
 `{ path: string; pathKey: string }`. `path` is the canonical native display
 path from `fs.realpath.native` with normalized separators and no trailing
 separator (drive roots preserved, `\\?\` never persisted). `pathKey` is the
-case-insensitive comparison key on win32 and the path itself on POSIX. The
-server stores both as opaque strings. `path_key` is added to `project_sources`
-and `environments` (nullable, backfilled with POSIX normalization, then
-required by application writes; nullability tightened in a later schema
-cleanup). Managed paths (`%USERPROFILE%\.bb\worktrees\<env>\<repo>`,
+comparison key: on win32 it is `path` with `\` replaced by `/` and lower-cased,
+on POSIX it is `path` unchanged. Keys therefore always use `/`, so the
+existing SQL containment shape `LIKE key || '/%'` stays valid on every host.
+The server stores both as opaque strings and never derives one from the
+other. Managed paths (`%USERPROFILE%\.bb\worktrees\<env>\<repo>`,
 `%USERPROFILE%\.bb\personal-workspaces\<env>`) are derived by the host-side
 provider code, never by the server.
+
+`path_key` migration, all in one Drizzle migration plus one application
+change set:
+
+1. Add nullable `path_key` to `project_sources` and `environments`; backfill
+   with the POSIX rule (`path_key = path`), so no existing row can collide
+   except exact duplicates that are already legal today.
+2. Move every path-equality and containment query to `path_key`:
+   `findEnvironmentByPath`, `findProviderEnvironmentContainingPath`
+   (`eq(path_key)` or `LIKE path_key || '/%'`), the pre-insert existence check
+   in the environment transaction, and `findProjectBySource`
+   (`packages/db/src/data/environments.ts`, `projects.ts`). Raw-path equality
+   remains only for display.
+3. Indexes: `environments_host_path_key_idx` on `(host_id, path_key)`;
+   `project_sources_host_path_key_idx` on `(host_id, path_key)`; a partial
+   unique index `environments_live_path_key_idx` on
+   `(project_id, host_id, path_key)` where `status != 'destroyed'` and
+   `path_key IS NOT NULL`, which turns today's check-then-insert into a
+   database guarantee under concurrency. `project_sources` keeps its existing
+   `(project_id, host_id)` partial unique index; cross-project reuse of one
+   path stays legal because it is legal today.
+4. Collision policy: the migration counts live rows that would violate the new
+   unique index before creating it and fails loudly with the colliding ids
+   instead of choosing a survivor.
+5. Application writes require `pathKey`; the server contract accepts an
+   incoming `pathKey` only from the daemon, never from clients. Nullability
+   is tightened in a later cleanup.
+
+Test: two concurrent create requests for `C:\Work\bb` and `c:/work/bb/` on
+the same host and project produce one environment; the second returns the
+existing one.
 
 **Contracts widen, they do not break.** `HostPlatform` gains `"win32"`
 (`packages/host-daemon-contract/src/local.ts`); the desktop platform enum gains
@@ -132,7 +167,7 @@ terminal launches stay visible.
 |---|---|---|
 | Host paths | `packages/domain/src/project-path.ts` (shape), `apps/server/src/services/hosts/host-paths.ts` (server-side opaque helpers, from the donor), daemon canonicalization, `plugins/environment-git-worktree/host/paths.ts`, `plugins/environment-personal-workspace/host/paths.ts` | Drive-absolute only; UNC rejected with a clear message; `pathKey` case-insensitive; every server POSIX gate (`workspace-paths.ts`, `thread-environment-directory.ts`, `environment-engine.ts` claimPath, `path-admission.ts`, `commands.ts` secret `serverPath`) routes through `host-paths.ts` |
 | Executable and environment discovery | `packages/process-utils` (`resolveExecutable`), `packages/provider-bridge-protocol/src/bridge-kit/portable-executable.ts` (donor), `apps/host-daemon/src/runtime-shell-env.ts` | PATHEXT-aware lookup; npm `.cmd` shims are read and the target script is spawned as `node.exe <script>` directly, never through `cmd.exe /c` (Defender scores caret-escaped command lines as obfuscation); PATH on win32 comes from HKLM+HKCU `Environment\Path` plus a user-profile PowerShell probe anchored on the *last* marker pair; child env blocks carry exactly one `Path` key; executability is decided by extension and PATHEXT, not `access(X_OK)` |
-| Process launch and stop | `packages/process-utils` (`spawnPortable*`, `terminateProcessTree`, enumeration), `apps/desktop/src/bb-process.ts`, `packages/config/src/verified-process-stop.ts` | Stop sequence: protocol-aware graceful shutdown, then `taskkill /PID <pid> /T`, then after the grace period `taskkill /PID <pid> /T /F`; enumeration via `Get-CimInstance Win32_Process` with a 10 s timeout, a spawn registry, PPID walk and `matchEvidence` (`spawn-registry`, `executable-path`, `command-line`, `descendant`), `approximateCwd: true` declared in the type; a timeout is an error, never an empty list; Desktop runtime identity (`BB_DESKTOP_RUNTIME_ID`, `BB_DESKTOP_PARENT_PID`, runtime id in the health response, parent-PID watchdog in `bb-app`) replaces `ps`-based verification; no Job Object dependency in v1 |
+| Process launch and stop | `packages/process-utils` (`spawnPortable*`, `terminateProcessTree`, enumeration), `apps/desktop/src/bb-process.ts`, `packages/config/src/verified-process-stop.ts` | Stop sequence with identity checks: (1) protocol-aware graceful shutdown; (2) snapshot the descendant tree as `{ pid, ppid, creationDate }` and send `taskkill /PID <leader> /T`; (3) after the grace period, the leader is force-killed only through the `ChildProcess` handle bb still holds (a PID cannot be recycled while a handle to it is open) and only while `exitCode === null`; descendants are re-snapshotted and each pid is force-killed individually only when its `creationDate` matches the earlier snapshot, mismatches are skipped and logged as `pid-reused`; no forced kill ever targets a bare PID whose identity was not re-verified; enumeration via `Get-CimInstance Win32_Process` with a 10 s timeout, a spawn registry, PPID walk and `matchEvidence` (`spawn-registry`, `executable-path`, `command-line`, `descendant`), `approximateCwd: true` declared in the type; a timeout is an error, never an empty list; Desktop runtime identity (`BB_DESKTOP_RUNTIME_ID`, `BB_DESKTOP_PARENT_PID`, runtime id in the health response, parent-PID watchdog in `bb-app`) replaces `ps`-based verification; no Job Object dependency in v1 |
 | Terminal and shell | `apps/host-daemon/src/terminals/terminal-manager.ts`, `apps/host-daemon/src/provider-installation.ts` | ConPTY through node-pty; shell order `pwsh.exe`, then Windows PowerShell 5.1, then `ComSpec`, then `cmd.exe`; interactive terminals load the user profile (`-NoLogo` only, parity with POSIX `-lc`); bb's own probes, hooks and skill scripts use `-NoProfile -NonInteractive -ExecutionPolicy Bypass`; the PTY pid is registered as a sweep root once node-pty reports a non-zero pid; input is written as explicit UTF-8 bytes; kill degrades from two-stage to single close and the code says so |
 | Open and reveal | `packages/local-open-targets` | A `windows` launch-adapter arm beside `macos`: Explorer (`explorer.exe /select,<path>` and `explorer.exe <dir>`), Windows Terminal (`wt.exe -d <dir>`) with PowerShell fallback, VS Code family via registry `App Paths` and `%LOCALAPPDATA%\Programs`, JetBrains Toolbox under `%LOCALAPPDATA%\JetBrains\Toolbox\apps`, default app via `ShellExecute`; `.cmd` editor shims launched through the seam-2 shim reader; icons fall back to built-in symbols |
 
@@ -164,19 +199,37 @@ terminal launches stay visible.
   `%USERPROFILE%\.bb-dev\<instance>`, identical to POSIX. The donor's
   daemon-only `%APPDATA%\bb` redirect is not ported. Electron `userData`
   (`%APPDATA%\bb`) remains a separate thing and is documented as such.
-- **Secrets.** `mode: 0o600` is a no-op on NTFS. After writing a secret file
-  on win32, `packages/secret-storage` runs best-effort
-  `icacls <file> /inheritance:r /grant:r <user>:F` and logs failure; tests
-  assert the ACL call on win32 instead of the POSIX mode bits. Desktop
-  credentials already use Electron `safeStorage` (DPAPI) and need no change.
+- **Secrets.** `mode: 0o600` is a no-op on NTFS, so `packages/secret-storage`
+  fails closed on win32. `readOrCreateSecretFile` and `writeSecretFile`
+  create the file empty with `wx`, run
+  `icacls <file> /inheritance:r /grant:r <sid>:F`, read the ACL back
+  (`icacls <file>` output must list exactly the current user's SID with full
+  control and nothing else), and only then write the secret bytes; the
+  temp-and-rename path does the same on the temp file before the rename. Any
+  failure removes the empty or temp file and throws an error naming the path
+  and the remedy (a data directory on an NTFS volume). Existing secret files
+  are checked the same way on first read and tightened; a file whose ACL
+  cannot be tightened is an error, not a warning. `icacls` ships in
+  `System32` on every supported Windows, so there is no fallback mode. Tests
+  on win32 assert the ACL read-back and the no-content-before-ACL ordering;
+  POSIX tests keep asserting mode bits. Desktop credentials already use
+  Electron `safeStorage` (DPAPI) and need no change. Consumers today: the
+  machine-auth secret, plugin HTTP tokens, plugin secret settings, the
+  telemetry id.
 - **Line endings.** `.gitattributes` gains `*.cmd text eol=crlf` and
   `*.bat text eol=crlf`; `.ps1` stays LF. The daemon's file-write path does not
   rewrite line endings of existing files; providers own their edits. Recorded
   as a known limitation, not changed here.
 - **Symlinks and junctions.** bb never creates symlinks on win32;
-  `prepare-plugin-runtime.ts` keeps `"junction"`. `path-mutations.ts` stops
-  rejecting junctions as symlinked targets. Repositories that contain symlinks
-  depend on Developer Mode and `core.symlinks`; documented.
+  `prepare-plugin-runtime.ts` keeps `"junction"`. `path-mutations.ts` keeps
+  refusing every reparse point (symlinks and junctions alike) for move and
+  remove: its `requireExistingWithin` resolves the target through
+  `fs.realpath` before `rename`/`rm`, so lifting the guard would delete or
+  move the junction's target directory instead of the link. Junctions remain
+  readable and listable. win32 tests cover remove, move and a
+  junction-substitution race, each asserting the target directory is
+  untouched. Repositories that contain symlinks depend on Developer Mode and
+  `core.symlinks`; documented.
 - **Architecture and identity.** x64 only. Desktop keeps `dev.bb.desktop` /
   `bb` (and the nightly variants); the donor's `bb wn` / `cl.bb.wn` identity is
   not ported. Windows artifact name `bb-<version>-x64.exe`, NSIS per-user
@@ -254,7 +307,10 @@ Donor: `apps/server/src/services/hosts/host-paths.ts`,
 Protocol: bump 1 (`statusResponse.platform` domain, provision payload).
 Gate: a project on `C:\` is created from the UI and the CLI; a managed
 worktree of a hook-less repository provisions and is removed; `C:/x`, `C:\x`
-and `c:\X` resolve to one project identity; POSIX suites unchanged.
+and `c:\X` resolve to one project identity; two concurrent creates of
+equivalent paths yield one environment (the §4 test); the migration's
+collision check is exercised against a fixture with duplicate live rows;
+POSIX suites unchanged.
 
 ### Phase 2 — Processes, environment, Git, hooks, open targets
 
@@ -284,9 +340,13 @@ Donor: `packages/process-utils/src/index.ts`,
 Protocol: bump 2 if any wire field changes; otherwise none.
 Gate: a worktree with `.bb-env-setup.ps1` streams output, times out and
 cancels; cancellation leaves no descendants (`tasklist` before/after in
-`qa/windows/phase-2/`); Open in Explorer, VS Code and Windows Terminal work;
-`bb` runs from PowerShell; process enumeration over-match and under-match
-cases are reproduced and documented.
+`qa/windows/phase-2/`); a PID-reuse stress test (a spawn-and-exit loop
+running while a tree is force-killed) leaves every unrelated process alive
+and logs `pid-reused` skips; secret files created on win32 read back an ACL
+containing only the current user; junction remove, move and substitution are
+refused with the target untouched; Open in Explorer, VS Code and Windows
+Terminal work; `bb` runs from PowerShell; process enumeration over-match and
+under-match cases are reproduced and documented.
 
 ### Phase 3 — ConPTY, providers, watcher, native `bb-app`
 
@@ -335,8 +395,9 @@ Donor: `apps/desktop/src/bb-process.ts`, `desktop-tray.ts`,
 `scripts/smoke-windows-processes.mjs`, `.github/workflows/win-release.yml`.
 Protocol: none expected.
 Gate: as a standard user, install, use, update N to N+1, uninstall; zero
-orphan processes after Quit (`tasklist` diff); SmartScreen state documented;
-macOS and Linux desktop builds unchanged.
+orphan processes after Quit (`tasklist` diff) while an unrelated process
+started during the run is still alive afterwards; SmartScreen state
+documented; macOS and Linux desktop builds unchanged.
 
 ### Phase 5 — Persistent host and GA hardening
 
@@ -390,9 +451,12 @@ reference desktop.
   decides between pinning a version with prebuilds, a `prebuild-install`-style
   step in `bb-app`, or a doctor check naming Build Tools. Decided by
   measurement.
-- **No Job Objects.** `taskkill /T` races fast PID reuse and cannot see
-  processes bb never spawned. Trigger to add a native helper: the Phase 4
-  "zero orphans after Quit" gate fails repeatedly.
+- **No Job Objects.** Without a Job Object, descendants bb never observed
+  can escape the tree, and a forced kill by PID can hit a recycled PID. The
+  §5 identity checks (held handle for the leader, `creationDate` match for
+  descendants, skip on mismatch) close the recycled-PID case; the escaped
+  descendant case stays open. Trigger to add a native Job Object helper: the
+  Phase 4 "zero orphans after Quit" gate fails repeatedly.
 - **CIM probe latency (about 1.2 s).** Cache per sweep interval, 10 s timeout,
   degrade to an error rather than an empty list.
 - **NTFS locks on worktree removal** (`EBUSY` from `node_modules`, editors).
