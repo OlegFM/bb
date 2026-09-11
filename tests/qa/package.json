@@ -20,6 +20,7 @@
   "devDependencies": {
     "@bb/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
+    "cross-spawn": "^7.0.6",
     "rimraf": "^6.1.0",
     "tsx": "^4.23.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2",

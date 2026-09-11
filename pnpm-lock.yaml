@@ -4555,6 +4555,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.10
+      cross-spawn:
+        specifier: ^7.0.6
+        version: 7.0.6
       rimraf:
         specifier: ^6.1.0
         version: 6.1.3

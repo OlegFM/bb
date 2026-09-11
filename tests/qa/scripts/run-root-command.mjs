@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import crossSpawn from "cross-spawn";
 
 const [, , command, ...args] = process.argv;
 
@@ -28,10 +28,21 @@ const commandConfig = {
   },
 };
 
-function readParentPid(pid) {
-  const result = spawnSync("ps", ["-o", "ppid=", "-p", String(pid)], {
+function readParentPid(pid, platform = process.platform) {
+  const probe =
+    platform === "win32"
+      ? {
+          command: "powershell.exe",
+          args: [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ParentProcessId`,
+          ],
+        }
+      : { command: "ps", args: ["-o", "ppid=", "-p", String(pid)] };
+  const result = crossSpawn.sync(probe.command, probe.args, {
     encoding: "utf8",
-    shell: false,
     stdio: ["ignore", "pipe", "ignore"],
   });
   if (result.status !== 0 || !result.stdout) {
@@ -46,9 +57,8 @@ function resolveStandaloneParentPid() {
 }
 
 function run(commandName, commandArgs, stdio, env = process.env) {
-  const result = spawnSync(commandName, commandArgs, {
+  const result = crossSpawn.sync(commandName, commandArgs, {
     env,
-    shell: false,
     stdio,
   });
   if (result.error) {
