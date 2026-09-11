@@ -29,7 +29,7 @@ QA through that URL needs the browser-local host daemon, restart the dev app
 with the share origin configured after exposing its app port:
 
 ```bash
-BB_APP_URL=https://<handle>--<app-port>.getbb.app scripts/bb-dev-app current
+BB_APP_URL=https://<handle>--<app-port>.getbb.app pnpm dev:app current
 ```
 
 The port remains stable for the checkout, so the existing share continues to
@@ -37,14 +37,12 @@ work after the restart. The host daemon intentionally rejects remote origins
 that are not configured; otherwise any webpage could drive its local editor
 API.
 
-Branch switches intentionally keep dirty work in this checkout; git will stop if a local file would be overwritten. Set `BB_DEV_APP_STASH_DIRTY=1` for a one-off launch that stashes first.
-
-For CLI QA against the dev instance, run `eval "$(scripts/bb-dev-app env)"` first. This sets `BB_SERVER_URL`, `BB_HOST_DAEMON_PORT`, and `BB_PROJECT_ID=proj_personal` so `pnpm bb:dev ...` does not accidentally target the packaged app.
+For CLI QA against the dev instance, run `eval "$(pnpm --silent dev:app env)"` first. This sets `BB_SERVER_URL`, `BB_HOST_DAEMON_PORT`, and `BB_PROJECT_ID=proj_personal` so `pnpm bb:dev ...` does not accidentally target the packaged app.
 
 Test agents with:
 
 ```bash
-eval "$(scripts/bb-dev-app env)"
+eval "$(pnpm --silent dev:app env)"
 pnpm bb:dev thread spawn --project proj_personal --provider codex --permission-mode accept-edits --title "Smoke test" --prompt "Reply only with ok." --json
 ```
 
@@ -132,8 +130,8 @@ Export `BB_PROVIDER_BRIDGE_RECORD_DIR` before you start the dev app and every
 provider bridge records its runtime and provider wires as NDJSON:
 
 ```bash
-BB_PROVIDER_BRIDGE_RECORD_DIR=$HOME/.bb/provider-recordings/raw scripts/bb-dev-app current
-eval "$(scripts/bb-dev-app env)"
+BB_PROVIDER_BRIDGE_RECORD_DIR=$HOME/.bb/provider-recordings/raw pnpm dev:app current
+eval "$(pnpm --silent dev:app env)"
 pnpm bb:dev thread spawn --project proj_personal --provider codex --prompt "Run git status." --json
 ls ~/.bb/provider-recordings/raw/codex/
 ```
@@ -158,7 +156,7 @@ Use `pnpm seed:perf` to fill a dev database with a large, realistic fixture:
 many projects, ~1,200 threads, and ~400k event rows with production-like
 payloads. Use it to reproduce performance problems that only appear at scale.
 
-- Start the dev app once first (`scripts/bb-dev-app current`), then stop it and
+- Start the dev app once first (`pnpm dev:app current`), then stop it and
   seed. The fixture then attaches to the real local host, so agents still run.
 - By default the command seeds this checkout's dev data dir. Pass
   `--data-dir <path>` for another target. The command refuses to touch `~/.bb`.

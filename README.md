@@ -127,7 +127,7 @@ To run that same source dev server with the Electron desktop shell:
 pnpm dev:desktop
 ```
 
-This uses `scripts/bb-dev-app current --desktop`, which stops stale launcher
+This uses `pnpm dev:app current --desktop`, which stops stale launcher
 sessions, checks dependencies and native modules, starts the source dev server,
 then opens the desktop shell against that dev app. The launcher prints the web
 URL but does not open a browser unless you pass `--open`.
