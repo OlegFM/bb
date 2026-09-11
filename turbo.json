@@ -363,6 +363,7 @@
       "cache": false,
       "inputs": [
         "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/apps/host-daemon/package.json",
         "$TURBO_ROOT$/packages/db/package.json",
         "$TURBO_ROOT$/pnpm-lock.yaml",
         "$TURBO_ROOT$/scripts/ensure-native-modules.mjs"

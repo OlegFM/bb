@@ -474,3 +474,106 @@ it("validates a broken native binding without installing, rebuilding, or detachi
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+function createVerifyOnlyRequire(name, loadError) {
+  function requireModule(request) {
+    if (request !== name) {
+      throw new Error(`Unexpected require: ${request}`);
+    }
+    if (loadError !== null) {
+      throw loadError;
+    }
+    return {};
+  }
+
+  requireModule.resolve = (request) => {
+    if (request === `${name}/package.json`) {
+      return `/fake-node-modules/${name}/package.json`;
+    }
+    throw new Error(`Unexpected resolve: ${request}`);
+  };
+
+  return requireModule;
+}
+
+describe("verify-only native modules", () => {
+  const verifyOnlyModules = [
+    {
+      name: "node-pty",
+      resolveFrom: "apps/host-daemon/package.json",
+      repair: "verify-only",
+    },
+  ];
+
+  it("loads a verify-only module without running an installer", () => {
+    const execFileSync = vi.fn();
+    const log = vi.fn();
+
+    ensureNativeModules({
+      repoRoot: "/repo",
+      modules: verifyOnlyModules,
+      createRequire: () => createVerifyOnlyRequire("node-pty", null),
+      execFileSync,
+      log,
+      platform: "linux",
+    });
+
+    expect(execFileSync).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("names the Windows build tools when a verify-only module fails on win32", () => {
+    const execFileSync = vi.fn();
+    const loadError = new Error("The specified module could not be found.");
+
+    expect(() =>
+      ensureNativeModules({
+        repoRoot: "/repo",
+        modules: verifyOnlyModules,
+        createRequire: () => createVerifyOnlyRequire("node-pty", loadError),
+        execFileSync,
+        log: vi.fn(),
+        platform: "win32",
+      }),
+    ).toThrow(/node-pty has no usable native binary on Windows[\s\S]*Visual Studio Build Tools[\s\S]*Original error: The specified module could not be found\./u);
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  it("never runs an installer for a verify-only module, even on an ABI mismatch", () => {
+    const loadError = new Error(
+      "The module was compiled against a different Node.js version using NODE_MODULE_VERSION 127.",
+    );
+    const execFileSync = vi.fn();
+
+    expect(() =>
+      ensureNativeModules({
+        repoRoot: "/repo",
+        modules: verifyOnlyModules,
+        createRequire: () => createVerifyOnlyRequire("node-pty", loadError),
+        execFileSync,
+        log: vi.fn(),
+        platform: "linux",
+      }),
+    ).toThrow(loadError);
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe("better-sqlite3 repair on win32", () => {
+  it("names the Windows build tools when node-gyp fails", () => {
+    const fake = createBetterSqliteRequire(
+      new Error("was compiled against a different Node.js version using NODE_MODULE_VERSION 127"),
+    );
+    const execFileSync = vi.fn(() => {
+      throw new Error("gyp ERR! find VS msvs_version not set from command line or npm config");
+    });
+
+    expect(() =>
+      ensureNativeModules({
+        ...createEnsureOptions(fake.requireModule, execFileSync),
+        platform: "win32",
+      }),
+    ).toThrow(/better-sqlite3 has no usable native binary on Windows[\s\S]*Original error: gyp ERR! find VS/u);
+    expect(execFileSync).toHaveBeenCalledTimes(2);
+  });
+});

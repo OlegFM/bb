@@ -13,13 +13,45 @@ import { fileURLToPath } from "node:url";
 
 const defaultRepoRoot = resolve(fileURLToPath(import.meta.url), "../..");
 
+const WINDOWS_BUILD_TOOLS_URL =
+  "https://visualstudio.microsoft.com/visual-cpp-build-tools/";
+
 const nativeModules = [
   {
     name: "better-sqlite3",
     resolveFrom: "packages/db/package.json",
     binaryPath: "build/Release/better_sqlite3.node",
+    repair: "prebuild-and-node-gyp",
+  },
+  {
+    name: "node-pty",
+    resolveFrom: "apps/host-daemon/package.json",
+    repair: "verify-only",
+  },
+  {
+    name: "@parcel/watcher",
+    resolveFrom: "apps/host-daemon/package.json",
+    repair: "verify-only",
   },
 ];
+
+export function isWindowsPlatform(platform = process.platform) {
+  return platform === "win32";
+}
+
+export function formatWindowsBuildGuidance({ detail, name }) {
+  const lines = [
+    `[ensure-native-modules] ${name} has no usable native binary on Windows.`,
+    `Install the "Desktop development with C++" workload from Visual Studio Build Tools`,
+    `(${WINDOWS_BUILD_TOOLS_URL}) plus Python 3.11 or newer,`,
+    `then reinstall from a prompt with the tools on PATH: pnpm install --frozen-lockfile.`,
+    `A plain reinstall also restores skipped optional packages (for example @parcel/watcher-win32-x64).`,
+  ];
+  if (detail !== undefined && detail !== "") {
+    lines.push(`Original error: ${detail}`);
+  }
+  return lines.join("\n");
+}
 
 function formatThrownValue(err) {
   return err instanceof Error ? err.message : String(err);
@@ -140,8 +172,15 @@ export function ensureNativeModules({
   verifyRepairedNativeModule:
     verifyRepairedNativeModuleImpl = getRepairedNativeModuleError,
   log = console.log,
+  platform = process.platform,
 } = {}) {
-  for (const { name, resolveFrom, binaryPath } of modules) {
+  const windows = isWindowsPlatform(platform);
+  for (const {
+    name,
+    resolveFrom,
+    binaryPath,
+    repair = "prebuild-and-node-gyp",
+  } of modules) {
     const requireModule = createRequireImpl(resolve(repoRoot, resolveFrom));
     const pkgJsonPath = requireModule.resolve(`${name}/package.json`);
     const pkgDir = dirname(pkgJsonPath);
@@ -163,7 +202,14 @@ export function ensureNativeModules({
           `[ensure-native-modules] ${name} failed validation: ${message}. Run pnpm start --dryrun to repair it before launch.`,
         );
       }
-      if (!shouldRebuildNativeModule(message)) throw err;
+      if (repair === "verify-only" || !shouldRebuildNativeModule(message)) {
+        if (windows) {
+          throw new Error(
+            formatWindowsBuildGuidance({ detail: message, name }),
+          );
+        }
+        throw err;
+      }
 
       const pkgRequire = createRequireImpl(pkgJsonPath);
       log(
@@ -215,18 +261,30 @@ export function ensureNativeModules({
       log(
         `[ensure-native-modules] Rebuilding ${name} from source for Node ${process.versions.node} (ABI ${process.versions.modules})`,
       );
-      execFileSyncImpl(
-        process.execPath,
-        [
-          pkgRequire.resolve("node-gyp/bin/node-gyp.js"),
-          "rebuild",
-          "--release",
-        ],
-        {
-          cwd: pkgDir,
-          stdio: "inherit",
-        },
-      );
+      try {
+        execFileSyncImpl(
+          process.execPath,
+          [
+            pkgRequire.resolve("node-gyp/bin/node-gyp.js"),
+            "rebuild",
+            "--release",
+          ],
+          {
+            cwd: pkgDir,
+            stdio: "inherit",
+          },
+        );
+      } catch (rebuildErr) {
+        if (windows) {
+          throw new Error(
+            formatWindowsBuildGuidance({
+              detail: formatChildProcessFailure(rebuildErr),
+              name,
+            }),
+          );
+        }
+        throw rebuildErr;
+      }
 
       const rebuildVerifyError = verifyRepairedNativeModuleImpl(
         name,
