@@ -207,10 +207,16 @@ child.onData((chunk) => {
 });
 child.onExit(({ exitCode }) => {
   const ok = output.includes("conpty-ok");
-  process.stdout.write(`node-pty ${ok ? "ok" : "FAILED"} (exit ${exitCode}, pid ${child.pid})\n`);
-  process.exitCode = ok ? 0 : 1;
+  process.stdout.write(
+    `node-pty ${ok ? "ok" : "FAILED"} (exit ${exitCode}, pid ${child.pid})\n`,
+    () => {
+      process.exit(ok ? 0 : 1);
+    },
+  );
 });
 ```
+
+The explicit `process.exit` after the write callback is required: on Windows node-pty's ConPTY keeps the event loop alive after the child exits, so a script that only sets `process.exitCode` never returns.
 
 - [ ] **Step 3: Run it on Node 22 and on Node 24, record the result**
 
