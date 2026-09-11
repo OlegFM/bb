@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildPluginHost } from "./build-plugin-host.js";
 import { resolvePluginBuildToolchain } from "./toolchain.js";
@@ -183,6 +183,39 @@ describe("plugin host build", () => {
           branding: { icon: "Cpu" },
           server: "./server.ts",
           host: "../host.ts",
+        },
+      }),
+    );
+    await writeFile(
+      join(dir, "server.ts"),
+      "export default function plugin() {}\n",
+    );
+
+    await expect(
+      buildPluginHost(dir, "0.9.0-test", await testToolchain()),
+    ).rejects.toThrow(/escapes the plugin directory/u);
+  });
+
+  it("rejects a host entry using a sibling-prefix path outside the plugin directory", async () => {
+    const dir = await mkdtemp(
+      join(process.cwd(), ".host-build-sibling-test-"),
+    );
+    tempDirs.push(dir);
+    const siblingDir = `${dir}-2`;
+    await mkdir(siblingDir, { recursive: true });
+    tempDirs.push(siblingDir);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "bb-plugin-host-sibling-fixture",
+        version: "1.0.0",
+        engines: { bb: ">=0.0" },
+        bb: {
+          name: "Sibling escape fixture",
+          description: "Sibling-prefix host path.",
+          branding: { icon: "Cpu" },
+          server: "./server.ts",
+          host: `../${basename(dir)}-2/host.ts`,
         },
       }),
     );

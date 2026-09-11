@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { build } from "esbuild";
@@ -33,6 +33,36 @@ describe("plugin app runtime shim", () => {
         .splice(0)
         .map((dir) => rm(dir, { recursive: true, force: true })),
     );
+  });
+
+  it("rejects an app entry using a sibling-prefix path outside the plugin directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-plugin-app-sibling-"));
+    tempDirs.push(dir);
+    const siblingDir = `${dir}-2`;
+    await mkdir(siblingDir, { recursive: true });
+    tempDirs.push(siblingDir);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "bb-plugin-app-sibling-fixture",
+        version: "0.0.0",
+        bb: {
+          name: "Sibling escape fixture",
+          description: "Sibling-prefix app path.",
+          branding: { icon: "Zap" },
+          server: "./server.ts",
+          app: `../${basename(dir)}-2/app.ts`,
+        },
+      }),
+    );
+    await writeFile(
+      join(dir, "server.ts"),
+      "export default function plugin() {}\n",
+    );
+
+    await expect(
+      buildPluginApp(dir, "0.0.0-test", await testToolchain()),
+    ).rejects.toThrow(/escapes the plugin directory/u);
   });
 
   it("re-derives @get-bb/plugin-sdk/app exports for every rebuild", async () => {

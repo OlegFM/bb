@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildPluginServer,
@@ -74,6 +74,31 @@ describe("plugin server build", () => {
 
     const bundle = await readFile(jsPath, "utf8");
     expect(bundle).toContain('from "@bb/plugin-sdk"');
+  });
+
+  it("rejects a server entry using a sibling-prefix path outside the plugin directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-plugin-server-sibling-"));
+    tempDirs.push(dir);
+    const siblingDir = `${dir}-2`;
+    await mkdir(siblingDir, { recursive: true });
+    tempDirs.push(siblingDir);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "bb-plugin-server-sibling-fixture",
+        version: "0.0.0",
+        bb: {
+          name: "Sibling escape fixture",
+          description: "Sibling-prefix server path.",
+          branding: { icon: "Zap" },
+          server: `../${basename(dir)}-2/server.ts`,
+        },
+      }),
+    );
+
+    await expect(
+      buildPluginServer(dir, "0.0.0-test", await testToolchain()),
+    ).rejects.toThrow(/escapes the plugin directory/u);
   });
 
   describe("SDK subpath imports", () => {
