@@ -52,9 +52,15 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
 
 - The product still rejects drive-letter project paths; terminals, hooks and
   provider launch on native Windows arrive in Phases 1 to 3.
-- `scripts/ensure-native-modules.mjs` cannot detach pnpm hardlinks on NTFS
-  because Node reports `nlink` as 1 there; a repair rewrites the shared store
-  copy. Reinstall from a clean store if two checkouts disagree on the ABI.
+- `packages/bb-app` and `apps/desktop` now list `win32` in their `os` fields
+  (spec §7), so `npx bb-app` installs on native Windows but its runtime does
+  not work until Phases 1 to 3 land; the supported product path stays WSL2
+  per [platform-support.md](platform-support.md).
+- `scripts/ensure-native-modules.mjs` detaches a pnpm-hardlinked
+  `better-sqlite3` binary before repairing it; on the reference desktop that
+  binary was not hardlinked (`nlink` = 1 in
+  `qa/windows/phase-0/11-native-modules.md`), so the detach path has not yet
+  been exercised on NTFS.
 - ConPTY keeps the Node event loop alive after the child exits, so a script
   that spawns through `node-pty` must call `process.exit` itself;
   `qa/windows/scripts/conpty-load-check.mjs` does.
@@ -66,6 +72,11 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   window appears; the dev server keeps answering `/health` and
   `pnpm dev:status` still reports it running after the launcher exits; and
   the session survived closing the PowerShell window that started it.
+- `pnpm dev:stop` force-kills the pid recorded in a session's pid file after
+  checking only that the pid exists (`taskkill /T /F` on Windows, `SIGKILL`
+  on POSIX); verifying the process identity (start time) before a forced kill
+  arrives with Phase 2's process primitives (spec §5), so delete a stale pid
+  file by hand after a crash or reboot before running `dev:stop`.
 - A cold `pnpm dev:desktop` exceeds the launcher's 120 s desktop wait: the
   launcher exits 1 with "Timed out ... waiting for desktop app" while the
   detached build keeps running, and the Electron window opened about

@@ -16,7 +16,7 @@ Use `pnpm dev:app <command>` when validating changes in the desktop dev app or h
 
 - `pnpm dev:status` (`pnpm dev:app status`) prints the active branch, Node runtime, dev URLs, data dir, and logs.
 - `pnpm dev:app current` restarts the dev server on the checked-out branch. Switch branches with `git` first; the launcher does not fetch or check out.
-- `pnpm dev:stop` (`pnpm dev:app stop`) stops the launcher-managed dev server and desktop.
+- `pnpm dev:stop` (`pnpm dev:app stop`) stops the launcher-managed dev server and desktop. It stops only the sessions the launcher itself started; it no longer sweeps port listeners or desktop processes the way the old bash launcher did.
 - `pnpm --silent dev:app env` prints `export` lines that target this checkout's dev server; `--powershell` prints `$env:` lines. Use `eval "$(pnpm --silent dev:app env)"` in bash and `pnpm --silent dev:app env --powershell | Out-String | Invoke-Expression` in PowerShell.
 - `pnpm dev:app logs dev` and `pnpm dev:app logs desktop` follow logs.
 

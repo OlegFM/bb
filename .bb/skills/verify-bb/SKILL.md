@@ -104,10 +104,12 @@ git rev-parse HEAD > "$BB_VERIFY_RUN/source-commit.txt"
 pnpm --silent dev:app current > "$BB_VERIFY_RUN/launch.log" 2>&1
 ```
 
-All three ports must be unoccupied before `current`, which stops listeners
-before it starts the app. A stopped screen session alone is insufficient;
-checkout-derived ports can collide. Run under the same OS user that owns
-the dev processes so listener inspection is complete.
+All three ports must be unoccupied before `current`, which stops only the
+sessions it tracks in its pid files. A stray listener on one of the three
+ports from an untracked process has to be cleared by hand
+(`Get-NetTCPConnection -LocalPort <port>` on Windows, `lsof -i :<port>` on
+POSIX) before launching; checkout-derived ports can collide. Run under the
+same OS user that owns the dev processes so listener inspection is complete.
 
 Run slow startup through the agent's background process facility, inspect the
 log, and provide progress while it builds. Startup must finish successfully
