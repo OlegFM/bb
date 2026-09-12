@@ -365,15 +365,14 @@ export async function runSessionHost(request: {
       windowsHide: true,
     });
   } catch (error) {
+    await logHandle.close();
     await appendSessionHostFailure({
       logPath: request.logPath,
       message: describeError(error),
     });
     return 1;
-  } finally {
-    await logHandle.close();
   }
-  return new Promise((resolvePromise) => {
+  const exitCode = new Promise<number>((resolvePromise) => {
     child.once("error", (error) => {
       void appendSessionHostFailure({
         logPath: request.logPath,
@@ -386,6 +385,8 @@ export async function runSessionHost(request: {
       resolvePromise(signal !== null ? 1 : (code ?? 1));
     });
   });
+  await logHandle.close();
+  return exitCode;
 }
 
 export async function waitForLogPattern(
