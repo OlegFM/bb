@@ -73,10 +73,10 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   `pnpm dev:status` still reports it running after the launcher exits; and
   the session survived closing the PowerShell window that started it.
 - `pnpm dev:stop` force-kills the pid recorded in a session's pid file after
-  checking only that the pid exists (`taskkill /T /F` on Windows, `SIGKILL`
-  on POSIX); verifying the process identity (start time) before a forced kill
-  arrives with Phase 2's process primitives (spec §5), so delete a stale pid
-  file by hand after a crash or reboot before running `dev:stop`.
+  checking only that the pid exists (`taskkill /T /F` on Windows, `SIGTERM`
+  then `SIGKILL` on POSIX); verifying the process identity (start time) before
+  a forced kill arrives with Phase 2's process primitives (spec §5), so delete
+  a stale pid file by hand after a crash or reboot before running `dev:stop`.
 - A cold `pnpm dev:desktop` exceeds the launcher's 120 s desktop wait: the
   launcher exits 1 with "Timed out ... waiting for desktop app" while the
   detached build keeps running, and the Electron window opened about
