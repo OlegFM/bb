@@ -178,3 +178,26 @@ Per-commit verification (Turbo, logs kept outside the repo under
   `pnpm exec oxfmt --check` on them ("All matched files use the correct format.",
   exit 0), then `turbo run test --filter=@bb/scripts -- dev-app-launcher`
   (19 passed).
+
+## 4. CI run for the pushed branch
+
+Run: https://github.com/OlegFM/bb/actions/runs/34661615561 (CI workflow, push of
+`8efe55e90` to `windows-native/phase-0` on the fork).
+
+`Windows x64 (windows-2025, Node 22.x)`: **completed success**, 00:26:08Z to
+00:34:14Z UTC (8m06s). Polled every 3 minutes with
+
+```bash
+gh run view 34661615561 -R OlegFM/bb --json jobs \
+  --jq '.jobs[] | select(.name | startswith("Windows x64")) | {status, conclusion}'
+```
+
+which reported `in_progress` on the first three polls and
+`completed success` on the fourth. The run's other jobs (Linux and macOS test,
+check and smoke legs) were still queued on the fork's runners, so the run was
+cancelled after the Windows job concluded, per the dispatch:
+`gh run cancel 34661615561 -R OlegFM/bb` → `✓ Request to cancel workflow 34661615561 submitted.`,
+`EXIT=0`.
+
+For comparison, the same job was also `success` on the previous push
+(`f37f6ffad`, run 34658495073).
