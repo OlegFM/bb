@@ -33,14 +33,26 @@ const homeDir = join("/", "home", "dev");
 const repoRoot = join(homeDir, "work", "bb");
 const config = resolveDevInstanceConfig({ homeDir, repoRoot });
 
-const monorepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const monorepoRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
 const windowsSessionHost = {
   command: process.execPath,
   args: [
     "--conditions=source",
     "--import",
     "tsx",
-    join(monorepoRoot, "packages", "scripts", "src", "commands", "run-dev-app-session-host.ts"),
+    join(
+      monorepoRoot,
+      "packages",
+      "scripts",
+      "src",
+      "commands",
+      "run-dev-app-session-host.ts",
+    ),
   ],
 };
 
@@ -71,8 +83,14 @@ describe("parseDevAppArgs", () => {
       desktop: true,
       open: true,
     });
-    expect(parseDevAppArgs(["status"])).toEqual({ ...defaults, command: "status" });
-    expect(parseDevAppArgs(["--help"])).toEqual({ ...defaults, command: "help" });
+    expect(parseDevAppArgs(["status"])).toEqual({
+      ...defaults,
+      command: "status",
+    });
+    expect(parseDevAppArgs(["--help"])).toEqual({
+      ...defaults,
+      command: "help",
+    });
     expect(parseDevAppArgs(["env", "--powershell"])).toEqual({
       ...defaults,
       command: "env",
@@ -87,12 +105,16 @@ describe("parseDevAppArgs", () => {
       command: "logs",
       logTarget: "desktop",
     });
-    expect(() => parseDevAppArgs(["logs", "launcher"])).toThrow("Unknown log target: launcher");
+    expect(() => parseDevAppArgs(["logs", "launcher"])).toThrow(
+      "Unknown log target: launcher",
+    );
   });
 
   it("rejects unknown commands and stray arguments", () => {
     expect(() => parseDevAppArgs(["main"])).toThrow("Unknown command: main");
-    expect(() => parseDevAppArgs(["stop", "extra"])).toThrow("Unexpected arguments: extra");
+    expect(() => parseDevAppArgs(["stop", "extra"])).toThrow(
+      "Unexpected arguments: extra",
+    );
   });
 });
 
@@ -126,14 +148,22 @@ describe("resolveDevAppPaths", () => {
 
     expect(paths.logRoot).toBe(join(config.dataDir, "dev-app"));
     expect(paths.devLogPath).toBe(join(config.dataDir, "dev-app", "dev.log"));
-    expect(paths.desktopLogPath).toBe(join(config.dataDir, "dev-app", "desktop.log"));
-    expect(paths.devPidPath).toBe(join(config.dataDir, "dev-supervisors", "dev-app-dev.pid"));
-    expect(paths.desktopPidPath).toBe(join(config.dataDir, "dev-supervisors", "dev-app-desktop.pid"));
+    expect(paths.desktopLogPath).toBe(
+      join(config.dataDir, "dev-app", "desktop.log"),
+    );
+    expect(paths.devPidPath).toBe(
+      join(config.dataDir, "dev-supervisors", "dev-app-dev.pid"),
+    );
+    expect(paths.desktopPidPath).toBe(
+      join(config.dataDir, "dev-supervisors", "dev-app-desktop.pid"),
+    );
     expect(paths.desktopUserDataDir).toBe(join(config.dataDir, "desktop"));
   });
 
   it("honours BB_DESKTOP_USER_DATA_DIR", () => {
-    const paths = resolveDevAppPaths(config, { BB_DESKTOP_USER_DATA_DIR: " /custom/desktop " });
+    const paths = resolveDevAppPaths(config, {
+      BB_DESKTOP_USER_DATA_DIR: " /custom/desktop ",
+    });
 
     expect(paths.desktopUserDataDir).toBe("/custom/desktop");
   });
@@ -141,13 +171,19 @@ describe("resolveDevAppPaths", () => {
 
 describe("assertDesktopNodeRuntime", () => {
   it("accepts Node 22.19 and newer on the 22 line", () => {
-    expect(() => assertDesktopNodeRuntime({ execPath: "/n/node", version: "v22.19.0" })).not.toThrow();
-    expect(() => assertDesktopNodeRuntime({ execPath: "/n/node", version: "v22.23.2" })).not.toThrow();
+    expect(() =>
+      assertDesktopNodeRuntime({ execPath: "/n/node", version: "v22.19.0" }),
+    ).not.toThrow();
+    expect(() =>
+      assertDesktopNodeRuntime({ execPath: "/n/node", version: "v22.23.2" }),
+    ).not.toThrow();
   });
 
   it("rejects other lines and older 22 releases", () => {
     for (const version of ["v22.18.9", "v24.12.0", "v20.19.0"]) {
-      expect(() => assertDesktopNodeRuntime({ execPath: "/n/node", version })).toThrow(
+      expect(() =>
+        assertDesktopNodeRuntime({ execPath: "/n/node", version }),
+      ).toThrow(
         `needs Node 22.19 or newer on the 22 line (see .nvmrc); current ${version} at /n/node`,
       );
     }
@@ -173,18 +209,46 @@ describe("resolveOpenUrlCommand", () => {
 
 describe("readiness patterns", () => {
   it("match the dev server and desktop banners and the known failures", () => {
-    expect(DEV_SERVER_READY_PATTERN.test("[host-daemon] Host daemon started on 27001")).toBe(true);
-    expect(desktopReadyPattern(11001).test("@bb/desktop: app http://localhost:11001 (Vite dev server — live reload)")).toBe(true);
-    expect(desktopReadyPattern(11001).test("@bb/desktop: app http://localhost:11002")).toBe(false);
-    expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("[dev] port 19001 is unavailable"))).toBe(true);
-    expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("ELIFECYCLE Command failed"))).toBe(true);
-    expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("ERROR  run failed: command exited (1)"))).toBe(true);
     expect(
-      DEV_FAILURE_PATTERNS.some((pattern) =>
-        pattern.test("[session-host] spawn definitely-not-a-command-xyz ENOENT"),
+      DEV_SERVER_READY_PATTERN.test(
+        "[host-daemon] Host daemon started on 27001",
       ),
     ).toBe(true);
-    expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("all good"))).toBe(false);
+    expect(
+      desktopReadyPattern(11001).test(
+        "@bb/desktop: app http://localhost:11001 (Vite dev server — live reload)",
+      ),
+    ).toBe(true);
+    expect(
+      desktopReadyPattern(11001).test(
+        "@bb/desktop: app http://localhost:11002",
+      ),
+    ).toBe(false);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) =>
+        pattern.test("[dev] port 19001 is unavailable"),
+      ),
+    ).toBe(true);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) =>
+        pattern.test("ELIFECYCLE Command failed"),
+      ),
+    ).toBe(true);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) =>
+        pattern.test("ERROR  run failed: command exited (1)"),
+      ),
+    ).toBe(true);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) =>
+        pattern.test(
+          "[session-host] spawn definitely-not-a-command-xyz ENOENT",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("all good")),
+    ).toBe(false);
   });
 });
 
@@ -245,11 +309,27 @@ describe("tracked processes", () => {
         readyPattern: /child ready/u,
         timeoutMs: 15_000,
       });
-      expect(await readTrackedProcessState({ pidPath, serviceName: "child" })).toBe("running");
+      expect(
+        await readTrackedProcessState({ pidPath, serviceName: "child" }),
+      ).toBe("running");
 
-      expect(await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" })).toBe("stopped");
-      expect(await readTrackedProcessState({ pidPath, serviceName: "child" })).toBe("stopped");
-      expect(await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" })).toBe("not-running");
+      expect(
+        await stopTrackedProcess({
+          pidPath,
+          platform: process.platform,
+          serviceName: "child",
+        }),
+      ).toBe("stopped");
+      expect(
+        await readTrackedProcessState({ pidPath, serviceName: "child" }),
+      ).toBe("stopped");
+      expect(
+        await stopTrackedProcess({
+          pidPath,
+          platform: process.platform,
+          serviceName: "child",
+        }),
+      ).toBe("not-running");
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -261,7 +341,10 @@ describe("tracked processes", () => {
     const pidPath = join(tempRoot, "child.pid");
     try {
       await startLoggedProcess({
-        args: ["-e", "console.log('port 1 is unavailable'); setInterval(() => {}, 1000)"],
+        args: [
+          "-e",
+          "console.log('port 1 is unavailable'); setInterval(() => {}, 1000)",
+        ],
         command: process.execPath,
         cwd: monorepoRoot,
         env: process.env,
@@ -289,8 +372,14 @@ describe("tracked processes", () => {
           readyPattern: /never/u,
           timeoutMs: 200,
         }),
-      ).rejects.toThrow(`Timed out after 200 ms waiting for dev server; see ${logPath}`);
-      await stopTrackedProcess({ pidPath, platform: process.platform, serviceName: "child" });
+      ).rejects.toThrow(
+        `Timed out after 200 ms waiting for dev server; see ${logPath}`,
+      );
+      await stopTrackedProcess({
+        pidPath,
+        platform: process.platform,
+        serviceName: "child",
+      });
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -335,7 +424,9 @@ describe("tracked processes", () => {
           readyPattern: /never/u,
           timeoutMs: 5_000,
         }),
-      ).rejects.toThrow(`dev server exited before it was ready; see ${logPath}`);
+      ).rejects.toThrow(
+        `dev server exited before it was ready; see ${logPath}`,
+      );
       expect(Date.now() - startedAt).toBeLessThan(2_000);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
@@ -359,7 +450,9 @@ describe("runSessionHost", () => {
       expect(code).toBe(1);
       const logText = readFileSync(logPath, "utf8");
       expect(logText).toMatch(/^\[session-host\] .+/mu);
-      expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test(logText))).toBe(true);
+      expect(
+        DEV_FAILURE_PATTERNS.some((pattern) => pattern.test(logText)),
+      ).toBe(true);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

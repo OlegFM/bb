@@ -35,7 +35,10 @@ const commandsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(commandsDir, "..", "..", "..", "..");
 
 const sessionHostPath = fileURLToPath(
-  new URL(`./run-dev-app-session-host${extname(fileURLToPath(import.meta.url))}`, import.meta.url),
+  new URL(
+    `./run-dev-app-session-host${extname(fileURLToPath(import.meta.url))}`,
+    import.meta.url,
+  ),
 );
 const windowsSessionHost = {
   command: process.execPath,
@@ -99,7 +102,10 @@ async function runStep(
 }
 
 async function ensureDependencies(desktop: boolean): Promise<void> {
-  await runStep("Installing dependencies", "pnpm", ["install", "--frozen-lockfile"]);
+  await runStep("Installing dependencies", "pnpm", [
+    "install",
+    "--frozen-lockfile",
+  ]);
   await runStep("Checking native modules", process.execPath, [
     join(repoRoot, "scripts", "ensure-native-modules.mjs"),
   ]);
@@ -121,7 +127,9 @@ async function ensureDependencies(desktop: boolean): Promise<void> {
     desktopRequire("electron");
   } catch {
     const installScript = desktopRequire.resolve("electron/install.js");
-    await runStep("Installing the Electron binary", process.execPath, [installScript]);
+    await runStep("Installing the Electron binary", process.execPath, [
+      installScript,
+    ]);
   }
 }
 
@@ -215,7 +223,9 @@ function openAppUrl(config: DevInstanceConfig): void {
     env: process.env,
     stdio: "ignore",
   });
-  child.once("error", (error) => log(`Could not open ${url}: ${error.message}`));
+  child.once("error", (error) =>
+    log(`Could not open ${url}: ${error.message}`),
+  );
   child.unref();
 }
 
@@ -226,8 +236,14 @@ async function printStatus(
   const [branchName, commit, devState, desktopState] = await Promise.all([
     captureCommandOutput("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
     captureCommandOutput("git", ["rev-parse", "--short", "HEAD"]),
-    readTrackedProcessState({ pidPath: paths.devPidPath, serviceName: "dev server" }),
-    readTrackedProcessState({ pidPath: paths.desktopPidPath, serviceName: "desktop" }),
+    readTrackedProcessState({
+      pidPath: paths.devPidPath,
+      serviceName: "dev server",
+    }),
+    readTrackedProcessState({
+      pidPath: paths.desktopPidPath,
+      serviceName: "desktop",
+    }),
   ]);
   process.stdout.write(
     `${formatDevAppStatus({
@@ -270,7 +286,8 @@ async function main(): Promise<void> {
     process.once("SIGINT", () => controller.abort());
     process.once("SIGTERM", () => controller.abort());
     await followLogFile({
-      logPath: args.logTarget === "desktop" ? paths.desktopLogPath : paths.devLogPath,
+      logPath:
+        args.logTarget === "desktop" ? paths.desktopLogPath : paths.devLogPath,
       signal: controller.signal,
       write: (chunk) => {
         process.stdout.write(chunk);

@@ -26,7 +26,10 @@ describe("bb/no-tmp-path-literal", () => {
   const rule = rules["no-tmp-path-literal"];
 
   it("reports string literals under /tmp", () => {
-    const reports = runRule(rule, [literal("/tmp/bb-server-test"), literal("/tmp")]);
+    const reports = runRule(rule, [
+      literal("/tmp/bb-server-test"),
+      literal("/tmp"),
+    ]);
 
     expect(reports).toHaveLength(2);
     expect(reports[0].message).toContain("os.tmpdir()");

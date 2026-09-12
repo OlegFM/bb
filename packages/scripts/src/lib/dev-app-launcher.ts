@@ -62,7 +62,10 @@ export const DEV_SERVER_READY_TIMEOUT_MS = 90_000;
 export const DESKTOP_READY_TIMEOUT_MS = 120_000;
 
 export function desktopReadyPattern(appPort: number): RegExp {
-  return new RegExp(`@bb/desktop: app http://localhost:${appPort}(?![0-9])`, "u");
+  return new RegExp(
+    `@bb/desktop: app http://localhost:${appPort}(?![0-9])`,
+    "u",
+  );
 }
 
 function parseLogTarget(word: string | undefined): DevAppLogTarget {
@@ -178,7 +181,10 @@ export function resolveOpenUrlCommand(
   url: string,
 ): { command: string; args: string[] } {
   if (platform === "win32") {
-    return { command: "rundll32.exe", args: ["url.dll,FileProtocolHandler", url] };
+    return {
+      command: "rundll32.exe",
+      args: ["url.dll,FileProtocolHandler", url],
+    };
   }
   if (platform === "darwin") {
     return { command: "open", args: [url] };
@@ -400,7 +406,9 @@ export async function waitForLogPattern(
       return;
     }
     if (args.failurePatterns.some((pattern) => pattern.test(text))) {
-      throw new Error(`${args.description} failed to start; see ${args.logPath}`);
+      throw new Error(
+        `${args.description} failed to start; see ${args.logPath}`,
+      );
     }
     if (args.isAlive !== undefined && !(await args.isAlive())) {
       throw new Error(
@@ -438,7 +446,10 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function waitForProcessGone(pid: number, timeoutMs: number): Promise<boolean> {
+async function waitForProcessGone(
+  pid: number,
+  timeoutMs: number,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
     if (!isProcessAlive(pid)) {
@@ -503,7 +514,10 @@ export async function stopTrackedProcess(args: {
 }): Promise<"not-running" | "stopped"> {
   let pid: number;
   try {
-    pid = await readRunningPid({ pidPath: args.pidPath, serviceName: args.serviceName });
+    pid = await readRunningPid({
+      pidPath: args.pidPath,
+      serviceName: args.serviceName,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (

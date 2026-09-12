@@ -5,7 +5,9 @@ import {
 
 const [logPath, command, ...args] = process.argv.slice(2);
 if (logPath === undefined || command === undefined) {
-  process.stderr.write("Usage: run-dev-app-session-host <logPath> <command> [args...]\n");
+  process.stderr.write(
+    "Usage: run-dev-app-session-host <logPath> <command> [args...]\n",
+  );
   process.exit(2);
 }
 

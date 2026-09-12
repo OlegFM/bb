@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const commandPath = join(repoRoot, "packages", "scripts", "src", "commands", "run-dev-app.ts");
+const commandPath = join(
+  repoRoot,
+  "packages",
+  "scripts",
+  "src",
+  "commands",
+  "run-dev-app.ts",
+);
 
 function runDevApp(args, env) {
   return spawnSync(
@@ -20,7 +27,10 @@ describe("run-dev-app", () => {
   it("reports status for a checkout with nothing running", () => {
     const tempHome = mkdtempSync(join(tmpdir(), "bb-dev-app-home-"));
     try {
-      const result = runDevApp(["status"], { HOME: tempHome, USERPROFILE: tempHome });
+      const result = runDevApp(["status"], {
+        HOME: tempHome,
+        USERPROFILE: tempHome,
+      });
 
       expect(result.status).toBe(0);
       expect(result.stdout).toContain(
@@ -36,7 +46,10 @@ describe("run-dev-app", () => {
   it("stops cleanly when nothing is running", () => {
     const tempHome = mkdtempSync(join(tmpdir(), "bb-dev-app-home-"));
     try {
-      const result = runDevApp(["stop"], { HOME: tempHome, USERPROFILE: tempHome });
+      const result = runDevApp(["stop"], {
+        HOME: tempHome,
+        USERPROFILE: tempHome,
+      });
 
       expect(result.status).toBe(0);
       expect(result.stderr).toContain("dev server: not running");
@@ -59,14 +72,20 @@ describe("run-dev-app", () => {
     const powershell = runDevApp(["env", "--powershell"], {});
 
     expect(posix.status).toBe(0);
-    expect(posix.stdout.split("\n")[0]).toMatch(/^export BB_SERVER_URL=http:\/\/127\.0\.0\.1:\d+$/u);
+    expect(posix.stdout.split("\n")[0]).toMatch(
+      /^export BB_SERVER_URL=http:\/\/127\.0\.0\.1:\d+$/u,
+    );
     expect(posix.stdout).toContain("unset BB_THREAD_STORAGE");
     expect(powershell.status).toBe(0);
-    expect(powershell.stdout.split("\n")[0]).toMatch(/^\$env:BB_SERVER_URL = "http:\/\/127\.0\.0\.1:\d+"$/u);
+    expect(powershell.stdout.split("\n")[0]).toMatch(
+      /^\$env:BB_SERVER_URL = "http:\/\/127\.0\.0\.1:\d+"$/u,
+    );
   });
 
   it("pins the root engine floor for primary development", () => {
-    const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+    const packageJson = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    );
     const nodePin = readFileSync(join(repoRoot, ".nvmrc"), "utf8").trim();
 
     expect(packageJson.engines.node).toBe(`>=${nodePin}`);

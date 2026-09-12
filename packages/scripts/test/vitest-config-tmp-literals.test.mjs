@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const workspaceGroups = ["apps", "packages", "plugins", "tests", "examples/plugins"];
+const workspaceGroups = [
+  "apps",
+  "packages",
+  "plugins",
+  "tests",
+  "examples/plugins",
+];
 
 function listVitestConfigs() {
   const configs = [];

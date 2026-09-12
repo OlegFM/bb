@@ -535,7 +535,9 @@ describe("verify-only native modules", () => {
         log: vi.fn(),
         platform: "win32",
       }),
-    ).toThrow(/node-pty has no usable native binary on Windows[\s\S]*Visual Studio Build Tools[\s\S]*Original error: The specified module could not be found\./u);
+    ).toThrow(
+      /node-pty has no usable native binary on Windows[\s\S]*Visual Studio Build Tools[\s\S]*Original error: The specified module could not be found\./u,
+    );
     expect(execFileSync).not.toHaveBeenCalled();
   });
 
@@ -562,10 +564,14 @@ describe("verify-only native modules", () => {
 describe("better-sqlite3 repair on win32", () => {
   it("names the Windows build tools when node-gyp fails", () => {
     const fake = createBetterSqliteRequire(
-      new Error("was compiled against a different Node.js version using NODE_MODULE_VERSION 127"),
+      new Error(
+        "was compiled against a different Node.js version using NODE_MODULE_VERSION 127",
+      ),
     );
     const execFileSync = vi.fn(() => {
-      throw new Error("gyp ERR! find VS msvs_version not set from command line or npm config");
+      throw new Error(
+        "gyp ERR! find VS msvs_version not set from command line or npm config",
+      );
     });
 
     expect(() =>
@@ -573,7 +579,9 @@ describe("better-sqlite3 repair on win32", () => {
         ...createEnsureOptions(fake.requireModule, execFileSync),
         platform: "win32",
       }),
-    ).toThrow(/better-sqlite3 has no usable native binary on Windows[\s\S]*Original error: gyp ERR! find VS/u);
+    ).toThrow(
+      /better-sqlite3 has no usable native binary on Windows[\s\S]*Original error: gyp ERR! find VS/u,
+    );
     expect(execFileSync).toHaveBeenCalledTimes(2);
   });
 });
