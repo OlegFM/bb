@@ -144,6 +144,13 @@ async function stopAll(paths: DevAppPaths): Promise<void> {
   log(`dev server: ${dev === "stopped" ? "stopped" : "not running"}`);
 }
 
+function trackedSessionIsAlive(args: {
+  pidPath: string;
+  serviceName: string;
+}): () => Promise<boolean> {
+  return async () => (await readTrackedProcessState(args)) === "running";
+}
+
 async function startDevServer(paths: DevAppPaths): Promise<void> {
   log(`Starting dev server, log ${paths.devLogPath}`);
   await startLoggedProcess({
@@ -159,6 +166,10 @@ async function startDevServer(paths: DevAppPaths): Promise<void> {
   await waitForLogPattern({
     description: "dev server",
     failurePatterns: DEV_FAILURE_PATTERNS,
+    isAlive: trackedSessionIsAlive({
+      pidPath: paths.devPidPath,
+      serviceName: "dev server",
+    }),
     logPath: paths.devLogPath,
     readyPattern: DEV_SERVER_READY_PATTERN,
     timeoutMs: DEV_SERVER_READY_TIMEOUT_MS,
@@ -183,6 +194,10 @@ async function startDesktop(
   await waitForLogPattern({
     description: "desktop app",
     failurePatterns: DEV_FAILURE_PATTERNS,
+    isAlive: trackedSessionIsAlive({
+      pidPath: paths.desktopPidPath,
+      serviceName: "desktop",
+    }),
     logPath: paths.desktopLogPath,
     readyPattern: desktopReadyPattern(config.ports.appPort),
     timeoutMs: DESKTOP_READY_TIMEOUT_MS,

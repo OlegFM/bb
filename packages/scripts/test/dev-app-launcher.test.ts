@@ -1,4 +1,11 @@
-import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +23,7 @@ import {
   readTrackedProcessState,
   resolveDevAppPaths,
   resolveOpenUrlCommand,
+  runSessionHost,
   startLoggedProcess,
   stopTrackedProcess,
   waitForLogPattern,
@@ -160,6 +168,11 @@ describe("readiness patterns", () => {
     expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("[dev] port 19001 is unavailable"))).toBe(true);
     expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("ELIFECYCLE Command failed"))).toBe(true);
     expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("ERROR  run failed: command exited (1)"))).toBe(true);
+    expect(
+      DEV_FAILURE_PATTERNS.some((pattern) =>
+        pattern.test("[session-host] spawn definitely-not-a-command-xyz ENOENT"),
+      ),
+    ).toBe(true);
     expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test("all good"))).toBe(false);
   });
 });
@@ -294,6 +307,52 @@ describe("tracked processes", () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("stops waiting as soon as the tracked session is gone", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "child.log");
+    writeFileSync(logPath, "starting up\n");
+    const startedAt = Date.now();
+    try {
+      await expect(
+        waitForLogPattern({
+          description: "dev server",
+          failurePatterns: [],
+          isAlive: async () => false,
+          logPath,
+          pollIntervalMs: 50,
+          readyPattern: /never/u,
+          timeoutMs: 5_000,
+        }),
+      ).rejects.toThrow(`dev server exited before it was ready; see ${logPath}`);
+      expect(Date.now() - startedAt).toBeLessThan(2_000);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("runSessionHost", () => {
+  it("writes its own spawn failure to the session log and exits 1", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "logs", "dev.log");
+    try {
+      const code = await runSessionHost({
+        args: [],
+        command: "definitely-not-a-command-xyz",
+        cwd: monorepoRoot,
+        env: process.env,
+        logPath,
+      });
+
+      expect(code).toBe(1);
+      const logText = readFileSync(logPath, "utf8");
+      expect(logText).toMatch(/^\[session-host\] .+/mu);
+      expect(DEV_FAILURE_PATTERNS.some((pattern) => pattern.test(logText))).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
 
 describe("followLogFile", () => {

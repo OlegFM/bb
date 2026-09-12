@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { DevInstanceConfig } from "@bb/config/runtime";
 import {
@@ -55,6 +55,7 @@ export const DEV_FAILURE_PATTERNS: readonly RegExp[] = [
   /port .* is unavailable/u,
   /ELIFECYCLE/u,
   /ERROR {2}run failed/u,
+  /^\[session-host\] /mu,
 ];
 
 export const DEV_SERVER_READY_TIMEOUT_MS = 90_000;
@@ -216,6 +217,7 @@ export interface StartLoggedProcessArgs {
 export interface WaitForLogPatternArgs {
   description: string;
   failurePatterns: readonly RegExp[];
+  isAlive?: () => Promise<boolean>;
   logPath: string;
   pollIntervalMs?: number;
   readyPattern: RegExp;
@@ -229,6 +231,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolvePromise) => {
     setTimeout(resolvePromise, ms);
   });
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isErrnoCode(error: unknown, code: string): boolean {
@@ -312,6 +318,18 @@ export async function startLoggedProcess(
   }
 }
 
+export async function appendSessionHostFailure(args: {
+  logPath: string;
+  message: string;
+}): Promise<void> {
+  const line = `[session-host] ${args.message}\n`;
+  try {
+    await appendFile(args.logPath, line, "utf8");
+  } catch {
+    process.stderr.write(line);
+  }
+}
+
 export async function runSessionHost(request: {
   args: string[];
   command: string;
@@ -319,8 +337,17 @@ export async function runSessionHost(request: {
   env: NodeJS.ProcessEnv;
   logPath: string;
 }): Promise<number> {
-  await mkdir(dirname(request.logPath), { recursive: true });
-  const logHandle = await open(request.logPath, "a");
+  let logHandle: Awaited<ReturnType<typeof open>>;
+  try {
+    await mkdir(dirname(request.logPath), { recursive: true });
+    logHandle = await open(request.logPath, "a");
+  } catch (error) {
+    await appendSessionHostFailure({
+      logPath: request.logPath,
+      message: describeError(error),
+    });
+    return 1;
+  }
   let child: ReturnType<typeof spawnPortableProcess>;
   try {
     child = spawnPortableProcess({
@@ -331,13 +358,23 @@ export async function runSessionHost(request: {
       stdio: ["ignore", logHandle.fd, logHandle.fd],
       windowsHide: true,
     });
+  } catch (error) {
+    await appendSessionHostFailure({
+      logPath: request.logPath,
+      message: describeError(error),
+    });
+    return 1;
   } finally {
     await logHandle.close();
   }
   return new Promise((resolvePromise) => {
     child.once("error", (error) => {
-      process.stderr.write(`${error.message}\n`);
-      resolvePromise(1);
+      void appendSessionHostFailure({
+        logPath: request.logPath,
+        message: error.message,
+      }).then(() => {
+        resolvePromise(1);
+      });
     });
     child.once("exit", (code, signal) => {
       resolvePromise(signal !== null ? 1 : (code ?? 1));
@@ -364,6 +401,11 @@ export async function waitForLogPattern(
     }
     if (args.failurePatterns.some((pattern) => pattern.test(text))) {
       throw new Error(`${args.description} failed to start; see ${args.logPath}`);
+    }
+    if (args.isAlive !== undefined && !(await args.isAlive())) {
+      throw new Error(
+        `${args.description} exited before it was ready; see ${args.logPath}`,
+      );
     }
     await sleep(pollIntervalMs);
   }
