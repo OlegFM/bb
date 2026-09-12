@@ -38,7 +38,7 @@ vi.mock("@/lib/ws", () => ({
 
 const hostDaemon = vi.hoisted(() => ({
   localDaemonHostId: "host_primary" as string | null,
-  platform: "darwin" as "darwin" | "linux" | "wsl" | "unknown" | null,
+  platform: "darwin" as "darwin" | "linux" | "wsl" | "win32" | "unknown" | null,
 }));
 
 vi.mock("@/hooks/useHostDaemon", () => ({
@@ -177,6 +177,26 @@ describe("MachinesSettingsSection", () => {
     expect(localName.parentElement?.textContent).toContain("this machine");
     expect(localName.parentElement?.textContent).not.toContain("primary");
     expect(screen.getByText("Linux")).toBeDefined();
+  });
+
+  it("labels a native Windows daemon as Windows", async () => {
+    hostDaemon.localDaemonHostId = "host_remote";
+    hostDaemon.platform = "win32";
+    vi.mocked(sdk.system.config).mockResolvedValue(systemConfig());
+    vi.mocked(sdk.hosts.list).mockResolvedValue([primaryHost, offlineHost]);
+    stubSidebarBootstrapFetch();
+
+    renderSection();
+
+    const primaryName = await screen.findByText("MacBook Pro");
+    const localName = screen.getByText("dev-vm");
+    expect(primaryName.parentElement?.textContent).toContain("primary");
+    expect(primaryName.parentElement?.textContent).not.toContain(
+      "this machine",
+    );
+    expect(localName.parentElement?.textContent).toContain("this machine");
+    expect(localName.parentElement?.textContent).not.toContain("primary");
+    expect(screen.getByText("Windows")).toBeDefined();
   });
 
   it("does not infer client-local identity when no daemon is reachable", async () => {

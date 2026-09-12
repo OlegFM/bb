@@ -70,6 +70,16 @@ describe("desktop update support", () => {
     expect(checked).toEqual([APP_IMAGE_PATH]);
   });
 
+  it("disables update checks on Windows until the Windows feed ships", () => {
+    expect(
+      resolveDesktopUpdateSupport({
+        canReplaceAppImage: () => true,
+        env: {},
+        platform: "windows",
+      }),
+    ).toEqual({ autoUpdate: false, versionCheck: false });
+  });
+
   it("does not consult the filesystem on macOS", () => {
     let consulted = false;
 

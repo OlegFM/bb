@@ -8,7 +8,7 @@ const bbDesktopVersionFeedFileSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 
-const bbDesktopVersionFeedPlatformSchema = z.enum(["macos", "linux"]);
+const bbDesktopVersionFeedPlatformSchema = z.enum(["macos", "linux", "windows"]);
 export type BbDesktopVersionFeedPlatform = z.infer<
   typeof bbDesktopVersionFeedPlatformSchema
 >;
@@ -32,6 +32,7 @@ export type BbDesktopVersionFeed = z.infer<typeof bbDesktopVersionFeedSchema>;
 const BB_DESKTOP_VERSION_FEED_FILE_NAMES = {
   linux: "desktop-version-linux.json",
   macos: "desktop-version.json",
+  windows: "desktop-version-windows.json",
 } as const satisfies Record<BbDesktopVersionFeedPlatform, string>;
 
 export function createBbDesktopVersionFeedFileName(

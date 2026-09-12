@@ -40,6 +40,15 @@ describe("bbDesktopInfoSchema", () => {
     ).toBe(true);
   });
 
+  it("accepts windows", () => {
+    expect(
+      bbDesktopInfoSchema.safeParse({
+        ...baseInfo,
+        platform: "windows",
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejects win32", () => {
     expect(
       bbDesktopInfoSchema.safeParse({

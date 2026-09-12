@@ -43,7 +43,7 @@ vi.mock("@/lib/ws", () => ({
 
 const hostDaemon = vi.hoisted(() => ({
   localDaemonHostId: null as string | null,
-  platform: null as "darwin" | "linux" | "wsl" | "unknown" | null,
+  platform: null as "darwin" | "linux" | "wsl" | "win32" | "unknown" | null,
 }));
 
 vi.mock("@/hooks/useHostDaemon", () => ({

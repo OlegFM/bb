@@ -133,6 +133,9 @@ describe("desktop version feed schema", () => {
     expect(createBbDesktopVersionFeedFileName("linux")).toBe(
       "desktop-version-linux.json",
     );
+    expect(createBbDesktopVersionFeedFileName("windows")).toBe(
+      "desktop-version-windows.json",
+    );
   });
 
   it("rejects malformed version feed payloads", () => {

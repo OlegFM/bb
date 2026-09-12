@@ -135,6 +135,12 @@ function getPlatformCopy(
 ): PlatformCopy {
   const placeholder = "/path/to/project";
   const hostSuffix = hostName ? ` on ${hostName}` : "";
+  if (platform === "win32") {
+    return {
+      description: `Enter an absolute Windows path${hostSuffix} to the project folder, such as C:\\Users\\me\\repo.`,
+      placeholder: "C:\\path\\to\\project",
+    };
+  }
   if (platform === "wsl") {
     return {
       description: `Enter an absolute WSL path${hostSuffix} to the project folder, such as /home/me/repo or /mnt/c/...`,
