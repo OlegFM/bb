@@ -559,6 +559,21 @@ const hostPathsExistCommandSchema = pathsExistRequestSchema
   })
   .strict();
 
+const hostCanonicalizePathCommandSchema = z
+  .object({
+    type: z.literal("host.canonicalize_path"),
+    path: z.string().min(1),
+  })
+  .strict();
+
+export const canonicalHostPathSchema = z
+  .object({
+    path: z.string().min(1),
+    pathKey: z.string().min(1),
+  })
+  .strict();
+export type CanonicalHostPath = z.infer<typeof canonicalHostPathSchema>;
+
 const projectInspectCommandSchema = z
   .object({
     type: z.literal("project.inspect"),
@@ -1602,6 +1617,15 @@ export const hostDaemonCommandRegistry = {
     type: "host.paths_exist",
     schema: hostPathsExistCommandSchema,
     resultSchema: pathsExistResponseSchema,
+    transport: "onlineRpc",
+    retryable: true,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "host.canonicalize_path": defineHostDaemonCommandDescriptor({
+    type: "host.canonicalize_path",
+    schema: hostCanonicalizePathCommandSchema,
+    resultSchema: canonicalHostPathSchema,
     transport: "onlineRpc",
     retryable: true,
     flushEventsBeforeResult: false,

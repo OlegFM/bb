@@ -274,6 +274,10 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
       "/home/me/missing": false,
     },
   },
+  "host.canonicalize_path": {
+    path: "C:\\Work\\bb",
+    pathKey: "c:/work/bb",
+  },
   "project.inspect": {
     path: "/home/me/project",
     gitRemoteUrl: "git@example.com:me/project.git",
@@ -1000,8 +1004,30 @@ const CONTRIBUTED_ENV = [
 
 describe("host-daemon command schemas", () => {
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(199);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(200);
     expect(HOST_ARTIFACT_MAX_BYTES).toBe(256 * 1024 * 1024);
+  });
+
+  it("round-trips host.canonicalize_path", () => {
+    expect(
+      hostDaemonOnlineRpcCommandSchema.safeParse({
+        type: "host.canonicalize_path",
+        path: "C:\\Work\\bb",
+      }).success,
+    ).toBe(true);
+    expect(
+      hostDaemonOnlineRpcCommandSchema.safeParse({
+        type: "host.canonicalize_path",
+        path: "",
+      }).success,
+    ).toBe(false);
+    const resultSchema =
+      hostDaemonOnlineRpcResultSchemaByType["host.canonicalize_path"];
+    expect(
+      resultSchema.safeParse({ path: "C:\\Work\\bb", pathKey: "c:/work/bb" })
+        .success,
+    ).toBe(true);
+    expect(resultSchema.safeParse({ path: "C:\\Work\\bb" }).success).toBe(false);
   });
 
   it("uses relative host-plugin timeouts and bounds artifact declarations", () => {

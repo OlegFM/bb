@@ -46,6 +46,7 @@ import {
   readHostFileMetadata,
   readHostRelativeFile,
 } from "./command-handlers/host-files.js";
+import { canonicalizeHostPathCommand } from "./command-handlers/canonicalize-path.js";
 import { writeHostFile } from "./command-handlers/file-write.js";
 import {
   mkdirHostPath,
@@ -599,6 +600,7 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
   "host.remove_path": removeHostPath,
   "host.browse_directory": browseHostDirectory,
   "host.paths_exist": checkHostPathsExist,
+  "host.canonicalize_path": canonicalizeHostPathCommand,
   "project.inspect": async (command, options) =>
     inspectProjectPath(
       command.path,
