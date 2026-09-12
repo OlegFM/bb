@@ -528,6 +528,35 @@ export async function stopTrackedProcess(args: {
   return "stopped";
 }
 
+async function readLogFileFrom(args: {
+  logPath: string;
+  offset: number;
+  write: (chunk: string) => void;
+}): Promise<number> {
+  let handle;
+  try {
+    handle = await open(args.logPath, "r");
+  } catch (error) {
+    if (!isErrnoCode(error, "ENOENT")) {
+      throw error;
+    }
+    return args.offset;
+  }
+  try {
+    const { size } = await handle.stat();
+    const start = size < args.offset ? 0 : args.offset;
+    if (size <= start) {
+      return start;
+    }
+    const buffer = Buffer.alloc(size - start);
+    await handle.read(buffer, 0, buffer.length, start);
+    args.write(buffer.toString("utf8"));
+    return size;
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function followLogFile(args: {
   logPath: string;
   pollIntervalMs?: number;
@@ -537,30 +566,12 @@ export async function followLogFile(args: {
   const pollIntervalMs = args.pollIntervalMs ?? 500;
   let offset = 0;
   while (!args.signal.aborted) {
-    let handle;
-    try {
-      handle = await open(args.logPath, "r");
-    } catch (error) {
-      if (!isErrnoCode(error, "ENOENT")) {
-        throw error;
-      }
-      await sleep(pollIntervalMs);
-      continue;
-    }
-    try {
-      const { size } = await handle.stat();
-      if (size < offset) {
-        offset = 0;
-      }
-      if (size > offset) {
-        const buffer = Buffer.alloc(size - offset);
-        await handle.read(buffer, 0, buffer.length, offset);
-        offset = size;
-        args.write(buffer.toString("utf8"));
-      }
-    } finally {
-      await handle.close();
-    }
+    offset = await readLogFileFrom({
+      logPath: args.logPath,
+      offset,
+      write: args.write,
+    });
     await sleep(pollIntervalMs);
   }
+  await readLogFileFrom({ logPath: args.logPath, offset, write: args.write });
 }

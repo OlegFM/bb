@@ -44,6 +44,17 @@ const windowsSessionHost = {
   ],
 };
 
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() <= deadline) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+  throw new Error("Timed out waiting for the follower to observe the log");
+}
+
 const defaults = {
   desktop: false,
   logTarget: "dev",
@@ -370,16 +381,41 @@ describe("followLogFile", () => {
           chunks.push(chunk);
         },
       });
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
       writeFileSync(logPath, "first line\n");
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      await waitUntil(() => chunks.join("").includes("first line\n"));
       appendFileSync(logPath, "second line\n");
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 60));
+      await waitUntil(() => chunks.join("").includes("second line\n"));
       controller.abort();
       await following;
 
       expect(chunks.join("")).toBe("first line\nsecond line\n");
       expect(chunks.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("drains a line appended just before the abort", async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "bb-dev-app-"));
+    const logPath = join(tempRoot, "dev.log");
+    const chunks: string[] = [];
+    const controller = new AbortController();
+    try {
+      writeFileSync(logPath, "first line\n");
+      const following = followLogFile({
+        logPath,
+        pollIntervalMs: 200,
+        signal: controller.signal,
+        write: (chunk) => {
+          chunks.push(chunk);
+        },
+      });
+      await waitUntil(() => chunks.join("").includes("first line\n"));
+      appendFileSync(logPath, "second line\n");
+      controller.abort();
+      await following;
+
+      expect(chunks.join("")).toBe("first line\nsecond line\n");
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
