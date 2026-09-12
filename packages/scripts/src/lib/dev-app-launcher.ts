@@ -329,7 +329,8 @@ export async function appendSessionHostFailure(args: {
   message: string;
 }): Promise<void> {
   const line = `
-[session-host] ${args.message}\n`;
+[session-host] ${args.message}
+`;
   try {
     await appendFile(args.logPath, line, "utf8");
   } catch {
