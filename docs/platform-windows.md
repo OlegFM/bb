@@ -92,9 +92,14 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
 - The app accepts `C:\...` and `C:/...` file paths and renders them as
   `file:///C:/...` links.
 - Managed worktrees and personal workspaces are derived with the host's
-  native separator under `%USERPROFILE%\.bb\worktrees` and
-  `%USERPROFILE%\.bb\personal-workspaces` (dev:
-  `%USERPROFILE%\.bb-dev\<instance>\...`).
+  native separator under the provider plugin's host-data directory inside
+  the daemon data dir (`%USERPROFILE%\.bb` in production,
+  `%USERPROFILE%\.bb-dev\<instance>` for a dev app). The gate observed
+  `<data dir>\plugins\environment-git-worktree\host-data\worktrees\<thread>-<attempt>\<repo>`
+  (`qa/windows/phase-1/22-managed-worktree.md`). The server's managed-root
+  containment check still compares against `<data dir>\worktrees` and
+  `<data dir>\personal-workspaces`, the legacy roots, on every platform; that
+  mismatch predates this branch and is not changed by it.
 
 ## Known limitations after Phase 0
 
