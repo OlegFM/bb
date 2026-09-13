@@ -230,16 +230,18 @@ export function resolveInheritedDevSkillsRootPaths(
   args: ResolveInheritedDevSkillsRootPathsArgs,
 ): string[] {
   const roots = [join(resolveProdDataDir({ homeDir: args.homeDir }), "skills")];
-  const segments = resolve(args.repoRoot).split(/[\\/]+/u);
+  const repoRoot = resolve(args.repoRoot);
+  const segments = repoRoot.split(/[\\/]+/u);
   const worktreesIndex = segments.lastIndexOf(MANAGED_WORKTREE_DIR_NAME);
   if (worktreesIndex <= 0) {
     return roots;
   }
 
-  const parentDataDir = segments.slice(0, worktreesIndex).join("/");
-  if (parentDataDir.length === 0) {
-    return roots;
-  }
+  const levelsUp = segments.length - worktreesIndex;
+  const parentDataDir = resolve(
+    repoRoot,
+    ...Array.from({ length: levelsUp }, () => ".."),
+  );
 
   return Array.from(new Set([join(parentDataDir, "skills"), ...roots]));
 }

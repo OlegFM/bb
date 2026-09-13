@@ -159,6 +159,21 @@ describe("run-dev", () => {
     });
   });
 
+  it.runIf(process.platform === "win32")(
+    "inherits parent bb skills for a Windows managed worktree dev app",
+    () => {
+      const homeDir = "C:\\Users\\tester";
+      const repoRoot =
+        "C:\\Users\\tester\\.bb-dev\\code-bb-abc123\\worktrees\\env_feature\\bb";
+      expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).toEqual(
+        [
+          "C:\\Users\\tester\\.bb-dev\\code-bb-abc123\\skills",
+          "C:\\Users\\tester\\.bb\\skills",
+        ],
+      );
+    },
+  );
+
   it("dedupes inherited bb skills for prod-managed worktree dev apps", () => {
     const homeDir = "/Users/tester";
     const repoRoot = "/Users/tester/.bb/worktrees/env_feature/bb";
