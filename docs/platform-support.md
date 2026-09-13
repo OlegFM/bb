@@ -120,8 +120,12 @@ Not available on the phone (use the web app or desktop for these):
   the WSL filesystem, but they are a tradeoff:
   slower filesystem I/O and weaker file-watching behavior than the WSL
   filesystem.
-- Native Windows drive-letter and UNC paths are rejected at the app/server
-  boundary so unsupported input fails clearly.
+- UNC and device paths (`\\server\share`, `\\.\`, `\\?\`) are rejected at the
+  app/server boundary for every host, so unsupported input fails clearly.
+  Native Windows drive-letter paths (`C:\Users\me\repo`) are valid input for a
+  native Windows host (see [platform-windows.md](platform-windows.md)); they
+  are not the path format for a WSL2 host's own filesystem, which stays POSIX
+  as described above.
 
 ### Maintainer-only or best-effort surfaces
 
