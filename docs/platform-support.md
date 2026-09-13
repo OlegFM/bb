@@ -98,15 +98,14 @@ Not available on the phone (use the web app or desktop for these):
 
 ### Local path requirements
 
-- When the host is connected, `bb project create --root <path>`,
-  `POST /projects`, and adding or re-pointing a local source require `<path>`
-  to be an existing directory on that host (the daemon canonicalizes it);
-  otherwise the request fails with HTTP 400 `invalid_path`. Re-adding a project
-  that already exists returns the existing project even if its directory is
-  gone. When the host is offline the path is stored as typed
-  (shape-normalized).
-- A path that starts with two separators (`\\` or `//`) is treated as a UNC
-  path and refused on every host; POSIX paths start with a single `/`.
+- `bb project create --root <path>`, `POST /projects`, and adding or
+  re-pointing a local source accept any absolute path on the target host; the
+  directory does not have to exist. On a POSIX host the path is stored as
+  typed with trailing separators removed, connected or not. On a connected
+  Windows host the daemon returns the on-disk spelling when the directory
+  exists and the normalized spelling otherwise; when that host is offline the
+  server shape-normalizes the path itself.
+- Re-adding a project that already exists returns the existing project.
 
 ### Command ownership and mode selection
 
@@ -132,9 +131,8 @@ Not available on the phone (use the web app or desktop for these):
   the WSL filesystem, but they are a tradeoff:
   slower filesystem I/O and weaker file-watching behavior than the WSL
   filesystem.
-- UNC and device paths (`\\server\share`, `//server/share`, `\\.\`, `\\?\`) are
-  rejected at the app/server boundary for every host, so unsupported input
-  fails clearly.
+- UNC and device paths (`\\server\share`, `\\.\`, `\\?\`) are rejected at the
+  app/server boundary for every host, so unsupported input fails clearly.
   Native Windows drive-letter paths (`C:\Users\me\repo`) are valid input for a
   native Windows host (see [platform-windows.md](platform-windows.md)); they
   are not the path format for a WSL2 host's own filesystem, which stays POSIX

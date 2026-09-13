@@ -86,20 +86,15 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
   to bind a new project's local path to a connected enrolled machine. Use
   `--host` as an alias. Without a selector, the CLI asks its local host daemon.
-  When the machine is connected, `--root` must be an existing directory on it
-  (the machine canonicalizes the path); otherwise the command fails with HTTP
-  400 `invalid_path`. Re-adding a project that already exists returns the
-  existing project even if its directory is gone. When the machine is offline
-  the path is stored as typed.
+  `--root` does not have to exist yet. Re-adding a project that already exists
+  returns the existing project.
 - `bb project list` preserves the ordinary-project-only default. Pass
   `--include-personal` when the singleton personal project must be discoverable.
 - Use `bb project source add <project-id> --machine <id-or-name> --path <path>`
   to register a path on another connected machine. It uses the same selector
-  resolution and fallback as project create. Adding or re-pointing a source on
-  a connected machine requires `--path` to be an existing directory there;
-  otherwise the command fails with HTTP 400 `invalid_path`. Use `--clone`
-  instead of `--path` to clone the project's remote there; `--remote-url` and
-  `--target-path` are optional clone overrides.
+  resolution and fallback as project create, and `--path` does not have to
+  exist yet. Use `--clone` instead of `--path` to clone the project's remote
+  there; `--remote-url` and `--target-path` are optional clone overrides.
 - `bb project paths|files|content|commands` accept `--machine <id-or-name>`
   (`--host` alias) or `--environment <id>`, but not both. An environment uses
   its owning machine and workspace; an explicit machine uses that machine's

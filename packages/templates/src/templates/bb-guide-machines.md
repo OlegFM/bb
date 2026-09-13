@@ -88,11 +88,8 @@ a new managed worktree, or the personal workspace. Do not combine it with an
 existing environment ID: the reused environment already selects its machine.
 
 For project creation and sources, `--root`/`--path` refers to a path on the
-selected connected machine. When that machine is connected, the path must be an
-existing directory on it (the machine canonicalizes it); otherwise the command
-fails with HTTP 400 `invalid_path`. Re-adding a project that already exists
-returns the existing project even if its directory is gone. When the machine is
-offline the path is stored as typed. Omit the selector to keep the existing
-local CLI machine fallback (normally the primary machine). Pass `--clone` to source add
-instead of `--path` to clone the project's Git remote there; `--remote-url` and
-`--target-path` optionally override the clone inputs.
+selected connected machine; the directory does not have to exist. Omit the
+selector to keep the existing local CLI machine fallback (normally the primary
+machine). Pass `--clone` to source add instead of `--path` to clone the
+project's Git remote there; `--remote-url` and `--target-path` optionally
+override the clone inputs.

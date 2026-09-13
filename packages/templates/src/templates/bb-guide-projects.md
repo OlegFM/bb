@@ -24,11 +24,8 @@ A project maps to a code repository. All threads belong to a project.
   binds --root to that machine. Omitting the selector preserves the existing
   local CLI machine fallback (normally the primary machine).
 
-  When the machine is connected, --root must be an existing directory on it
-  (the machine canonicalizes the path); otherwise the command fails with HTTP
-  400 invalid_path. Re-adding a project that already exists returns the
-  existing project even if its directory is gone. When the machine is offline
-  the path is stored as typed.
+  --root does not have to exist yet. Re-adding a project that already exists
+  returns the existing project.
 
   bb project show <id>                    Show project details
   bb project update <id>                  Update a project
@@ -84,9 +81,7 @@ Sources:
 
   Explicit project source selectors must name a connected machine. Omitting
   the selector preserves the same local CLI machine fallback as project create.
-  Adding or re-pointing a source on a connected machine requires --path to be
-  an existing directory there; otherwise the command fails with HTTP 400
-  invalid_path.
+  --path does not have to exist yet.
 
   bb project source update <projectId> <sourceId>
     --path <path>

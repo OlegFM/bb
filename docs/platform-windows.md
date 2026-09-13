@@ -54,24 +54,30 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   200); WSL daemons keep reporting `wsl`. The Machines settings label it
   "Windows".
 - Project and environment paths may be drive-absolute (`C:\Users\me\repo`,
-  `C:/Users/me/repo`). UNC (`\\server\share`, `//server/share`), device
-  (`\\.\`) and extended-length (`\\?\`) paths are rejected with a message
-  naming an absolute path of either flavor as the remedy, because the same
-  two-leading-separator rule applies on POSIX hosts. The request schema refuses
-  UNC, device, relative and root paths — a bare drive letter (`C:`) counts as a
-  root — with
+  `C:/Users/me/repo`). UNC (`\\server\share`), device (`\\.\`) and
+  extended-length (`\\?\`) paths — everything that starts with two
+  backslashes — are rejected with a message naming an absolute path of either
+  flavor as the remedy. A path that starts with two forward slashes is a POSIX
+  path, not a UNC path, and stays accepted on POSIX hosts. The request schema
+  refuses UNC, device, relative and root paths — a bare drive letter (`C:`)
+  counts as a root — with
   HTTP 400 `invalid_request` before any daemon call; for paths that do reach
   it (provider-produced paths, the environment directory tool, and the
   offline fallback's shape check), `host.canonicalize_path` refuses UNC,
-  device, relative and bare-drive input, a POSIX-shaped path on Windows, a
-  missing path, and a non-directory, all as HTTP 400 `invalid_path`.
-- The host daemon owns canonical paths: `host.canonicalize_path` resolves the
-  on-disk casing and symlinks with `fs.realpath.native`, strips any `\\?\`
-  prefix, and returns `{ path, pathKey }`. `path_key` is the comparison key
-  stored next to `path` on `project_sources` and `environments` (`\` → `/`,
-  lower-cased on Windows; unchanged on POSIX). `C:/Work/bb`, `C:\Work\bb` and
-  `c:\work\BB` resolve to one project and one live environment (partial
-  unique index `environments_live_path_key_idx`).
+  device, relative and bare-drive input and a POSIX-shaped path on Windows, as
+  HTTP 400 `invalid_path`.
+- The host daemon owns canonical paths: `host.canonicalize_path` returns
+  `{ path, pathKey }`. On Windows it resolves the on-disk casing and links
+  with `fs.realpath.native` and strips any `\\?\` prefix; when the path does
+  not exist yet (`ENOENT`, `ENOTDIR`) it returns the normalized spelling
+  instead, so nothing in bb requires a path to exist. On a POSIX host it
+  validates the shape only and returns the path as typed with trailing
+  separators removed — no `realpath`, no existence check, exactly as before
+  the Windows port. `path_key` is the comparison key stored next to `path` on
+  `project_sources` and `environments` (`\` → `/`, lower-cased on Windows;
+  unchanged on POSIX). `C:/Work/bb`, `C:\Work\bb` and `c:\work\BB` resolve to
+  one project and one live environment (partial unique index
+  `environments_live_path_key_idx`).
 - When the host is connected, the daemon's canonical form is stored; when it
   is offline, the server stores the shape-normalized path and its
   shape-derived key (the same rule the migration backfill applies), so
@@ -82,10 +88,11 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   UNC refusal names an absolute path of either flavor, while a `win32` daemon
   names a drive-letter path.
 - Creating a project on a connected host looks its source up by shape key
-  first; on a miss, it canonicalizes the path through the daemon, which
-  requires the directory to exist. Re-adding an existing project whose
-  directory was later removed still returns the existing project; creating a
-  new project on a missing or refused path returns 400 `invalid_path`.
+  first; on a miss, it canonicalizes the path through the daemon. Re-adding an
+  existing project whose directory was later removed still returns the
+  existing project, and a directory that does not exist yet is registered
+  under its normalized spelling; only a shape the daemon refuses returns 400
+  `invalid_path`.
 - `deriveRepoDirName` in the workspace plugins and `deriveProjectNameFromPath`
   accept drive-letter paths with either separator; UNC sources are refused
   (`invalid_source_path` in the plugins).
