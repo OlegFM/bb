@@ -1,11 +1,11 @@
-import path from "node:path";
+import { isHostPathWithin } from "@bb/domain";
+import { managedWorkspaceRoots } from "../hosts/host-paths.js";
 
 export function isBbManagedWorkspacePath(args: {
   dataDir: string;
   path: string;
 }): boolean {
-  return [
-    path.posix.join(args.dataDir, "worktrees"),
-    path.posix.join(args.dataDir, "personal-workspaces"),
-  ].some((root) => args.path === root || args.path.startsWith(`${root}/`));
+  return managedWorkspaceRoots(args.dataDir).some((rootPath) =>
+    isHostPathWithin({ rootPath, candidatePath: args.path }),
+  );
 }

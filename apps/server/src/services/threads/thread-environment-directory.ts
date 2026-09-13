@@ -9,9 +9,17 @@ import {
   getThread,
   updateThread,
 } from "@bb/db";
-import { buildHostPathKey, turnScope } from "@bb/domain";
+import {
+  isAbsoluteHostPath,
+  isHostPathRoot,
+  isUncOrDeviceHostPath,
+  normalizeHostPath,
+  turnScope,
+} from "@bb/domain";
 import type { DynamicTool, Thread, ToolCallResponse } from "@bb/domain";
+import type { CanonicalHostPath } from "@bb/host-daemon-contract";
 import type { AppDeps } from "../../types.js";
+import { canonicalizeHostPath } from "../hosts/host-paths.js";
 import { runLiveHostCommand } from "../hosts/live-command.js";
 import { appendThreadEventInTransaction } from "./thread-events.js";
 import { buildEnvironmentProvisionCommand } from "./thread-create-helpers.js";
@@ -86,19 +94,14 @@ function toolCallSuccess(text: string): ToolCallResponse {
   return toolCallTextResponse(true, text);
 }
 
-function normalizeDirectoryPath(path: string): string {
-  const trimmed = path.trim();
-  if (trimmed === "/") {
-    return trimmed;
+export function validateEnvironmentDirectoryPath(path: string): string | null {
+  if (isUncOrDeviceHostPath(path)) {
+    return "Path must be a drive-letter path; UNC and device paths are not supported.";
   }
-  return trimmed.replace(/\/+$/u, "");
-}
-
-function validateDirectoryPath(path: string): string | null {
-  if (!path.startsWith("/")) {
+  if (!isAbsoluteHostPath(path)) {
     return "Path must be an absolute path on the current host.";
   }
-  if (path === "/") {
+  if (isHostPathRoot(path)) {
     return "Path must name a project directory, not the filesystem root.";
   }
   if (path.includes("\0")) {
@@ -268,8 +271,8 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     );
   }
 
-  const normalizedPath = normalizeDirectoryPath(input.data.path);
-  const pathFailure = validateDirectoryPath(normalizedPath);
+  const requestedPath = normalizeHostPath(input.data.path);
+  const pathFailure = validateEnvironmentDirectoryPath(requestedPath);
   if (pathFailure) {
     return toolCallFailure(pathFailure);
   }
@@ -279,12 +282,24 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     return toolCallFailure(writableFailure);
   }
 
+  let canonical: CanonicalHostPath;
+  try {
+    canonical = await canonicalizeHostPath(deps, {
+      hostId: args.currentEnvironment.hostId,
+      path: requestedPath,
+    });
+  } catch (error) {
+    return toolCallFailure(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   try {
     await withEnvironmentPathAdmission(
       deps,
       {
         hostId: args.currentEnvironment.hostId,
-        path: normalizedPath,
+        path: canonical.path,
         threadId: args.thread.id,
       },
       () => {},
@@ -296,10 +311,10 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
   }
 
   if (
-    getEnvironment(deps.db, args.currentEnvironment.id)?.path === normalizedPath
+    getEnvironment(deps.db, args.currentEnvironment.id)?.path === canonical.path
   ) {
     return toolCallSuccess(
-      `This thread is already using ${normalizedPath} as its environment directory.`,
+      `This thread is already using ${canonical.path} as its environment directory.`,
     );
   }
 
@@ -307,7 +322,7 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     deps.db,
     args.thread.projectId,
     args.currentEnvironment.hostId,
-    buildHostPathKey(normalizedPath),
+    canonical.pathKey,
   );
   let createdEnvironment = false;
   let targetEnvironment: ReadyEnvironment;
@@ -323,7 +338,8 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     const refusal = foreignProviderOwnedPathRefusal(deps.db, {
       dataDir,
       hostId: args.currentEnvironment.hostId,
-      path: normalizedPath,
+      path: canonical.path,
+      pathKey: canonical.pathKey,
       projectId: args.thread.projectId,
     });
     if (refusal !== null) {
@@ -333,7 +349,7 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
       deps,
       {
         currentEnvironment: args.currentEnvironment,
-        path: normalizedPath,
+        path: canonical.path,
         thread: args.thread,
       },
     );

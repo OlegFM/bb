@@ -12,7 +12,12 @@ import {
   hostDaemonServerWsMessageSchema,
   parseHostDaemonRpcResultForCommand,
 } from "@bb/host-daemon-contract";
-import { type HostType, type ThreadEvent } from "@bb/domain";
+import {
+  buildHostPathKey,
+  normalizeHostPath,
+  type HostType,
+  type ThreadEvent,
+} from "@bb/domain";
 import type {
   HostDaemonCommand,
   HostDaemonEventEnvelope,
@@ -371,6 +376,23 @@ export function registerTestHostRpcCapture(
               command.type === "plugin.host.dispose"
                 ? { disposed: true }
                 : { cancelled: true },
+          }),
+          sessionId: args.sessionId,
+        });
+        return;
+      }
+      if (command.type === "host.canonicalize_path") {
+        const canonicalPath = normalizeHostPath(command.path);
+        deps.hub.recordHostOnlineRpcResponse({
+          message: hostDaemonOnlineRpcResponseMessageSchema.parse({
+            type: "host-rpc.response",
+            requestId: message.requestId,
+            commandType: command.type,
+            ok: true,
+            result: {
+              path: canonicalPath,
+              pathKey: buildHostPathKey(canonicalPath),
+            },
           }),
           sessionId: args.sessionId,
         });

@@ -117,6 +117,111 @@ describe("public project local host routes", () => {
     });
   });
 
+  it("resolves differently spelled Windows paths to one project on a connected host", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-windows-identity",
+      });
+      seedPrimaryHost(harness.deps, host.id);
+
+      const create = (name: string, path: string) =>
+        harness.app.request("/api/v1/projects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name,
+            source: { type: "local_path", hostId: host.id, path },
+          }),
+        });
+
+      const firstResponsePromise = create("Windows Project", "C:/Work/bb/");
+      const inspection = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "project.inspect",
+      );
+      expect(inspection.command).toMatchObject({ path: "C:\\Work\\bb" });
+      await reportQueuedCommandSuccess(harness, inspection, {
+        path: "C:\\Work\\bb",
+        gitRemoteUrl: null,
+      });
+      const firstResponse = await firstResponsePromise;
+      const repeatedResponse = await create(
+        "Windows Project Again",
+        "c:\\work\\bb",
+      );
+
+      expect(firstResponse.status).toBe(201);
+      expect(repeatedResponse.status).toBe(201);
+      const firstProject = projectResponseSchema.parse(
+        await readJson(firstResponse),
+      );
+      const repeatedProject = projectResponseSchema.parse(
+        await readJson(repeatedResponse),
+      );
+      expect(repeatedProject.id).toBe(firstProject.id);
+      expect(firstProject.sources).toEqual([
+        expect.objectContaining({ path: "C:\\Work\\bb" }),
+      ]);
+      expect(listPublicProjects(harness.db)).toHaveLength(1);
+    });
+  });
+
+  it("registers a Windows project for an offline host with a shape-derived key", async () => {
+    await withTestHarness(async (harness) => {
+      const offlinePrimary = seedHost(harness.deps, {
+        id: "host-windows-offline",
+      });
+      seedPrimaryHost(harness.deps, offlinePrimary.id);
+
+      const response = await harness.app.request("/api/v1/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Offline Windows Project",
+          source: {
+            type: "local_path",
+            hostId: offlinePrimary.id,
+            path: "c:/Work/bb/",
+          },
+        }),
+      });
+
+      expect(response.status).toBe(201);
+      const project = projectResponseSchema.parse(await readJson(response));
+      expect(project.sources).toEqual([
+        expect.objectContaining({ path: "C:\\Work\\bb" }),
+      ]);
+    });
+  });
+
+  it("rejects UNC project paths at the API boundary", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, { id: "host-unc" });
+      seedPrimaryHost(harness.deps, host.id);
+
+      const response = await harness.app.request("/api/v1/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "UNC Project",
+          source: {
+            type: "local_path",
+            hostId: host.id,
+            path: "\\\\server\\share\\bb",
+          },
+        }),
+      });
+
+      expect(response.status).toBe(400);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "invalid_request",
+        message: expect.stringContaining(
+          "UNC and device paths are not supported",
+        ),
+      });
+    });
+  });
+
   it("creates projects and local sources when inspection is unavailable", async () => {
     await withTestHarness(async (harness) => {
       const offlinePrimary = seedHost(harness.deps, {

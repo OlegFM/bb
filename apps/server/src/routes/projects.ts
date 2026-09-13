@@ -47,8 +47,9 @@ import {
   requirePublicProject,
   requirePublicStandardProject,
 } from "../services/lib/entity-lookup.js";
-import { buildHostPathKey, PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
+import { PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
 import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
+import { canonicalizeHostPath } from "../services/hosts/host-paths.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
 import { runLiveHostCommand } from "../services/hosts/live-command.js";
 import {
@@ -299,6 +300,7 @@ function requireProjectSource(
 
 interface ResolvedProjectSource {
   path: string;
+  pathKey: string;
   gitRemoteUrl: string | null;
 }
 
@@ -357,14 +359,17 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   );
 
   post(routes.create, async (context, payload) => {
+    requireNonDestroyedHostWithStatus(deps, payload.source.hostId);
+    assertUsableHostId(deps, { hostId: payload.source.hostId });
+    const canonical = await canonicalizeHostPath(deps, {
+      hostId: payload.source.hostId,
+      path: payload.source.path,
+    });
     const source = {
       ...payload.source,
-      pathKey: buildHostPathKey(payload.source.path),
+      path: canonical.path,
+      pathKey: canonical.pathKey,
     };
-    if (source.type === "local_path") {
-      requireNonDestroyedHostWithStatus(deps, source.hostId);
-      assertUsableHostId(deps, { hostId: source.hostId });
-    }
     const existingProject = getPublicProjectByLocalPathSource(deps.db, source);
     if (existingProject) {
       return context.json(
@@ -484,7 +489,7 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
           "A remoteUrl is required because this project has no git remote anchor",
         );
       }
-      resolved = await runLiveHostCommand(deps, {
+      const cloned = await runLiveHostCommand(deps, {
         hostId: payload.hostId,
         timeoutMs: PROJECT_CLONE_TIMEOUT_MS,
         command: {
@@ -496,10 +501,27 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
             : {}),
         },
       });
-    } else {
+      const canonical = await canonicalizeHostPath(deps, {
+        hostId: payload.hostId,
+        path: cloned.path,
+      });
       resolved = {
+        ...cloned,
+        path: canonical.path,
+        pathKey: canonical.pathKey,
+      };
+    } else {
+      const canonical = await canonicalizeHostPath(deps, {
+        hostId: payload.hostId,
         path: payload.path,
-        gitRemoteUrl: await inspectProjectGitRemoteBestEffort(deps, payload),
+      });
+      resolved = {
+        path: canonical.path,
+        pathKey: canonical.pathKey,
+        gitRemoteUrl: await inspectProjectGitRemoteBestEffort(deps, {
+          hostId: payload.hostId,
+          path: canonical.path,
+        }),
       };
     }
     let source;
@@ -509,7 +531,7 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
         type: "local_path",
         hostId: payload.hostId,
         path: resolved.path,
-        pathKey: buildHostPathKey(resolved.path),
+        pathKey: resolved.pathKey,
       });
     } catch (error) {
       if (
@@ -552,19 +574,20 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
         `Source type mismatch: source is ${existing.type} but request specifies ${payload.type}`,
       );
     }
+    const location = payload.path
+      ? await canonicalizeHostPath(deps, {
+          hostId: existing.hostId,
+          path: payload.path,
+        })
+      : null;
     const source = updateProjectSource(
       deps.db,
       deps.hub,
       context.req.param("sourceId"),
       {
-        ...(payload.path
-          ? {
-              location: {
-                path: payload.path,
-                pathKey: buildHostPathKey(payload.path),
-              },
-            }
-          : {}),
+        ...(location === null
+          ? {}
+          : { location: { path: location.path, pathKey: location.pathKey } }),
         ...(payload.isDefault ? { isDefault: payload.isDefault } : {}),
       },
     );

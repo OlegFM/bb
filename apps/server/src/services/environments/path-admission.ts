@@ -14,7 +14,7 @@ export function assertEnvironmentPathAvailable(
     args.path !== null &&
     findEnvironmentPathClaim(deps.db, args.hostId, null, null) !== null
   ) {
-    const pathKey = buildHostPathKey(args.path.replace(/\/+$/u, "") || "/");
+    const pathKey = buildHostPathKey(args.path);
     const provisioning =
       args.threadId === null
         ? null

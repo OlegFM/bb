@@ -30,6 +30,7 @@ import {
   getPreparingEnvironment,
   getThread,
   getProject,
+  listEnvironments,
   pruneDestroyedEnvironments,
   reserveEnvironment,
   updatePreparingEnvironment,
@@ -670,6 +671,48 @@ describe("core environment orchestration", () => {
         false,
       );
       expect(fixture.row().path).toBe("/tmp/project");
+    }));
+
+  it("binds a Windows workspace by its key and reuses it for an equivalent path", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          expect(await context.experimental_claimPath("C:\\Work\\bb\\")).toBe(
+            true,
+          );
+          return { status: "created", path: "c:/work/bb/", ownsPath: false };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        path: "C:\\work\\bb",
+        pathKey: "c:/work/bb",
+        status: "provisioning",
+      });
+
+      const competitor = seedThread(harness.deps, {
+        projectId: fixture.context.project.id,
+        status: "starting",
+      });
+      const second = reserveEnvironment(harness.db, {
+        ...fixture.row(),
+        ownerThreadId: competitor.id,
+        status: "creating" as const,
+        path: null,
+        pathKey: null,
+        claimPath: null,
+      });
+      expect(claimEnvironmentPathKey(harness.db, second, "c:/work/bb")).toBe(
+        false,
+      );
+      expect(
+        listEnvironments(harness.db, {
+          projectId: fixture.context.project.id,
+        }).filter(
+          (row) => row.status !== "destroyed" && row.pathKey === "c:/work/bb",
+        ),
+      ).toHaveLength(1);
     }));
 
   it("preserves the attached path for live checkout exclusion", async () =>

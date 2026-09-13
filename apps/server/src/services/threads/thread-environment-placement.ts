@@ -29,6 +29,7 @@ import { getProjectSourceByHost, type EnvironmentRow } from "@bb/db";
 import { z } from "zod";
 import { DEFAULT_ENVIRONMENT_PROVIDER_ID } from "../environments/environment-provider-ids.js";
 import {
+  buildHostPathKey,
   jsonValueSchema,
   PERSONAL_PROJECT_ID,
   isLocalPathProjectSource,
@@ -444,6 +445,7 @@ export async function resolveThreadEnvironmentPlacement(
         dataDir,
         hostId: resolvedEnvironment.hostId,
         path: resolvedEnvironment.unmanagedPath,
+        pathKey: buildHostPathKey(resolvedEnvironment.unmanagedPath),
         projectId: args.projectId,
       });
       if (refusal !== null) {

@@ -36,6 +36,7 @@ describe("foreignProviderOwnedPathRefusal", () => {
           dataDir: null,
           hostId: host.id,
           path: "/tmp/owned-worktree",
+          pathKey: "/tmp/owned-worktree",
           projectId: project.id,
         }),
       ).toBe(
@@ -57,6 +58,7 @@ describe("foreignProviderOwnedPathRefusal", () => {
           dataDir: null,
           hostId: host.id,
           path: `${HOST_DATA_DIR}/worktrees/env_other/repo`,
+          pathKey: `${HOST_DATA_DIR}/worktrees/env_other/repo`,
           projectId: project.id,
         }),
       ).toBeNull();
@@ -84,6 +86,7 @@ describe("foreignProviderOwnedPathRefusal", () => {
           dataDir: HOST_DATA_DIR,
           hostId: host.id,
           path: ownPath,
+          pathKey: ownPath,
           projectId: project.id,
         }),
       ).toBeNull();
@@ -133,6 +136,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
             dataDir: null,
             hostId: host.id,
             path,
+            pathKey: path,
             projectId: other.id,
           }),
         ).toBe(
@@ -144,6 +148,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
           dataDir: null,
           hostId: host.id,
           path: "/plugins/environment-git-worktree/worktrees/thr_1/repo",
+          pathKey: "/plugins/environment-git-worktree/worktrees/thr_1/repo",
           projectId: owner.id,
         }),
       ).toBeNull();
@@ -152,6 +157,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
           dataDir: null,
           hostId: host.id,
           path: "/plugins/environment-git-worktree/worktrees/thr_10/repo",
+          pathKey: "/plugins/environment-git-worktree/worktrees/thr_10/repo",
           projectId: other.id,
         }),
       ).toBeNull();
@@ -186,6 +192,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
           dataDir: null,
           hostId: host.id,
           path: "/tmp/shared-checkout",
+          pathKey: "/tmp/shared-checkout",
           projectId: second.id,
         }),
       ).toBeNull();
@@ -194,6 +201,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
           dataDir: null,
           hostId: host.id,
           path: "/tmp/shared-checkout/packages/app",
+          pathKey: "/tmp/shared-checkout/packages/app",
           projectId: second.id,
         }),
       ).toBeNull();

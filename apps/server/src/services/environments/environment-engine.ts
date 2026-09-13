@@ -11,6 +11,7 @@ import {
 } from "../threads/thread-environment-placement.js";
 import { withEnvironmentCleanupSlot } from "./cleanup-concurrency.js";
 import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
+import { canonicalizeHostPath } from "../hosts/host-paths.js";
 import { foreignProviderOwnedPathRefusal } from "../threads/workspace-path-claims.js";
 import {
   cancelPendingEnvironmentHook,
@@ -41,6 +42,7 @@ import {
 } from "@bb/db";
 import {
   buildHostPathKey,
+  isAbsoluteHostPath,
   jsonValueSchema,
   type Environment,
   type EnvironmentMachineSelection,
@@ -52,6 +54,7 @@ import {
   type ThreadStatus,
   threadScope,
 } from "@bb/domain";
+import { type CanonicalHostPath } from "@bb/host-daemon-contract";
 import { type ThreadResponse } from "@bb/server-contract";
 import {
   type PluginEnvironmentProviderCreateResult,
@@ -366,14 +369,14 @@ async function runCreate(
               const path = z
                 .string()
                 .min(1)
-                .startsWith("/")
+                .refine(isAbsoluteHostPath)
                 .refine((path) => !path.includes("\0"))
                 .parse(value);
               if (signal.aborted) return false;
               return claimEnvironmentPathKey(
                 deps.db,
                 provisioning,
-                buildHostPathKey(path.replace(/\/+$/u, "") || "/"),
+                buildHostPathKey(path),
               );
             },
             previous:
@@ -390,9 +393,14 @@ async function runCreate(
             signal: signal,
           });
     if (result.status === "created") {
+      let canonical: CanonicalHostPath;
       try {
-        const producedPath = result.path.replace(/\/+$/u, "") || "/";
-        const producedPathKey = buildHostPathKey(producedPath);
+        canonical = await canonicalizeHostPath(deps, {
+          hostId: context.host.id,
+          path: result.path,
+        });
+        const producedPath = canonical.path;
+        const producedPathKey = canonical.pathKey;
         const { dataDir } = await ensureHostSessionReadyForWork(deps, {
           hostId: context.host.id,
         });
@@ -402,6 +410,7 @@ async function runCreate(
               dataDir,
               hostId: context.host.id,
               path: producedPath,
+              pathKey: producedPathKey,
               projectId: context.project.id,
             });
             if (refusal !== null) throw new Error(refusal);
@@ -461,8 +470,8 @@ async function runCreate(
         ["creating", "ready", "error"],
         (row) => {
           row.hostId = context.host.id;
-          row.path = produced.path;
-          row.pathKey = buildHostPathKey(produced.path);
+          row.path = canonical.path;
+          row.pathKey = canonical.pathKey;
           row.providerOwnsPath = produced.ownsPath;
           row.mergeBaseBranch = produced.mergeBaseBranch ?? null;
           row.resource = produced.resource ?? null;
