@@ -64,6 +64,31 @@ describe("canonicalizeHostPath", () => {
       });
     }));
 
+  it("keeps other daemon failures at their transport status", async () =>
+    withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-canon-broken",
+      });
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: () => ({
+          ok: false,
+          errorCode: "internal_error",
+          errorMessage: "canonicalization crashed",
+        }),
+      });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "/srv/repo",
+        }),
+      ).rejects.toMatchObject({
+        status: 502,
+        body: { code: "internal_error", message: "canonicalization crashed" },
+      });
+    }));
+
   it("falls back to shape normalization when the host is offline", async () =>
     withTestHarness(async (harness) => {
       const host = seedHost(harness.deps, { id: "host-canon-offline" });
@@ -73,6 +98,22 @@ describe("canonicalizeHostPath", () => {
           path: "c:/work/bb/",
         }),
       ).resolves.toEqual({ path: "C:\\work\\bb", pathKey: "c:/work/bb" });
+    }));
+
+  it("refuses unsupported shapes in the offline fallback", async () =>
+    withTestHarness(async (harness) => {
+      const host = seedHost(harness.deps, { id: "host-canon-offline-shapes" });
+      const refuse = (path: string) =>
+        expect(
+          canonicalizeHostPath(harness.deps, { hostId: host.id, path }),
+        ).rejects.toMatchObject({
+          status: 400,
+          body: { code: "invalid_path" },
+        });
+
+      await refuse("\\\\server\\share\\bb");
+      await refuse("work/bb");
+      await refuse("C:");
     }));
 });
 

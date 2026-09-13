@@ -11,7 +11,10 @@ import {
 } from "../threads/thread-environment-placement.js";
 import { withEnvironmentCleanupSlot } from "./cleanup-concurrency.js";
 import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
-import { canonicalizeHostPath } from "../hosts/host-paths.js";
+import {
+  canonicalizeHostDataDir,
+  canonicalizeHostPath,
+} from "../hosts/host-paths.js";
 import { foreignProviderOwnedPathRefusal } from "../threads/workspace-path-claims.js";
 import {
   cancelPendingEnvironmentHook,
@@ -29,6 +32,7 @@ import {
   findProjectEnvironmentByHostPathKey,
   getPreparingEnvironment,
   claimEnvironmentPathKey,
+  moveEnvironmentPathClaim,
   bindEnvironmentPath,
   listProviderLifecycleEnvironments,
   updatePreparingEnvironment,
@@ -401,25 +405,37 @@ async function runCreate(
         });
         const producedPath = canonical.path;
         const producedPathKey = canonical.pathKey;
+        const claimedPathKey = buildHostPathKey(result.path);
         const { dataDir } = await ensureHostSessionReadyForWork(deps, {
           hostId: context.host.id,
+        });
+        const canonicalDataDir = await canonicalizeHostDataDir(deps, {
+          hostId: context.host.id,
+          dataDir,
         });
         deps.db.transaction(
           () => {
             const refusal = foreignProviderOwnedPathRefusal(deps.db, {
-              dataDir,
+              dataDir: canonicalDataDir,
               hostId: context.host.id,
               path: producedPath,
               pathKey: producedPathKey,
               projectId: context.project.id,
             });
             if (refusal !== null) throw new Error(refusal);
-            const claimed = claimEnvironmentPathKey(
-              deps.db,
-              provisioning,
-              producedPathKey,
-              true,
-            );
+            const claimed =
+              getEnvironment(deps.db, provisioning.id)?.claimPath ===
+                claimedPathKey && claimedPathKey !== producedPathKey
+                ? moveEnvironmentPathClaim(deps.db, provisioning, {
+                    fromPathKey: claimedPathKey,
+                    toPathKey: producedPathKey,
+                  })
+                : claimEnvironmentPathKey(
+                    deps.db,
+                    provisioning,
+                    producedPathKey,
+                    true,
+                  );
             if (!claimed)
               throw new Error(
                 "Workspace path is already claimed by another provisioning.",

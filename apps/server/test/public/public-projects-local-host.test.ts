@@ -11,6 +11,7 @@ import {
   waitForQueuedCommand,
   waitForQueuedCommandAfter,
 } from "../helpers/commands.js";
+import { registerHostRpcResponder } from "../helpers/host-rpc.js";
 import { readJson } from "../helpers/json.js";
 import {
   seedEnvironment,
@@ -163,6 +164,93 @@ describe("public project local host routes", () => {
         expect.objectContaining({ path: "C:\\Work\\bb" }),
       ]);
       expect(listPublicProjects(harness.db)).toHaveLength(1);
+    });
+  });
+
+  it("stores the daemon's canonical spelling for a new project", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-windows-canonical",
+      });
+      seedPrimaryHost(harness.deps, host.id);
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) =>
+          request.command.type === "host.canonicalize_path"
+            ? {
+                ok: true,
+                result: { path: "C:\\Work\\bb", pathKey: "c:/work/bb" },
+              }
+            : {
+                ok: false,
+                errorCode: "unsupported",
+                errorMessage: `unexpected ${request.command.type}`,
+              },
+      });
+
+      const response = await harness.app.request("/api/v1/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Canonical Windows Project",
+          source: { type: "local_path", hostId: host.id, path: "C:/work/BB" },
+        }),
+      });
+
+      expect(response.status).toBe(201);
+      const project = projectResponseSchema.parse(await readJson(response));
+      expect(project.sources).toEqual([
+        expect.objectContaining({ path: "C:\\Work\\bb" }),
+      ]);
+    });
+  });
+
+  it("returns the existing project when the daemon refuses its directory", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-vanished-directory",
+      });
+      seedPrimaryHost(harness.deps, host.id);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/vanished-project",
+      });
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => ({
+          ok: false,
+          errorCode: "invalid_path",
+          errorMessage:
+            request.command.type === "host.canonicalize_path"
+              ? `Path "${request.command.path}" does not exist`
+              : "unexpected command",
+        }),
+      });
+
+      const create = (path: string) =>
+        harness.app.request("/api/v1/projects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Vanished Project",
+            source: { type: "local_path", hostId: host.id, path },
+          }),
+        });
+
+      const repeated = await create("/tmp/vanished-project");
+      expect(repeated.status).toBe(201);
+      await expect(readJson(repeated)).resolves.toMatchObject({
+        id: project.id,
+      });
+
+      const fresh = await create("/tmp/missing-project");
+      expect(fresh.status).toBe(400);
+      await expect(readJson(fresh)).resolves.toMatchObject({
+        code: "invalid_path",
+        message: 'Path "/tmp/missing-project" does not exist',
+      });
     });
   });
 

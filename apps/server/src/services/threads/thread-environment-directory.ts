@@ -19,7 +19,10 @@ import {
 import type { DynamicTool, Thread, ToolCallResponse } from "@bb/domain";
 import type { CanonicalHostPath } from "@bb/host-daemon-contract";
 import type { AppDeps } from "../../types.js";
-import { canonicalizeHostPath } from "../hosts/host-paths.js";
+import {
+  canonicalizeHostDataDir,
+  canonicalizeHostPath,
+} from "../hosts/host-paths.js";
 import { runLiveHostCommand } from "../hosts/live-command.js";
 import { appendThreadEventInTransaction } from "./thread-events.js";
 import { buildEnvironmentProvisionCommand } from "./thread-create-helpers.js";
@@ -335,8 +338,15 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     targetEnvironment = ready;
   } else {
     const dataDir = findHostDataDir(deps, args.currentEnvironment.hostId);
+    const canonicalDataDir =
+      dataDir === null
+        ? null
+        : await canonicalizeHostDataDir(deps, {
+            hostId: args.currentEnvironment.hostId,
+            dataDir,
+          });
     const refusal = foreignProviderOwnedPathRefusal(deps.db, {
-      dataDir,
+      dataDir: canonicalDataDir,
       hostId: args.currentEnvironment.hostId,
       path: canonical.path,
       pathKey: canonical.pathKey,

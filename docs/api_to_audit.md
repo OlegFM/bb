@@ -2529,9 +2529,15 @@ and portable output handling for host-local plugin commands on every supported O
 
 - `PluginEnvironmentProviderCreateContext.experimental_claimPath(path)`: durable,
   asynchronous atomic host/path reservation on the launch row before provider
-  mutation; resolves false for competing claims or stale attempts. Claims use
-  the supplied host/path, with trailing slashes normalized. The claim
-  is released by attachment or completed cancellation cleanup,
+  mutation; resolves false for competing claims or stale attempts. The path must
+  be absolute in either host flavor — a POSIX path or a drive-absolute Windows
+  path such as `C:\Users\me\repo`; UNC and device paths are refused. Claims use
+  the supplied host/path reduced to a path key, which trims trailing separators
+  and, for Windows paths, folds drive case and separators. The claim key is a
+  shape key because the claimed directory need not exist yet; when the provider
+  returns the path it claimed, the claim is moved to the host daemon's canonical
+  key at bind time, so the reservation keeps identifying the workspace that was
+  bound. The claim is released by attachment or completed cancellation cleanup,
   including after failure. Stabilize after restart, cancellation,
   competing checkout, and path-reservation behavior has been audited.
 

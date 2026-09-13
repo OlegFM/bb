@@ -612,6 +612,16 @@ export function claimEnvironmentPathKey(db: DbConnection, provisioning: Environm
   }, { behavior: "immediate" });
 }
 
+export function moveEnvironmentPathClaim(db: DbConnection, provisioning: EnvironmentRow, move: { fromPathKey: string; toPathKey: string }): boolean {
+  return db.transaction((tx) => {
+    const current = getEnvironment(tx, provisioning.id);
+    if (current === null || current.attempt !== provisioning.attempt || current.ownerThreadId !== provisioning.ownerThreadId || (current.status !== "creating" && current.teardownStatus !== "running")) return false;
+    if (current.claimPath !== move.fromPathKey) return false;
+    if (findEnvironmentPathClaim(tx, current.hostId, move.toPathKey, current) !== null) return false;
+    return updatePreparingEnvironment(tx, { ...current, claimPath: move.toPathKey });
+  }, { behavior: "immediate" });
+}
+
 export function findEnvironmentPathClaim(db: EnvironmentWriteConnection, hostId: string, pathKey: string | null, owner: EnvironmentRow | null): EnvironmentRow | null {
   return db.select().from(environments).where(and(
     eq(environments.hostId, hostId),

@@ -3,6 +3,7 @@ import { requestThreadStopForCurrentState } from "../../../src/services/threads/
 import { prepareProviderEnvironment } from "../../../src/services/threads/thread-environment-placement.js";
 import { withEnvironmentCleanupSlot } from "../../../src/services/environments/cleanup-concurrency.js";
 import { registerTestHostRpcCapture } from "../../helpers/commands.js";
+import { registerHostRpcResponder } from "../../helpers/host-rpc.js";
 import { recordProvisionedEnvironmentWorkspace } from "@bb/db/internal-environment-lifecycle";
 import { createThreadFromRequest } from "../../../src/services/threads/thread-create.js";
 import {
@@ -671,6 +672,62 @@ describe("core environment orchestration", () => {
         false,
       );
       expect(fixture.row().path).toBe("/tmp/project");
+    }));
+
+  it("moves the claim to the canonical key when the daemon resolves the produced path", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          expect(await context.experimental_claimPath("/tmp/ws-1")).toBe(true);
+          return { status: "created", path: "/tmp/ws-1", ownsPath: false };
+        },
+      });
+      registerHostRpcResponder(harness, {
+        hostId: fixture.host.id,
+        sessionId: fixture.session.id,
+        handle: (request) => {
+          if (request.command.type !== "host.canonicalize_path") {
+            throw new Error(`unexpected ${request.command.type}`);
+          }
+          const path =
+            request.command.path === "/tmp/ws-1"
+              ? "/private/tmp/ws-1"
+              : request.command.path;
+          return { ok: true, result: { path, pathKey: path } };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        path: "/private/tmp/ws-1",
+        pathKey: "/private/tmp/ws-1",
+        claimPath: "/private/tmp/ws-1",
+        status: "provisioning",
+        teardownStatus: null,
+      });
+    }));
+
+  it("refuses a produced path the provider never claimed", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          expect(await context.experimental_claimPath("/tmp/ws-claimed")).toBe(
+            true,
+          );
+          return { status: "created", path: "/tmp/ws-other", ownsPath: false };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        status: "error",
+        statusMessage: expect.stringContaining(
+          "already claimed by another provisioning",
+        ),
+        path: null,
+        pathKey: null,
+        teardownStatus: "removed",
+      });
     }));
 
   it("binds a Windows workspace by its key and reuses it for an equivalent path", async () =>

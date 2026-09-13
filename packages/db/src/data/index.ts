@@ -232,6 +232,7 @@ export {
   environmentHasLiveThreads,
   releaseFinishedEnvironmentPreparationOwners,
   claimEnvironmentPathKey,
+  moveEnvironmentPathClaim,
   findEnvironmentPathClaim,
   bindEnvironmentPath,
   createEnvironment,

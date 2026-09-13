@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { noopNotifier } from "../../src/notifier.js";
 import type { DbNotifier } from "../../src/notifier.js";
 import {
+  claimEnvironmentPathKey,
   createEnvironment,
+  findEnvironmentPathClaim,
   findForeignManagedEnvironmentAtHostPathKey,
   findProviderEnvironmentContainingPathKey,
+  getEnvironment,
   listRetiredLoadedEnvironmentIdsOnHost,
+  moveEnvironmentPathClaim,
   recordEnvironmentCurrentBranch,
   recordProvisionedEnvironmentWorkspace,
   reserveEnvironment,
@@ -194,6 +198,97 @@ describe("environments", () => {
       owner.id,
     );
     expect(findProviderEnvironmentContainingPathKey(db, "c:/work/bbx")).toBeNull();
+  });
+
+  it("moves a path claim to another key and releases the old one", () => {
+    const { db, host, project } = setup();
+    const thread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      providerId: "codex",
+    });
+    const provisioning = reserveEnvironment(db, {
+      projectId: project.id,
+      hostId: host.id,
+      ownerThreadId: thread.id,
+      status: "creating",
+      providerOwnsPath: false,
+    });
+
+    expect(claimEnvironmentPathKey(db, provisioning, "/tmp/ws-1")).toBe(true);
+    expect(
+      moveEnvironmentPathClaim(db, provisioning, {
+        fromPathKey: "/tmp/ws-1",
+        toPathKey: "/private/tmp/ws-1",
+      }),
+    ).toBe(true);
+    expect(getEnvironment(db, provisioning.id)?.claimPath).toBe(
+      "/private/tmp/ws-1",
+    );
+    expect(
+      findEnvironmentPathClaim(db, host.id, "/tmp/ws-1", null),
+    ).toBeNull();
+  });
+
+  it("refuses a claim move onto a key another live environment claims", () => {
+    const { db, host, project } = setup();
+    const [first, second] = ["one", "two"].map((name) =>
+      createThread(db, noopNotifier, {
+        projectId: project.id,
+        providerId: "codex",
+        title: name,
+      }),
+    );
+    if (!first || !second) throw new Error("Missing seeded threads");
+    const provisioning = reserveEnvironment(db, {
+      projectId: project.id,
+      hostId: host.id,
+      ownerThreadId: first.id,
+      status: "creating",
+      providerOwnsPath: false,
+    });
+    const competitor = reserveEnvironment(db, {
+      projectId: project.id,
+      hostId: host.id,
+      ownerThreadId: second.id,
+      status: "creating",
+      providerOwnsPath: false,
+    });
+
+    expect(claimEnvironmentPathKey(db, provisioning, "/tmp/ws-1")).toBe(true);
+    expect(
+      claimEnvironmentPathKey(db, competitor, "/private/tmp/ws-1"),
+    ).toBe(true);
+    expect(
+      moveEnvironmentPathClaim(db, provisioning, {
+        fromPathKey: "/tmp/ws-1",
+        toPathKey: "/private/tmp/ws-1",
+      }),
+    ).toBe(false);
+    expect(getEnvironment(db, provisioning.id)?.claimPath).toBe("/tmp/ws-1");
+  });
+
+  it("refuses a claim move that does not start from the stored claim", () => {
+    const { db, host, project } = setup();
+    const thread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      providerId: "codex",
+    });
+    const provisioning = reserveEnvironment(db, {
+      projectId: project.id,
+      hostId: host.id,
+      ownerThreadId: thread.id,
+      status: "creating",
+      providerOwnsPath: false,
+    });
+
+    expect(claimEnvironmentPathKey(db, provisioning, "/tmp/ws-1")).toBe(true);
+    expect(
+      moveEnvironmentPathClaim(db, provisioning, {
+        fromPathKey: "/tmp/ws-other",
+        toPathKey: "/private/tmp/ws-other",
+      }),
+    ).toBe(false);
+    expect(getEnvironment(db, provisioning.id)?.claimPath).toBe("/tmp/ws-1");
   });
 
   it("emits metadata-changed when merge base branch changes", () => {

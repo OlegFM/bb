@@ -47,7 +47,7 @@ import {
   requirePublicProject,
   requirePublicStandardProject,
 } from "../services/lib/entity-lookup.js";
-import { PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
+import { buildHostPathKey, PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
 import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
 import { canonicalizeHostPath } from "../services/hosts/host-paths.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
@@ -361,6 +361,20 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   post(routes.create, async (context, payload) => {
     requireNonDestroyedHostWithStatus(deps, payload.source.hostId);
     assertUsableHostId(deps, { hostId: payload.source.hostId });
+    const requestedSource = {
+      ...payload.source,
+      pathKey: buildHostPathKey(payload.source.path),
+    };
+    const projectAtRequestedPath = getPublicProjectByLocalPathSource(
+      deps.db,
+      requestedSource,
+    );
+    if (projectAtRequestedPath) {
+      return context.json(
+        buildProjectResponses(deps, projectAtRequestedPath.id)[0],
+        201,
+      );
+    }
     const canonical = await canonicalizeHostPath(deps, {
       hostId: payload.source.hostId,
       path: payload.source.path,
