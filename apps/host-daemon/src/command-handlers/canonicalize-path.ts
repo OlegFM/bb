@@ -7,7 +7,10 @@ import {
   isUncOrDeviceHostPath,
   normalizeHostPath,
 } from "@bb/domain";
-import type { CanonicalHostPath } from "@bb/host-daemon-contract";
+import type {
+  CanonicalHostPath,
+  HostDaemonOnlineRpcResult,
+} from "@bb/host-daemon-contract";
 import {
   CommandDispatchError,
   type CommandOf,
@@ -15,6 +18,7 @@ import {
 import { isFsErrorWithCode } from "../fs-errors.js";
 
 const WINDOWS_EXTENDED_LENGTH_PREFIX = "\\\\?\\";
+const BARE_DRIVE_PATTERN = /^[A-Za-z]:$/u;
 const realpathNative = promisify(realpathCallback.native);
 
 export interface CanonicalizeHostPathArgs {
@@ -31,20 +35,25 @@ function stripExtendedLengthPrefix(path: string): string {
 }
 
 function assertAcceptedShape(path: string, platform: NodeJS.Platform): void {
-  if (isUncOrDeviceHostPath(path)) {
-    throw new CommandDispatchError(
-      "invalid_path",
-      `Path "${path}" is a UNC or device path; only drive-letter paths are supported`,
-    );
+  if (platform === "win32") {
+    if (isUncOrDeviceHostPath(path)) {
+      throw new CommandDispatchError(
+        "invalid_path",
+        `Path "${path}" is a UNC or device path; only drive-letter paths are supported`,
+      );
+    }
+    if (
+      BARE_DRIVE_PATTERN.test(path) ||
+      detectHostPathFlavor(path) !== "windows"
+    ) {
+      throw new CommandDispatchError(
+        "invalid_path",
+        `Path "${path}" must be a drive-absolute path such as C:\\Users\\me\\repo`,
+      );
+    }
+    return;
   }
-  const flavor = detectHostPathFlavor(path);
-  if (platform === "win32" && flavor !== "windows") {
-    throw new CommandDispatchError(
-      "invalid_path",
-      `Path "${path}" must be a drive-absolute path such as C:\\Users\\me\\repo`,
-    );
-  }
-  if (platform !== "win32" && flavor !== "posix") {
+  if (detectHostPathFlavor(path) !== "posix") {
     throw new CommandDispatchError(
       "invalid_path",
       `Path "${path}" must be an absolute path`,
@@ -60,10 +69,16 @@ export async function canonicalizeHostPath(
   try {
     isDirectory = (await args.stat(args.path)).isDirectory();
   } catch (error) {
-    if (isFsErrorWithCode(error, "ENOENT") || isFsErrorWithCode(error, "ENOTDIR")) {
+    if (isFsErrorWithCode(error, "ENOENT")) {
       throw new CommandDispatchError(
         "invalid_path",
         `Path "${args.path}" does not exist`,
+      );
+    }
+    if (isFsErrorWithCode(error, "ENOTDIR")) {
+      throw new CommandDispatchError(
+        "invalid_path",
+        `Path "${args.path}" is not a directory`,
       );
     }
     throw error;
@@ -77,7 +92,10 @@ export async function canonicalizeHostPath(
   const resolved = await args.realpath(args.path);
   const candidate =
     args.platform === "win32" ? stripExtendedLengthPrefix(resolved) : resolved;
-  if (args.platform === "win32" && detectHostPathFlavor(candidate) !== "windows") {
+  if (
+    args.platform === "win32" &&
+    detectHostPathFlavor(candidate) !== "windows"
+  ) {
     throw new CommandDispatchError(
       "invalid_path",
       `Path "${args.path}" resolves to "${resolved}", which is not a drive-letter path`,
@@ -89,7 +107,7 @@ export async function canonicalizeHostPath(
 
 export async function canonicalizeHostPathCommand(
   command: CommandOf<"host.canonicalize_path">,
-): Promise<CanonicalHostPath> {
+): Promise<HostDaemonOnlineRpcResult<"host.canonicalize_path">> {
   return canonicalizeHostPath({
     path: command.path,
     platform: process.platform,

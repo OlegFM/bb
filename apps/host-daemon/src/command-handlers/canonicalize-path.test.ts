@@ -11,7 +11,9 @@ const tempDirs: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
+    tempDirs
+      .splice(0)
+      .map((dir) => fs.rm(dir, { recursive: true, force: true })),
   );
 });
 
@@ -43,7 +45,15 @@ describe("canonicalizeHostPath", () => {
   });
 
   it("rejects UNC, device and relative input on Windows", async () => {
-    for (const input of ["\\\\server\\share\\bb", "\\\\?\\C:\\bb", "//server/share", "bb\\repo", "/srv/bb"]) {
+    for (const input of [
+      "\\\\server\\share\\bb",
+      "\\\\?\\C:\\bb",
+      "//server/share",
+      "bb\\repo",
+      "/srv/bb",
+      "C:",
+      "c:",
+    ]) {
       await expect(
         canonicalizeHostPath({
           path: input,
@@ -93,6 +103,20 @@ describe("canonicalizeHostPath", () => {
     }
   });
 
+  it("rejects UNC-shaped input on POSIX with the POSIX message", async () => {
+    await expect(
+      canonicalizeHostPath({
+        path: "//srv/x",
+        platform: "linux",
+        realpath: async () => "//srv/x",
+        stat: directoryStat(),
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_path",
+      message: expect.stringContaining("must be an absolute path"),
+    });
+  });
+
   it("rejects missing paths and files", async () => {
     const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
     await expect(
@@ -119,6 +143,41 @@ describe("canonicalizeHostPath", () => {
       code: "invalid_path",
       message: expect.stringContaining("not a directory"),
     });
+  });
+
+  it("reports a path segment that is a file as not a directory", async () => {
+    const notADirectory = Object.assign(new Error("not a directory"), {
+      code: "ENOTDIR",
+    });
+    await expect(
+      canonicalizeHostPath({
+        path: "/srv/file.txt/sub",
+        platform: "linux",
+        realpath: async () => "/srv/file.txt/sub",
+        stat: async () => {
+          throw notADirectory;
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_path",
+      message: expect.stringContaining("not a directory"),
+    });
+  });
+
+  it("propagates stat errors other than ENOENT and ENOTDIR unchanged", async () => {
+    const forbidden = Object.assign(new Error("forbidden"), {
+      code: "EACCES",
+    });
+    await expect(
+      canonicalizeHostPath({
+        path: "/srv/protected",
+        platform: "linux",
+        realpath: async () => "/srv/protected",
+        stat: async () => {
+          throw forbidden;
+        },
+      }),
+    ).rejects.toMatchObject({ code: "EACCES" });
   });
 });
 
@@ -154,7 +213,9 @@ describe("canonicalizeHostPathCommand", () => {
       });
       expect(result.path.endsWith("\\CamelCase")).toBe(true);
       expect(result.path.startsWith("\\\\?\\")).toBe(false);
-      expect(result.pathKey).toBe(result.path.replace(/\\/gu, "/").toLowerCase());
+      expect(result.pathKey).toBe(
+        result.path.replace(/\\/gu, "/").toLowerCase(),
+      );
     },
   );
 });

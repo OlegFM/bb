@@ -1027,7 +1027,9 @@ describe("host-daemon command schemas", () => {
       resultSchema.safeParse({ path: "C:\\Work\\bb", pathKey: "c:/work/bb" })
         .success,
     ).toBe(true);
-    expect(resultSchema.safeParse({ path: "C:\\Work\\bb" }).success).toBe(false);
+    expect(resultSchema.safeParse({ path: "C:\\Work\\bb" }).success).toBe(
+      false,
+    );
   });
 
   it("uses relative host-plugin timeouts and bounds artifact declarations", () => {
