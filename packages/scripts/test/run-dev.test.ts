@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   resolveDevInstanceConfig,
   resolveInheritedDevSkillsRootPaths,
+  resolveProdDataDir,
   toDevProcessEnv,
 } from "@bb/config/runtime";
 import {
@@ -170,6 +171,27 @@ describe("run-dev", () => {
           "C:\\Users\\tester\\.bb-dev\\code-bb-abc123\\skills",
           "C:\\Users\\tester\\.bb\\skills",
         ],
+      );
+    },
+  );
+
+  it("keeps only the prod skills root for a repo root directly under the filesystem root", () => {
+    const homeDir = "/Users/tester";
+    const repoRoot = "/worktrees/env_feature/bb";
+
+    expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).toEqual([
+      path.join(resolveProdDataDir({ homeDir }), "skills"),
+    ]);
+  });
+
+  it.runIf(process.platform === "win32")(
+    "keeps only the prod skills root for a Windows repo root directly under a drive root",
+    () => {
+      const homeDir = "C:\\Users\\tester";
+      const repoRoot = "C:\\worktrees\\env_feature\\bb";
+
+      expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).toEqual(
+        [path.join(resolveProdDataDir({ homeDir }), "skills")],
       );
     },
   );

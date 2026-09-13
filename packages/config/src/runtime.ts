@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { delimiter, isAbsolute, join, relative, resolve } from "node:path";
+import {
+  delimiter,
+  isAbsolute,
+  join,
+  parse,
+  relative,
+  resolve,
+} from "node:path";
 
 export type BbRuntimeMode = "dev" | "prod";
 
@@ -242,6 +249,9 @@ export function resolveInheritedDevSkillsRootPaths(
     repoRoot,
     ...Array.from({ length: levelsUp }, () => ".."),
   );
+  if (parse(parentDataDir).root === parentDataDir) {
+    return roots;
+  }
 
   return Array.from(new Set([join(parentDataDir, "skills"), ...roots]));
 }
