@@ -4,6 +4,8 @@ export const WORKSPACES_DIR_NAME = "workspaces";
 
 export const CORE_WORKSPACES_DIR_NAME = "personal-workspaces";
 
+const HOST_PATH_SEPARATOR_PATTERN = path.sep === "\\" ? /[\\/]/u : /\//u;
+
 export class PersonalWorkspacePathError extends Error {}
 
 function isSinglePathSegment(value: string): boolean {
@@ -12,7 +14,7 @@ function isSinglePathSegment(value: string): boolean {
     value !== "." &&
     value !== ".." &&
     path.basename(value) === value &&
-    !/[\\/]/u.test(value)
+    !HOST_PATH_SEPARATOR_PATTERN.test(value)
   );
 }
 

@@ -6,6 +6,8 @@ import {
   normalizeHostPath,
 } from "./host-path.js";
 
+const SEPARATOR_ONLY_PATH_PATTERN = /^[\\/]+$/u;
+
 export const INVALID_PROJECT_PATH_MESSAGE =
   "Project path must be an absolute path.";
 export const PROJECT_PATH_ROOT_MESSAGE =
@@ -26,12 +28,16 @@ export function normalizeProjectPathInput(path: string): string {
 }
 
 export function getProjectPathValidationMessage(path: string): string | null {
-  const normalizedPath = normalizeProjectPathInput(path);
+  const trimmedPath = path.trim();
+  const normalizedPath = normalizeProjectPathInput(trimmedPath);
   if (!normalizedPath) {
     return INVALID_PROJECT_PATH_MESSAGE;
   }
   if (isUncOrDeviceHostPath(normalizedPath)) {
     return UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE;
+  }
+  if (trimmedPath !== "/" && SEPARATOR_ONLY_PATH_PATTERN.test(trimmedPath)) {
+    return INVALID_PROJECT_PATH_MESSAGE;
   }
   if (!isAbsoluteHostPath(normalizedPath)) {
     return INVALID_PROJECT_PATH_MESSAGE;

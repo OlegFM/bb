@@ -707,6 +707,45 @@ describe("core environment orchestration", () => {
       });
     }));
 
+  it("binds the produced path as typed when the daemon refuses its shape", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          expect(await context.experimental_claimPath("/tmp/ws-refused")).toBe(
+            true,
+          );
+          return {
+            status: "created",
+            path: "/tmp/ws-refused/",
+            ownsPath: false,
+          };
+        },
+      });
+      registerHostRpcResponder(harness, {
+        hostId: fixture.host.id,
+        sessionId: fixture.session.id,
+        handle: (request) => {
+          if (request.command.type !== "host.canonicalize_path") {
+            throw new Error(`unexpected ${request.command.type}`);
+          }
+          return {
+            ok: false,
+            errorCode: "invalid_path",
+            errorMessage: `Path "${request.command.path}" must be a drive-absolute path such as C:\\Users\\me\\repo`,
+          };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        path: "/tmp/ws-refused",
+        pathKey: "/tmp/ws-refused",
+        claimPath: "/tmp/ws-refused",
+        status: "provisioning",
+        teardownStatus: null,
+      });
+    }));
+
   it("refuses a produced path the provider never claimed", async () =>
     withTestHarness(async (harness) => {
       const fixture = setup(harness, {

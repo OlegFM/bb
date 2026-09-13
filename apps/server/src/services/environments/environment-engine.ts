@@ -13,7 +13,7 @@ import { withEnvironmentCleanupSlot } from "./cleanup-concurrency.js";
 import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
 import {
   canonicalizeHostDataDir,
-  canonicalizeHostPath,
+  canonicalizeProducedHostPath,
 } from "../hosts/host-paths.js";
 import { foreignProviderOwnedPathRefusal } from "../threads/workspace-path-claims.js";
 import {
@@ -402,7 +402,7 @@ async function runCreate(
     if (result.status === "created") {
       let canonical: CanonicalHostPath;
       try {
-        canonical = await canonicalizeHostPath(deps, {
+        canonical = await canonicalizeProducedHostPath(deps, {
           hostId: context.host.id,
           path: result.path,
         });

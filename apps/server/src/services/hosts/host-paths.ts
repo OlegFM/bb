@@ -56,6 +56,21 @@ export async function canonicalizeHostPath(
   }
 }
 
+export async function canonicalizeProducedHostPath(
+  deps: WorkSessionDeps,
+  args: { hostId: string; path: string },
+): Promise<CanonicalHostPath> {
+  try {
+    return await canonicalizeHostPath(deps, args);
+  } catch (error) {
+    if (error instanceof ApiError && error.body.code === "invalid_path") {
+      const path = args.path.replace(/\/+$/u, "") || "/";
+      return { path, pathKey: buildHostPathKey(path) };
+    }
+    throw error;
+  }
+}
+
 export async function canonicalizeHostDataDir(
   deps: WorkSessionDeps,
   args: { hostId: string; dataDir: string },

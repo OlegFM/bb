@@ -90,6 +90,24 @@ describe("project-path", () => {
     );
   });
 
+  it("refuses input made only of separators", () => {
+    expect(getProjectPathValidationMessage("//")).toBe(
+      INVALID_PROJECT_PATH_MESSAGE,
+    );
+    expect(getProjectPathValidationMessage("///")).toBe(
+      INVALID_PROJECT_PATH_MESSAGE,
+    );
+    expect(getProjectPathValidationMessage(" // ")).toBe(
+      INVALID_PROJECT_PATH_MESSAGE,
+    );
+    expect(getProjectPathValidationMessage("/")).toBe(
+      PROJECT_PATH_ROOT_MESSAGE,
+    );
+    expect(getProjectPathValidationMessage("\\\\")).toBe(
+      UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE,
+    );
+  });
+
   it("keeps POSIX paths with repeated leading separators absolute", () => {
     expect(isAbsoluteProjectPath("//server/share/bb")).toBe(true);
     expect(isAbsoluteProjectPath("///srv/bb")).toBe(true);

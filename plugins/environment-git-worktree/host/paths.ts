@@ -3,6 +3,7 @@ import path from "node:path";
 
 const REPO_DIR_NAME_PATTERN = /^[A-Za-z0-9._][A-Za-z0-9._-]*$/;
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/u;
+const HOST_PATH_SEPARATOR_PATTERN = path.sep === "\\" ? /[\\/]/u : /\//u;
 
 function tryParseUrlPath(value: string): string | null {
   try {
@@ -63,7 +64,7 @@ export function resolveWorktreeAttemptRoot(args: {
     args.pathKey === "." ||
     args.pathKey === ".." ||
     path.basename(args.pathKey) !== args.pathKey ||
-    /[\\/]/u.test(args.pathKey)
+    HOST_PATH_SEPARATOR_PATTERN.test(args.pathKey)
   ) {
     throw new WorkspaceError(
       "invalid_path_key",

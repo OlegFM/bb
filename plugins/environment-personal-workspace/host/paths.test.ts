@@ -25,6 +25,24 @@ describe("personal workspace paths", () => {
     );
   });
 
+  it.runIf(process.platform !== "win32")(
+    "accepts a backslash in a key on POSIX hosts",
+    () => {
+      expect(resolveWorkspacePath({ dataDir, pathKey: "a\\b" })).toBe(
+        path.join(dataDir, WORKSPACES_DIR_NAME, "a\\b"),
+      );
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "refuses a backslash in a key on Windows hosts",
+    () => {
+      expect(() => resolveWorkspacePath({ dataDir, pathKey: "a\\b" })).toThrow(
+        /single path segment/u,
+      );
+    },
+  );
+
   it("only removes paths under the workspace roots", () => {
     const own = path.join(dataDir, WORKSPACES_DIR_NAME, "thr_a");
     expect(assertRemovableWorkspacePath({ dataDir, path: own })).toBe(

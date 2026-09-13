@@ -67,5 +67,28 @@ describe("deriveRepoDirName", () => {
     expect(() =>
       resolveWorktreeAttemptRoot({ dataDir, pathKey: "../escape" }),
     ).toThrow(/single path segment/u);
+    expect(() =>
+      resolveWorktreeAttemptRoot({ dataDir, pathKey: "nested/key" }),
+    ).toThrow(/single path segment/u);
   });
+
+  it.runIf(process.platform !== "win32")(
+    "accepts a backslash in a key on POSIX hosts",
+    () => {
+      const dataDir = path.join(os.tmpdir(), "bb-data");
+      expect(resolveWorktreeAttemptRoot({ dataDir, pathKey: "thr\\1" })).toBe(
+        path.join(dataDir, "worktrees", "thr\\1"),
+      );
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "refuses a backslash in a key on Windows hosts",
+    () => {
+      const dataDir = path.join(os.tmpdir(), "bb-data");
+      expect(() =>
+        resolveWorktreeAttemptRoot({ dataDir, pathKey: "thr\\1" }),
+      ).toThrow(/single path segment/u);
+    },
+  );
 });
