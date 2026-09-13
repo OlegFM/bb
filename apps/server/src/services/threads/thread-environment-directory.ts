@@ -99,7 +99,7 @@ function toolCallSuccess(text: string): ToolCallResponse {
 
 export function validateEnvironmentDirectoryPath(path: string): string | null {
   if (isUncOrDeviceHostPath(path)) {
-    return "Path must be a drive-letter path; UNC and device paths are not supported.";
+    return "UNC and device paths (\\\\server\\share, //server/share) are not supported. Use an absolute path on the current host.";
   }
   if (!isAbsoluteHostPath(path)) {
     return "Path must be an absolute path on the current host.";
