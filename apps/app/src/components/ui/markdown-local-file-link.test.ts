@@ -179,6 +179,27 @@ describe("parseLocalFileHref", () => {
       ).toBeNull();
     }
   });
+
+  it("parses Windows absolute file hrefs", () => {
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "C:\\Users\\me\\repo\\README.md",
+      }),
+    ).toMatchObject({ path: "C:\\Users\\me\\repo\\README.md" });
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "file:///C:/Users/me/repo/README.md",
+      }),
+    ).toMatchObject({ path: "C:/Users/me/repo/README.md" });
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "\\\\server\\share\\README.md",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("buildLocalFileAnchorHref", () => {
@@ -240,6 +261,15 @@ describe("buildLocalFileAnchorHref", () => {
         "file:///workspace/no-extension",
       ),
     ).toBe("file:///workspace/no-extension");
+  });
+
+  it("builds file URLs for Windows paths", () => {
+    expect(
+      buildLocalFileAnchorHref(
+        { path: "C:\\Users\\me\\repo\\README.md", lineRange: null },
+        undefined,
+      ),
+    ).toBe("file:///C:/Users/me/repo/README.md");
   });
 });
 
@@ -338,5 +368,15 @@ describe("resolveRelativeLocalFileHref", () => {
         rootPath: "/storage/thr_1",
       }),
     ).toBeNull();
+  });
+
+  it("resolves relative hrefs against a Windows base directory", () => {
+    expect(
+      resolveRelativeLocalFileHref({
+        baseDir: "C:\\Users\\me\\repo",
+        href: "docs/guide.md",
+        rootPath: "C:\\Users\\me\\repo",
+      }),
+    ).toBe("C:\\Users\\me\\repo\\docs\\guide.md");
   });
 });

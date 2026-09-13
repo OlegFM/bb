@@ -4,6 +4,8 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { Host } from "@bb/domain";
 import { makeHost } from "@bb/test-helpers/domain-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProjectPathDialogTarget } from "@/components/dialogs/ProjectPathDialog";
+import type { LocalPathSubmitParams } from "@/hooks/useLocalPathPicker";
 import { useQuickCreateProject } from "./useQuickCreateProject";
 
 const mocks = vi.hoisted(() => ({
@@ -35,7 +37,11 @@ vi.mock("@/hooks/queries/host-queries", () => ({
 }));
 
 vi.mock("@/hooks/useLocalPathPicker", () => ({
-  useLocalPathPicker: () => ({
+  useLocalPathPicker: ({
+    submit,
+  }: {
+    submit: (params: LocalPathSubmitParams) => void;
+  }) => ({
     isAvailable: true,
     hostId: "host_atum",
     hostName: "atum",
@@ -49,7 +55,19 @@ vi.mock("@/hooks/useLocalPathPicker", () => ({
       onOpenChange: mocks.onOpenChange,
       target: null,
     },
-    submitProjectPath: vi.fn(),
+    submitProjectPath: (
+      target: ProjectPathDialogTarget,
+      path: string,
+      targetHostId: string | null,
+    ) => {
+      if (targetHostId === null) return;
+      submit({
+        path,
+        hostId: targetHostId,
+        target,
+        closeDialog: mocks.onClose,
+      });
+    },
   }),
 }));
 
@@ -96,5 +114,22 @@ describe("useQuickCreateProject", () => {
       "host_atum",
       "host_thoth",
     ]);
+  });
+
+  it("derives the project name from a submitted Windows drive-absolute path", () => {
+    const { result } = renderHook(() => useQuickCreateProject());
+
+    act(() => {
+      result.current.submitProjectPath(
+        { kind: "create" },
+        "C:\\Work\\bb",
+        "host_atum",
+      );
+    });
+
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "bb" }),
+      expect.anything(),
+    );
   });
 });

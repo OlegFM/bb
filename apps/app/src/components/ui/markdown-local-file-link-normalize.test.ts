@@ -37,6 +37,12 @@ describe("normalizeLocalFileMarkdownLinks", () => {
     ).toBe("[file](</workspace/path with/app.ts>)");
   });
 
+  it("wraps Windows absolute local link destinations that contain literal spaces", () => {
+    expect(
+      normalizeLocalFileMarkdownLinks("[x](C:\\Users\\me\\My Notes\\file.md)"),
+    ).toBe("[x](<C:\\Users\\me\\My Notes\\file.md>)");
+  });
+
   it("preserves link titles when wrapping local destinations with literal spaces", () => {
     expect(
       normalizeLocalFileMarkdownLinks(
