@@ -115,6 +115,25 @@ describe("canonicalizeHostPath", () => {
       await refuse("work/bb");
       await refuse("C:");
     }));
+
+  it("names both accepted shapes when the offline fallback refuses a UNC path", async () =>
+    withTestHarness(async (harness) => {
+      const host = seedHost(harness.deps, { id: "host-canon-offline-unc" });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "//server/share/bb",
+        }),
+      ).rejects.toMatchObject({
+        status: 400,
+        body: {
+          code: "invalid_path",
+          message: expect.stringContaining(
+            "use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo",
+          ),
+        },
+      });
+    }));
 });
 
 describe("managedWorkspaceRoots", () => {

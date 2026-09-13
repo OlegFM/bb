@@ -93,4 +93,122 @@ describe("update_environment_directory managed-root containment", () => {
         ],
       });
     }));
+
+  it("reports a stored Windows path as already in use when only its casing differs", async () =>
+    withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-case-insensitive",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "C:\\Work\\bb",
+      });
+      const current = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "C:\\work\\bb",
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: current.id,
+        status: "idle",
+      });
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: () => ({
+          ok: true,
+          result: {
+            path: "C:\\Work\\bb",
+            pathKey: buildHostPathKey("C:\\Work\\bb"),
+          },
+        }),
+      });
+
+      const result = await handleUpdateEnvironmentDirectoryToolCall(
+        harness.deps,
+        {
+          currentEnvironment: current,
+          thread,
+          turnId: "turn-case-insensitive",
+          input: { path: "c:/work/bb" },
+        },
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        contentItems: [
+          {
+            type: "inputText",
+            text: expect.stringContaining(
+              "already using C:\\Work\\bb as its environment directory",
+            ),
+          },
+        ],
+      });
+    }));
+
+  it("returns a tool failure when canonicalizing the host data dir fails", async () =>
+    withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-datadir-transport",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/project-datadir",
+      });
+      const current = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/project-datadir",
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: current.id,
+        status: "idle",
+      });
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => {
+          if (request.command.type !== "host.canonicalize_path") {
+            throw new Error(`unexpected ${request.command.type}`);
+          }
+          if (request.command.path.startsWith("/tmp/bb-host-data/")) {
+            return {
+              ok: false,
+              errorCode: "internal_error",
+              errorMessage: "daemon exploded while resolving the data dir",
+            };
+          }
+          return {
+            ok: true,
+            result: {
+              path: request.command.path,
+              pathKey: buildHostPathKey(request.command.path),
+            },
+          };
+        },
+      });
+
+      const result = await handleUpdateEnvironmentDirectoryToolCall(
+        harness.deps,
+        {
+          currentEnvironment: current,
+          thread,
+          turnId: "turn-datadir-transport",
+          input: { path: "/tmp/other-directory" },
+        },
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        contentItems: [
+          {
+            type: "inputText",
+            text: expect.stringContaining("daemon exploded"),
+          },
+        ],
+      });
+    }));
 });

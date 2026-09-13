@@ -2,10 +2,37 @@ import { describe, expect, it } from "vitest";
 import {
   buildAbsoluteFilePath,
   getAbsoluteDirname,
+  isAbsoluteFilePath,
   isAbsoluteFilePathWithinRoot,
   normalizeAbsoluteFilePath,
   resolveAbsoluteFilePath,
 } from "./absolute-file-path";
+
+describe("isAbsoluteFilePath", () => {
+  it.each([
+    ["/Users/me/repo/README.md", true],
+    ["/", true],
+    ["///x", true],
+    ["C:\\Users\\me\\repo", true],
+    ["c:/Users/me/repo", true],
+    ["C:\\", true],
+    ["C:", false],
+    ["c:", false],
+    ["C:Users\\me", false],
+    ["//srv/x", false],
+    ["\\\\server\\share\\README.md", false],
+    ["\\\\?\\C:\\Users\\me", false],
+    ["docs/README.md", false],
+    ["", false],
+  ])("classifies %s the way @bb/domain does", (path, expected) => {
+    expect(isAbsoluteFilePath(path)).toBe(expected);
+  });
+
+  it("produces no normalized path for a bare drive or a UNC path", () => {
+    expect(normalizeAbsoluteFilePath({ path: "C:" })).toBeNull();
+    expect(normalizeAbsoluteFilePath({ path: "//srv/x" })).toBeNull();
+  });
+});
 
 describe("getAbsoluteDirname", () => {
   it.each([

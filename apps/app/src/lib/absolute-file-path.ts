@@ -1,6 +1,8 @@
-type HostPathFlavor = "posix" | "windows";
-
-const WINDOWS_DRIVE_ABSOLUTE_PATTERN = /^[A-Za-z]:[\\/]/u;
+import {
+  detectHostPathFlavor,
+  isAbsoluteHostPath,
+  isBareDriveHostPath,
+} from "@bb/domain";
 
 interface ResolveAbsoluteFilePathArgs {
   path: string;
@@ -25,22 +27,12 @@ interface NormalizeAbsoluteFilePathArgs {
   path: string;
 }
 
-function detectHostPathFlavor(path: string): HostPathFlavor | null {
-  if (path.startsWith("/")) {
-    return "posix";
-  }
-  if (WINDOWS_DRIVE_ABSOLUTE_PATTERN.test(path)) {
-    return "windows";
-  }
-  return null;
-}
-
 export function isWindowsAbsoluteFilePath(path: string): boolean {
-  return detectHostPathFlavor(path) === "windows";
+  return detectHostPathFlavor(path) === "windows" && !isBareDriveHostPath(path);
 }
 
 export function isAbsoluteFilePath(path: string): boolean {
-  return detectHostPathFlavor(path) !== null;
+  return isAbsoluteHostPath(path) && !isBareDriveHostPath(path);
 }
 
 function trimTrailingSlash(path: string): string {
@@ -95,14 +87,12 @@ function normalizePosixFilePath(path: string): string {
 export function normalizeAbsoluteFilePath({
   path,
 }: NormalizeAbsoluteFilePathArgs): string | null {
-  const flavor = detectHostPathFlavor(path);
-  if (flavor === "windows") {
-    return normalizeWindowsFilePath(path);
+  if (!isAbsoluteFilePath(path)) {
+    return null;
   }
-  if (flavor === "posix") {
-    return normalizePosixFilePath(path);
-  }
-  return null;
+  return isWindowsAbsoluteFilePath(path)
+    ? normalizeWindowsFilePath(path)
+    : normalizePosixFilePath(path);
 }
 
 function windowsRootWithSeparator(rootPath: string): string {
@@ -191,7 +181,7 @@ function getWindowsDirname(path: string): string {
   const normalized = normalizeWindowsFilePath(path);
   const lastSeparatorIndex = normalized.lastIndexOf("\\");
   const parent = normalized.slice(0, lastSeparatorIndex);
-  return /^[A-Za-z]:$/u.test(parent) ? `${parent}\\` : parent;
+  return isBareDriveHostPath(parent) ? `${parent}\\` : parent;
 }
 
 export function getAbsoluteDirname({ path }: GetAbsoluteDirnameArgs): string {

@@ -86,4 +86,10 @@ describe("project-path", () => {
       getProjectPathValidationMessage("\\\\?\\C:\\Users\\michael\\bb"),
     ).toBe(UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE);
   });
+
+  it("names both accepted path shapes when refusing a UNC path", () => {
+    expect(UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE).toBe(
+      "UNC and device paths (\\\\server\\share, //server/share) are not supported. Use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo.",
+    );
+  });
 });

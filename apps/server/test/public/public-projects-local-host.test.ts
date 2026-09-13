@@ -304,7 +304,7 @@ describe("public project local host routes", () => {
       await expect(readJson(response)).resolves.toMatchObject({
         code: "invalid_request",
         message: expect.stringContaining(
-          "UNC and device paths are not supported",
+          "UNC and device paths (\\\\server\\share, //server/share) are not supported",
         ),
       });
     });

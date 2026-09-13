@@ -1,6 +1,7 @@
 import {
   buildHostPathKey,
   isAbsoluteHostPath,
+  isBareDriveHostPath,
   isUncOrDeviceHostPath,
   joinHostPath,
   normalizeHostPath,
@@ -11,7 +12,6 @@ import type { WorkSessionDeps } from "../../types.js";
 import { callHostRetryableOnlineRpc } from "./online-rpc.js";
 
 const CANONICALIZE_PATH_TIMEOUT_MS = 15_000;
-const BARE_DRIVE_PATTERN = /^[A-Za-z]:$/u;
 
 function invalidHostPath(message: string): ApiError {
   return new ApiError(400, "invalid_path", message, false);
@@ -20,10 +20,10 @@ function invalidHostPath(message: string): ApiError {
 function assertCanonicalizableShape(path: string): void {
   if (isUncOrDeviceHostPath(path)) {
     throw invalidHostPath(
-      `Path "${path}" is a UNC or device path; only drive-letter paths are supported`,
+      `Path "${path}" is a UNC or device path; use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo`,
     );
   }
-  if (BARE_DRIVE_PATTERN.test(path)) {
+  if (isBareDriveHostPath(path)) {
     throw invalidHostPath(
       `Path "${path}" must be a drive-absolute path such as C:\\Users\\me\\repo`,
     );

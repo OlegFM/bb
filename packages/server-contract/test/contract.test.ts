@@ -1151,7 +1151,11 @@ describe("server-contract canonical schemas", () => {
         type: "local_path",
         path: "\\\\server\\share\\bb",
       }),
-    ).toThrow("UNC and device paths are not supported");
+    ).toThrow(
+      JSON.stringify(
+        "UNC and device paths (\\\\server\\share, //server/share) are not supported",
+      ).slice(1, -1),
+    );
 
     expect(() =>
       contract.updateProjectSourceRequestSchema.parse({

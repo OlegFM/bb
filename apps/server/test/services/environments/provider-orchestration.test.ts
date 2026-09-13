@@ -726,7 +726,32 @@ describe("core environment orchestration", () => {
         ),
         path: null,
         pathKey: null,
+        claimPath: null,
         teardownStatus: "removed",
+      });
+    }));
+
+  it("names both accepted shapes when a claimed path is not absolute", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          await context.experimental_claimPath("relative/dir");
+          return {
+            status: "created",
+            path: "/tmp/ws-relative",
+            ownsPath: false,
+          };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        status: "error",
+        statusMessage: expect.stringContaining(
+          JSON.stringify(
+            "Claimed path must be absolute (for example /home/me/ws or C:\\Users\\me\\ws)",
+          ).slice(1, -1),
+        ),
       });
     }));
 

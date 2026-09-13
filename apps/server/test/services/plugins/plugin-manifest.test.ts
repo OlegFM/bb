@@ -239,6 +239,81 @@ describe("plugin manifest", () => {
     );
   });
 
+  it("loads branding assets nested under the plugin directory on the native separator", async () => {
+    await mkdir(join(rootDir, "icons", "nested"), { recursive: true });
+    await writeFile(join(rootDir, "icons", "nested", "icon.svg"), "<svg/>");
+    await writeFile(join(rootDir, "icons", "nested", "light.svg"), "<svg/>");
+    await writeFile(join(rootDir, "icons", "nested", "dark.svg"), "<svg/>");
+    await writeFile(join(rootDir, "icons", "nested", "receipt.svg"), "<svg/>");
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: {
+        icon: "./icons/nested/icon.svg",
+        logo: {
+          light: "./icons/nested/light.svg",
+          dark: "./icons/nested/dark.svg",
+        },
+        experimental_icons: { receipt: "./icons/nested/receipt.svg" },
+      },
+    });
+
+    const manifest = await readPluginManifest(rootDir);
+    expect(manifest.branding.compactIconPath).toBe(
+      join(rootDir, "icons", "nested", "icon.svg"),
+    );
+    expect(manifest.branding.logo?.lightPath).toBe(
+      join(rootDir, "icons", "nested", "light.svg"),
+    );
+    expect(manifest.branding.logo?.darkPath).toBe(
+      join(rootDir, "icons", "nested", "dark.svg"),
+    );
+    expect(manifest.branding.icons.get("receipt")).toBe(
+      join(rootDir, "icons", "nested", "receipt.svg"),
+    );
+  });
+
+  it("rejects an experimental icon symlink that escapes the plugin directory", async () => {
+    const outsideDir = await mkdtemp(
+      join(tmpdir(), "bb-plugin-branding-outside-"),
+    );
+    try {
+      const outsideAsset = join(outsideDir, "outside.svg");
+      await writeFile(outsideAsset, "<svg/>");
+      await mkdir(join(rootDir, "icons"), { recursive: true });
+      await symlink(outsideAsset, join(rootDir, "icons", "linked.svg"));
+      await writeManifest(undefined, {
+        ...validBb,
+        branding: {
+          icon: "Zap",
+          experimental_icons: { receipt: "./icons/linked.svg" },
+        },
+      });
+      await expect(readPluginManifest(rootDir)).rejects.toThrow(
+        /escapes the plugin directory through a symlink/,
+      );
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a branding asset that escapes the plugin directory with ..", async () => {
+    const outsideDir = await mkdtemp(
+      join(tmpdir(), "bb-plugin-branding-parent-"),
+    );
+    try {
+      await writeFile(join(outsideDir, "outside.svg"), "<svg/>");
+      await writeManifest(undefined, {
+        ...validBb,
+        branding: { logo: { light: "../outside.svg" } },
+      });
+      await expect(readPluginManifest(rootDir)).rejects.toThrow(
+        /escapes the plugin directory/,
+      );
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a branding asset symlink that escapes the plugin directory", async () => {
     const outsideDir = await mkdtemp(
       join(tmpdir(), "bb-plugin-branding-outside-"),

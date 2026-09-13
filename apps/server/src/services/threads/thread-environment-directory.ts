@@ -314,7 +314,8 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
   }
 
   if (
-    getEnvironment(deps.db, args.currentEnvironment.id)?.path === canonical.path
+    getEnvironment(deps.db, args.currentEnvironment.id)?.pathKey ===
+    canonical.pathKey
   ) {
     return toolCallSuccess(
       `This thread is already using ${canonical.path} as its environment directory.`,
@@ -338,13 +339,20 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     targetEnvironment = ready;
   } else {
     const dataDir = findHostDataDir(deps, args.currentEnvironment.hostId);
-    const canonicalDataDir =
-      dataDir === null
-        ? null
-        : await canonicalizeHostDataDir(deps, {
-            hostId: args.currentEnvironment.hostId,
-            dataDir,
-          });
+    let canonicalDataDir: string | null;
+    try {
+      canonicalDataDir =
+        dataDir === null
+          ? null
+          : await canonicalizeHostDataDir(deps, {
+              hostId: args.currentEnvironment.hostId,
+              dataDir,
+            });
+    } catch (error) {
+      return toolCallFailure(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     const refusal = foreignProviderOwnedPathRefusal(deps.db, {
       dataDir: canonicalDataDir,
       hostId: args.currentEnvironment.hostId,

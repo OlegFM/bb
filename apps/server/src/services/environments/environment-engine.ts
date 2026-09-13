@@ -373,7 +373,10 @@ async function runCreate(
               const path = z
                 .string()
                 .min(1)
-                .refine(isAbsoluteHostPath)
+                .refine(isAbsoluteHostPath, {
+                  message:
+                    "Claimed path must be absolute (for example /home/me/ws or C:\\Users\\me\\ws)",
+                })
                 .refine((path) => !path.includes("\0"))
                 .parse(value);
               if (signal.aborted) return false;

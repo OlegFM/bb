@@ -3,8 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  ExpectedCommandDispatchError,
+  isExpectedOnlineRpcFailureError,
+} from "../command-dispatch-support.js";
+import {
   canonicalizeHostPath,
   canonicalizeHostPathCommand,
+  type CanonicalizeHostPathArgs,
 } from "./canonicalize-path.js";
 
 const tempDirs: string[] = [];
@@ -162,6 +167,69 @@ describe("canonicalizeHostPath", () => {
       code: "invalid_path",
       message: expect.stringContaining("not a directory"),
     });
+  });
+
+  it("marks every invalid_path rejection as an expected failure", async () => {
+    const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
+    const notADirectory = Object.assign(new Error("not a directory"), {
+      code: "ENOTDIR",
+    });
+    const cases: CanonicalizeHostPathArgs[] = [
+      {
+        path: "\\\\server\\share\\bb",
+        platform: "win32",
+        realpath: async () => "\\\\server\\share\\bb",
+        stat: directoryStat(),
+      },
+      {
+        path: "C:",
+        platform: "win32",
+        realpath: async () => "C:",
+        stat: directoryStat(),
+      },
+      {
+        path: "Z:\\repo",
+        platform: "win32",
+        realpath: async () => "\\\\?\\UNC\\server\\share\\repo",
+        stat: directoryStat(),
+      },
+      {
+        path: "repo",
+        platform: "linux",
+        realpath: async () => "repo",
+        stat: directoryStat(),
+      },
+      {
+        path: "/srv/missing",
+        platform: "linux",
+        realpath: async () => "/srv/missing",
+        stat: async () => {
+          throw missing;
+        },
+      },
+      {
+        path: "/srv/file.txt/sub",
+        platform: "linux",
+        realpath: async () => "/srv/file.txt/sub",
+        stat: async () => {
+          throw notADirectory;
+        },
+      },
+      {
+        path: "/srv/file.txt",
+        platform: "linux",
+        realpath: async () => "/srv/file.txt",
+        stat: async () => ({ isDirectory: () => false }),
+      },
+    ];
+    for (const args of cases) {
+      const error = await canonicalizeHostPath(args).catch(
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(ExpectedCommandDispatchError);
+      expect(isExpectedOnlineRpcFailureError(error)).toBe(true);
+      expect(error).toMatchObject({ code: "invalid_path" });
+    }
   });
 
   it("propagates stat errors other than ENOENT and ENOTDIR unchanged", async () => {

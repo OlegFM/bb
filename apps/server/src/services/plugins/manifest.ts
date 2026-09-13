@@ -1,5 +1,5 @@
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import semver from "semver";
 import {
   derivePluginId,
@@ -173,7 +173,7 @@ export async function readPluginManifest(
       realpath(rootDir),
       realpath(assetPath),
     ]);
-    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + "/")) {
+    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
       throw new Error(
         `manifest ${label} escapes the plugin directory through a symlink`,
       );
@@ -201,7 +201,7 @@ export async function readPluginManifest(
       realpath(rootDir),
       realpath(assetPath),
     ]);
-    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + "/")) {
+    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
       throw new Error(
         `manifest ${label} escapes the plugin directory through a symlink`,
       );
@@ -245,7 +245,11 @@ export async function readPluginManifest(
       id: theme.id,
       name: theme.name,
       description: theme.description ?? null,
-      cssPath: resolveManifestPath(rootDir, theme.css, `bb.themes.${theme.id}.css`),
+      cssPath: resolveManifestPath(
+        rootDir,
+        theme.css,
+        `bb.themes.${theme.id}.css`,
+      ),
       codeTheme,
       codeThemePaths,
     };
@@ -285,7 +289,9 @@ export async function readPluginManifest(
     bbEngineRange: engines?.bb,
     bbPluginSdkRange: engines?.bbPluginSdk,
     serverEntry,
-    appEntry: bb.app ? resolveManifestPath(rootDir, bb.app, "bb.app") : undefined,
+    appEntry: bb.app
+      ? resolveManifestPath(rootDir, bb.app, "bb.app")
+      : undefined,
     hostEntry,
     themes,
     skillsRootPaths,

@@ -4,12 +4,17 @@ const WINDOWS_DRIVE_ABSOLUTE_PATTERN = /^[A-Za-z]:[\\/]/u;
 const WINDOWS_DRIVE_ROOT_PATTERN = /^[A-Za-z]:[\\/]*$/u;
 const WINDOWS_DRIVE_PREFIX_PATTERN = /^([A-Za-z]):/u;
 const WINDOWS_CANONICAL_ROOT_PATTERN = /^[A-Z]:\\$/u;
+const BARE_DRIVE_PATTERN = /^[A-Za-z]:$/u;
 const UNC_OR_DEVICE_PATH_PATTERN = /^[\\/]{2}(?![\\/])/u;
 const WINDOWS_SEPARATOR_RUN_PATTERN = /[\\/]+/u;
 const POSIX_SEPARATOR_RUN_PATTERN = /\/+/u;
 
 export function isUncOrDeviceHostPath(path: string): boolean {
   return UNC_OR_DEVICE_PATH_PATTERN.test(path);
+}
+
+export function isBareDriveHostPath(path: string): boolean {
+  return BARE_DRIVE_PATTERN.test(path);
 }
 
 export function detectHostPathFlavor(path: string): HostPathFlavor | null {
@@ -32,12 +37,13 @@ export function isAbsoluteHostPath(path: string): boolean {
   return detectHostPathFlavor(path) !== null;
 }
 
-export function isWindowsHostPath(path: string): boolean {
+function isWindowsHostPath(path: string): boolean {
   return detectHostPathFlavor(path) === "windows";
 }
 
 function normalizeWindowsHostPath(path: string): string {
-  const drive = WINDOWS_DRIVE_PREFIX_PATTERN.exec(path)?.[1]?.toUpperCase() ?? "";
+  const drive =
+    WINDOWS_DRIVE_PREFIX_PATTERN.exec(path)?.[1]?.toUpperCase() ?? "";
   const segments = path
     .slice(2)
     .split(WINDOWS_SEPARATOR_RUN_PATTERN)
@@ -86,7 +92,9 @@ export function joinHostPath(rootPath: string, ...segments: string[]): string {
   if (tail.length === 0) {
     return root;
   }
-  return root.endsWith(separator) ? `${root}${tail}` : `${root}${separator}${tail}`;
+  return root.endsWith(separator)
+    ? `${root}${tail}`
+    : `${root}${separator}${tail}`;
 }
 
 export function basenameHostPath(path: string): string {
@@ -96,19 +104,6 @@ export function basenameHostPath(path: string): string {
   }
   const separator = hostPathSeparator(normalized);
   return normalized.slice(normalized.lastIndexOf(separator) + 1);
-}
-
-export function dirnameHostPath(path: string): string {
-  const normalized = normalizeHostPath(path);
-  if (isHostPathRoot(normalized) || !isAbsoluteHostPath(normalized)) {
-    return normalized;
-  }
-  const separator = hostPathSeparator(normalized);
-  const index = normalized.lastIndexOf(separator);
-  if (separator === "/") {
-    return index <= 0 ? "/" : normalized.slice(0, index);
-  }
-  return index <= 2 ? normalized.slice(0, 3) : normalized.slice(0, index);
 }
 
 export function buildHostPathKey(path: string): string {

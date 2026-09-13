@@ -117,6 +117,17 @@ function requireTargets(moduleValue) {
   return value;
 }
 
+async function loadBuildHostPathKey(repo) {
+  const hostPathModulePath = join(repo, "packages/domain/src/host-path.ts");
+  if (!existsSync(hostPathModulePath)) {
+    return null;
+  }
+  const hostPathModule = await import(pathToFileURL(hostPathModulePath).href);
+  return typeof hostPathModule.buildHostPathKey === "function"
+    ? hostPathModule.buildHostPathKey
+    : null;
+}
+
 async function loadTarget(repo) {
   const dbModule = await import(
     pathToFileURL(join(repo, "packages/db/src/index.ts")).href
@@ -126,6 +137,7 @@ async function loadTarget(repo) {
       .href
   );
   return {
+    buildHostPathKey: await loadBuildHostPathKey(repo),
     createConnection: requireFunction(dbModule, "createConnection"),
     createProject: requireFunction(dbModule, "createProject"),
     createThread: requireFunction(dbModule, "createThread"),
@@ -264,11 +276,13 @@ function seedDatabase(api, root, args) {
     name: "migration-benchmark-host",
     type: "persistent",
   });
+  const projectPath = "/tmp/migration-benchmark";
   const projectResult = api.createProject(db, api.noopNotifier, {
     name: "Migration benchmark",
     source: {
       hostId: host.id,
-      path: "/tmp/migration-benchmark",
+      path: projectPath,
+      pathKey: api.buildHostPathKey?.(projectPath) ?? projectPath,
       type: "local_path",
     },
   });
