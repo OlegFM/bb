@@ -132,3 +132,91 @@ EXIT_VL=0
 
 Cancelling the overall run after the fact does not change the `Windows x64` job's already-recorded
 `success`.
+
+---
+
+# Gate refresh at `e976524b488483fd583de42c8dce13ac6d6ac0cd` (2026-09-13)
+
+The section above measured the CI leg at `203acb273`. This one measures it at the head after the final fix
+round. The push carried three commits (`94f5c40eb`, `bb472301a`, `e976524b4`) plus the first evidence commit
+`489cd5abc`.
+
+## Push
+
+```bash
+git push origin windows-native/phase-1 2>&1; echo "EXIT=$?"
+```
+```
+To github.com:OlegFM/bb.git
+   489cd5abc..e976524b4  windows-native/phase-1 -> windows-native/phase-1
+EXIT=0
+```
+
+```bash
+gh run list -R OlegFM/bb --branch windows-native/phase-1 --limit 3 2>&1
+```
+```
+queued		Use the flavor-neutral UNC refusal in the environment directory tool	Version Lockstep	windows-native/phase-1	push	34758768285	10s	2026-09-13T13:03:30Z
+queued		Use the flavor-neutral UNC refusal in the environment directory tool	CI	windows-native/phase-1	push	34758768292	10s	2026-09-13T13:03:30Z
+completed	cancelled	Record the Phase 1 Windows gate evidence	Version Lockstep	windows-native/phase-1	push	34755007328	24s	2026-09-13T11:39:27Z
+```
+
+## Result
+
+```bash
+gh run view 34758768292 -R OlegFM/bb --json url,headSha,displayTitle,event,createdAt,jobs --jq '{url,headSha,displayTitle,event,createdAt, windows: (.jobs[]|select(.name|test("Windows"))|{name,status,conclusion,startedAt,completedAt,url,steps:[.steps[]|{name,conclusion}]})}' 2>&1
+```
+```
+{"createdAt":"2026-09-13T13:03:30Z","displayTitle":"Use the flavor-neutral UNC refusal in the environment directory tool","event":"push","headSha":"e976524b488483fd583de42c8dce13ac6d6ac0cd","url":"https://github.com/OlegFM/bb/actions/runs/34758768292","windows":{"completedAt":"2026-09-13T13:11:32Z","conclusion":"success","name":"Windows x64 (windows-2025, Node 22.x)","startedAt":"2026-09-13T13:04:06Z","status":"completed","steps":[{"conclusion":"success","name":"Set up job"},{"conclusion":"success","name":"Checkout repository"},{"conclusion":"success","name":"Set up pnpm"},{"conclusion":"success","name":"Set up Node.js"},{"conclusion":"success","name":"Install dependencies"},{"conclusion":"success","name":"Load native add-ons"},{"conclusion":"success","name":"Typecheck and build"},{"conclusion":"success","name":"Test (Windows baseline)"},{"conclusion":"success","name":"Upload Windows test run summaries"},{"conclusion":"success","name":"Post Set up Node.js"},{"conclusion":"success","name":"Post Set up pnpm"},{"conclusion":"success","name":"Post Checkout repository"},{"conclusion":"success","name":"Complete job"}],"url":"https://github.com/OlegFM/bb/actions/runs/34758768292/job/103727698948"}}
+```
+
+- Run URL: <https://github.com/OlegFM/bb/actions/runs/34758768292>
+- Job URL: <https://github.com/OlegFM/bb/actions/runs/34758768292/job/103727698948>
+- Measured SHA: `e976524b488483fd583de42c8dce13ac6d6ac0cd`
+- Job: `Windows x64 (windows-2025, Node 22.x)` — **conclusion: `success`**, 13:04:06Z–13:11:32Z (7m26s)
+- Every step `success`, including `Typecheck and build`.
+
+## Artifact
+
+```bash
+gh api repos/OlegFM/bb/actions/runs/34758768292/artifacts --jq '.artifacts[]|{name,size_in_bytes,expired,id}' 2>&1
+```
+```
+{"expired":false,"id":10318023408,"name":"windows-x64-test-results","size_in_bytes":34353}
+```
+
+Artifact name: `windows-x64-test-results` (34,353 bytes, not expired). Downloaded (`EXIT=0`) and summarised:
+
+```powershell
+node qa/windows/scripts/summarize-turbo-run.mjs C:\...\scratchpad\ci-artifact-refresh; "EXIT=$LASTEXITCODE"
+```
+```
+| package | test task |
+|---|---|
+| @bb/desktop | fail (1) |
+| @bb/domain | pass |
+| @bb/host-daemon | fail (1) |
+| @bb/process-utils | fail (1) |
+| @bb/scripts | fail (1) |
+
+Source: C:\...\scratchpad\ci-artifact-refresh\3JH5KGbyg1EryDqYkxOsFv0nQJw.json
+EXIT=0
+```
+
+Identical to both the Phase 0 CI baseline and this branch's earlier run at `203acb273` — no package changed
+state in the CI leg.
+
+## Cancellations
+
+```bash
+gh run cancel 34758768292 -R OlegFM/bb 2>&1; echo "EXIT_CI=$?"; gh run cancel 34758768285 -R OlegFM/bb 2>&1; echo "EXIT_VL=$?"
+```
+```
+✓ Request to cancel workflow 34758768292 submitted.
+EXIT_CI=0
+✓ Request to cancel workflow 34758768285 submitted.
+EXIT_VL=0
+```
+
+Cancelling the overall run afterwards does not change the `Windows x64` job's recorded `success`.
+

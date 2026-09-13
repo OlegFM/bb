@@ -277,3 +277,246 @@ The expected location is confirmed by code rather than by observation:
 `joinHostPath(dataDir, "worktrees")` and `joinHostPath(dataDir, "personal-workspaces")`, and
 `docs/platform-windows.md` states managed worktrees and personal workspaces are derived with the host's
 native separator under `%USERPROFILE%\.bb\worktrees`.
+
+---
+
+# Gate refresh at `e976524b488483fd583de42c8dce13ac6d6ac0cd` (2026-09-13) — Step 6 now PASSES
+
+Everything above this line is the original measurement at `203acb273`, when this step was blocked. The
+final fix round landed `94f5c40eb`, which contains exactly the change this file diagnosed:
+
+```bash
+grep -n 'startsWith(realRoot' apps/server/src/services/plugins/manifest.ts
+```
+```
+176:    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
+204:    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
+```
+
+The scratch repository was re-created identically (hook-less `git init`, one commit, `master`, `b96b1ec`);
+the dev instance's project row `proj_x4gdw7vz68` → `C:\Users\olege\Work\phase1-ui` was still present and was
+reused. The same UI substitution as before applies: the thread was created through `POST /api/v1/threads`,
+the route the UI's composer posts to.
+
+## The provider plugins now load
+
+Dev app restarted at this head (`pnpm dev:app current` → `Branch: windows-native/phase-1 (e976524b4)`,
+`Dev session: running`, `EXIT=0`).
+
+```powershell
+$raw = Invoke-WebRequest -Uri "http://127.0.0.1:23813/api/v1/plugins" -Method Get; $j = $raw.Content | ConvertFrom-Json; "count=" + $j.plugins.Count; $j.plugins | Where-Object { $_.id -match "provider|plugin-api-docs" } | ForEach-Object { "{0} | enabled={1} | status={2}" -f $_.id, $_.enabled, $_.status }
+```
+```
+count=27
+plugin-api-docs | enabled=False | status=disabled
+provider-acp | enabled=True | status=running
+provider-claude-code | enabled=True | status=running
+provider-codex | enabled=True | status=running
+provider-pi | enabled=True | status=running
+provider-retry | enabled=True | status=running
+provider-usage | enabled=False | status=disabled
+```
+
+27 plugins against 22 before — the five that the asset guard rejected (`provider-claude-code`,
+`provider-codex`, `provider-pi`, `provider-acp`, `plugin-api-docs`) now load, and all four provider plugins
+are enabled and running. `grep -i symlink` over this instance's fresh `dev.log` returns nothing.
+
+```powershell
+$p = (Invoke-WebRequest -Uri "http://127.0.0.1:23813/api/v1/system/providers" -Method Get).Content | ConvertFrom-Json; $p | ForEach-Object { "{0} | {1} | available={2}" -f $_.id, $_.displayName, $_.available }
+```
+```
+codex | Codex | available=True
+claude-code | Claude Code | available=True
+pi | Pi | available=True
+acp-cursor | Cursor | available=True
+```
+
+`GET /api/v1/system/providers` returned `[]` before the fix; four providers are available now.
+
+## Thread creation with the Worktree provider
+
+First attempt, with `inputs: null` as in the original section:
+
+```
+HTTP 400
+{
+  "code": "invalid_request",
+  "message": "The \u0022git-worktree\u0022 environment provider needs inputs, and the request carried none"
+}
+```
+
+The provider declares a default in its input schema (`{"branch": {"kind": "default"}}`), which the UI's
+composer sends; supplying it succeeds:
+
+```powershell
+$body = '{"projectId":"proj_x4gdw7vz68","origin":"sdk","providerId":"codex","title":"Phase 1 worktree check","input":[{"type":"text","text":"Phase 1 managed worktree provisioning check."}],"environment":{"type":"provider","environmentProviderId":"git-worktree","machine":{"type":"existing","hostId":"host_45kqba73eq"},"inputs":{"branch":{"kind":"default"}}}}'; $body; try { $t = Invoke-RestMethod -Uri "http://127.0.0.1:23813/api/v1/threads" -Method Post -ContentType "application/json" -Body $body; ($t | ConvertTo-Json -Depth 3) | Out-String -Stream | Select-Object -First 26 } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+{
+  "id": "thr_hnyw5gyc3h",
+  "projectId": "proj_x4gdw7vz68",
+  "environmentId": null,
+  "providerId": "codex",
+  "title": "Phase 1 worktree check",
+  "titleFallback": "Phase 1 managed worktree provisioning check.",
+  "sectionId": null,
+  "status": "starting",
+  ...
+}
+```
+
+## The environment reaches `ready`
+
+```powershell
+(Invoke-WebRequest -Uri "http://127.0.0.1:23813/api/v1/environments?projectId=proj_x4gdw7vz68" -Method Get).Content
+```
+```
+[{"id":"env_v4mcchxyjw","name":null,"projectId":"proj_x4gdw7vz68","hostId":"host_45kqba73eq","path":"C:\\Users\\olege\\.bb-dev\\work-bb-21d97a8d7c85\\plugins\\environment-git-worktree\\host-data\\worktrees\\thr_hnyw5gyc3h-1\\phase1-ui","isGitRepo":true,"isWorktree":true,"branchName":"bb/phase-1-worktree-check-thr_hnyw5gyc3h","baseBranch":null,"defaultBranch":"master","mergeBaseBranch":null,"status":"ready","environmentProviderId":"git-worktree","lifecycle":{"phase":"active","retireAt":null,"teardown":null},"environmentProviderSelection":{"machine":{"type":"existing","hostId":"host_45kqba73eq"},"inputs":{"branch":{"kind":"default"}}},"environmentProviderInstanceKey":"thr_hnyw5gyc3h-1","managed":true,"workspaceProvisionType":"managed-worktree","createdAt":1789304735637,"updatedAt":1789304738094}]
+```
+
+- `status`: **`ready`** (about 2.5 s after creation: `createdAt` 1789304735637 → `updatedAt` 1789304738094)
+- `path`: `C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_hnyw5gyc3h-1\phase1-ui`
+- `isWorktree: true`, `managed: true`, `workspaceProvisionType: "managed-worktree"`
+- `environmentProviderInstanceKey`: `thr_hnyw5gyc3h-1`
+- branch: `bb/phase-1-worktree-check-thr_hnyw5gyc3h`, default branch `master`
+
+### `path` versus `pathKey` in the database
+
+The `pathKey` column Task 5 added is not part of the public `Environment` response, so it was read straight
+out of the dev database with `better-sqlite3` (script run from `packages/db` so the dependency resolves;
+deleted afterwards):
+
+```powershell
+node C:\Users\olege\Work\bb\packages\db\read-env-rows.mjs "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\bb.db"
+```
+```
+[
+  {
+    "id": "env_v4mcchxyjw",
+    "project_id": "proj_x4gdw7vz68",
+    "host_id": "host_45kqba73eq",
+    "path": "C:\\Users\\olege\\.bb-dev\\work-bb-21d97a8d7c85\\plugins\\environment-git-worktree\\host-data\\worktrees\\thr_hnyw5gyc3h-1\\phase1-ui",
+    "is_git_repo": 1,
+    "is_worktree": 1,
+    "branch_name": "bb/phase-1-worktree-check-thr_hnyw5gyc3h",
+    "status": "ready",
+    "environment_provider_id": "git-worktree",
+    "environment_provider_plugin_id": "environment-git-worktree",
+    "provider_owns_path": 1,
+    "environment_provider_instance_key": "thr_hnyw5gyc3h-1",
+    "status_message": "Using workspace: C:\\Users\\olege\\.bb-dev\\work-bb-21d97a8d7c85\\plugins\\environment-git-worktree\\host-data\\worktrees\\thr_hnyw5gyc3h-1\\phase1-ui",
+    "claim_path": null,
+    "path_key": "c:/users/olege/.bb-dev/work-bb-21d97a8d7c85/plugins/environment-git-worktree/host-data/worktrees/thr_hnyw5gyc3h-1/phase1-ui"
+  }
+]
+EXIT=0
+```
+
+This is the Phase 1 behaviour working exactly as designed: the **stored `path` keeps the host's native
+separators and drive-letter case**, while the **`path_key` is the canonical comparison key** — lower-cased,
+forward-slashed — that Task 5 introduced and Task 6 reconciled.
+
+### Deviation from the brief's expected location
+
+The brief predicted `%USERPROFILE%\.bb-dev\<instance>\worktrees\<key>\phase1-ui`. The worktree is actually
+provisioned at `<dataDir>\plugins\environment-git-worktree\host-data\worktrees\<instanceKey>\<repo>`, i.e.
+inside the environment provider plugin's own host-data directory. That is the plugin-owned layout, not the
+core `managedWorkspaceRoots(dataDir)` root (`<dataDir>\worktrees`) the brief's expectation was drawn from;
+`<dataDir>\worktrees` does not exist on this instance at all. The substantive Windows property the step
+exists to check — a drive-absolute, native-separator managed path, created and removed cleanly — holds.
+
+## On disk while the environment is live
+
+```powershell
+$p = "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_hnyw5gyc3h-1\phase1-ui"; "Test-Path: " + (Test-Path $p); "--- dir ---"; Get-ChildItem $p -Force | Select-Object Name,Mode | Format-Table -AutoSize | Out-String; "--- git worktree list ---"; git -C C:\Users\olege\Work\phase1-ui worktree list; "EXIT=$LASTEXITCODE"
+```
+```
+Test-Path: True
+--- dir ---
+
+Name      Mode
+----      ----
+.git      -a-h-
+README.md -a---
+
+
+--- git worktree list ---
+C:/Users/olege/Work/phase1-ui                                                                                                b96b1ec [master]
+C:/Users/olege/.bb-dev/work-bb-21d97a8d7c85/plugins/environment-git-worktree/host-data/worktrees/thr_hnyw5gyc3h-1/phase1-ui  b96b1ec [bb/phase-1-worktree-check-thr_hnyw5gyc3h]
+EXIT=0
+```
+
+## Removal
+
+`DELETE /environments/:id` is refused while threads are live, which is the documented contract:
+
+```
+HTTP 409
+{
+  "code": "invalid_request",
+  "message": "Environment still has live threads"
+}
+```
+
+So the environment's threads were archived through the public route first, then the environment deleted:
+
+```powershell
+try { $a = Invoke-RestMethod -Uri "http://127.0.0.1:23813/api/v1/environments/env_v4mcchxyjw/archive-threads" -Method Post -ContentType "application/json" -Body "{}"; "archive-threads: " + ($a | ConvertTo-Json -Compress) } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+archive-threads: {"ok":true,"archivedThreadIds":["thr_hnyw5gyc3h"]}
+```
+
+```powershell
+try { $d = Invoke-RestMethod -Uri "http://127.0.0.1:23813/api/v1/environments/env_v4mcchxyjw" -Method Delete; "DELETE ok: " + ($d | ConvertTo-Json -Compress) } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+DELETE ok: {"ok":true}
+```
+
+## After removal
+
+```powershell
+$p = "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_hnyw5gyc3h-1\phase1-ui"; "Test-Path env dir: " + (Test-Path $p); "Test-Path instance dir: " + (Test-Path "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_hnyw5gyc3h-1"); "--- git worktree list ---"; git -C C:\Users\olege\Work\phase1-ui worktree list; "EXIT=$LASTEXITCODE"; "--- environments API ---"; (Invoke-WebRequest -Uri "http://127.0.0.1:23813/api/v1/environments?projectId=proj_x4gdw7vz68" -Method Get).Content
+```
+```
+Test-Path env dir: False
+Test-Path instance dir: False
+--- git worktree list ---
+C:/Users/olege/Work/phase1-ui  b96b1ec [master]
+EXIT=0
+--- environments API ---
+[]
+```
+
+The row itself:
+
+```powershell
+node C:\Users\olege\Work\bb\packages\db\read-env-rows.mjs "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\bb.db" | Select-String -Pattern '"id"|"status"|"path"|"path_key"|"teardown_status"'
+```
+```
+    "id": "env_v4mcchxyjw",
+    "path": null,
+    "status": "destroyed",
+    "teardown_status": "removed",
+    "path_key": null
+EXIT=0
+```
+
+`status` is **`destroyed`**, `teardown_status` is `removed`, and both `path` and `path_key` are cleared — so
+the row no longer occupies the live unique index on `(project_id, host_id, path_key)` that Task 5 added.
+
+## Step 6 verdict at this head
+
+**PASS.** The managed worktree provisions to `ready` at a drive-absolute, native-separator path, is visible
+to `git worktree list` and on disk while live, and after removal the directory (and its instance directory)
+are gone, `git worktree list` shows only the main checkout, the environments listing is empty, and the row
+is `destroyed` with `teardown_status: removed`.
+
+## Cleanup for this refresh
+
+- Thread `thr_hnyw5gyc3h` archived (by the `archive-threads` call above) and left in the dev database.
+- `packages/db/read-env-rows.mjs`, the throwaway database reader, deleted from the checkout.
+- Dev app stopped with `pnpm dev:stop`.
+- `C:\Users\olege\Work\phase1-ui` deleted again; see `00-host.md`.
+

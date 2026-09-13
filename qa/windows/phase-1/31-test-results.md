@@ -248,3 +248,220 @@ No test file fails at this HEAD for a Windows-behaviour reason that did not fail
 Every file above the baseline set failed only with a vitest timeout (or a direct cascade from one) and
 disappears as concurrency is reduced; `@bb/db` — the one package the brief requires to pass that showed a
 failure under load — passes cleanly on its own.
+
+---
+
+# Gate refresh at `e976524b488483fd583de42c8dce13ac6d6ac0cd` (2026-09-13)
+
+Everything above this line is the original measurement at `203acb273` and is unchanged. This section
+re-measures Step 3 after the final fix round: `94f5c40eb` (code — includes the
+`apps/server/src/services/plugins/manifest.ts` asset-guard fix `realRoot + "/"` → `realRoot + sep` that
+Step 6 diagnosed, plus other review findings), `bb472301a` (docs) and `e976524b4` (one message string).
+
+`git rev-parse HEAD`: `e976524b488483fd583de42c8dce13ac6d6ac0cd`
+`node -v`: v22.19.0 — `pnpm -v`: 9.15.0 — same reference desktop, same shell form.
+
+## Build and typecheck at this head
+
+Appended to `30-build-typecheck.txt` under its own "Gate refresh" banner:
+
+```
+ Tasks:    144 successful, 144 total
+Cached:    23 cached, 144 total
+  Time:    4m25.615s
+
+EXIT=0
+```
+
+## Test command
+
+Identical to the original Step 3 command, run as a background PowerShell job:
+
+```powershell
+pnpm exec turbo run test --continue --summarize --output-logs=errors-only --filter=@bb/domain --filter=@bb/db --filter=@bb/host-daemon-contract --filter=@bb/desktop-contract --filter=@bb/server-contract --filter=@bb/config --filter=@bb/scripts --filter=@bb/server --filter=@bb/host-daemon --filter=@bb/app --filter=@bb/desktop --filter=bb-plugin-environment-git-worktree --filter=bb-plugin-environment-personal-workspace 2>&1 | Tee-Object qa/windows/phase-1/31-test-output.txt; "EXIT=$LASTEXITCODE" | Tee-Object -Append qa/windows/phase-1/31-test-output.txt
+```
+
+```
+  Tasks:    13 successful, 21 total
+ Cached:    10 cached, 21 total
+   Time:    7m32.778s
+Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JH3vfzVRBCGX17fuwVQtIQPRfz.json
+ Failed:    @bb/app#test, @bb/config#test, @bb/desktop#test, @bb/host-daemon#test, @bb/scripts#test, @bb/server#test, bb-plugin-environment-git-worktree#test, bb-plugin-environment-personal-workspace#test
+
+ ERROR  run failed: command  exited (1)
+EXIT=1
+```
+
+`31-test-output.txt` was 837,250 bytes; `31-test-output-tail.txt` has been **replaced** with this run's last
+200 lines (it ends `EXIT=1`) and the full file deleted, as the brief requires.
+
+## Table 1R: pass/fail per package (summariser output)
+
+```powershell
+node qa/windows/scripts/summarize-turbo-run.mjs; "EXIT=$LASTEXITCODE"
+```
+
+| package | test task |
+|---|---|
+| @bb/app | fail (1) |
+| @bb/config | fail (1) |
+| @bb/db | pass |
+| @bb/desktop | fail (1) |
+| @bb/desktop-contract | pass |
+| @bb/domain | pass |
+| @bb/host-daemon | fail (1) |
+| @bb/host-daemon-contract | pass |
+| @bb/scripts | fail (1) |
+| @bb/server | fail (1) |
+| @bb/server-contract | pass |
+| bb-plugin-environment-git-worktree | fail (1) |
+| bb-plugin-environment-personal-workspace | fail (1) |
+
+Source: C:\Users\olege\Work\bb\.turbo\runs\3JH3vfzVRBCGX17fuwVQtIQPRfz.json
+
+EXIT=0 (summariser)
+
+`@bb/db` now passes in the full-load run too — the isolated re-run the original section needed is no longer
+required for it.
+
+## Table 2R: failing-test detail, with both comparison columns
+
+| package | files failed now | tests failed now | Phase 0 baseline (files) | first run at `203acb273` (files) | newly failing file versus either? |
+|---|---|---|---|---|---|
+| @bb/domain | pass | — | pass | pass | no |
+| @bb/db | **pass** | — | pass | 1 (timeout) | no — improved |
+| @bb/host-daemon-contract | pass | — | pass | pass | no |
+| @bb/desktop-contract | pass | — | pass | pass | no |
+| @bb/server-contract | pass | — | pass | pass | no |
+| @bb/config | 1 | 8 | 1 (8 tests) | 1 (8 tests) | no — identical |
+| @bb/scripts | **5** | **10** | 5 (10 tests) | 6 (11 tests) | no — back to the baseline exactly |
+| @bb/server | **33** | 166 | 52 | 45 | no file outside the timeout set; six plugin suites fixed |
+| @bb/host-daemon | 21 | 62 | 21 | 21 | no — identical |
+| @bb/app | 10 | 17 | 10 | 9 | two timing-flaky files in, one out; total equals the baseline |
+| @bb/desktop | 6 | 14 | 6 | 6 | no — identical |
+| bb-plugin-environment-git-worktree | 1 | 8 | 1 (8 tests) | 1 (8 tests) | no — identical |
+| bb-plugin-environment-personal-workspace | 1 | 1 | 1 (2 tests) | 1 (1 test) | no — identical file |
+
+```
+@bb/config:test:  Test Files  1 failed | 6 passed (7)            Tests  8 failed | 101 passed (109)
+bb-plugin-environment-personal-workspace:test:  Test Files  1 failed | 2 passed (3)   Tests  1 failed | 12 passed (13)
+@bb/desktop:test:  Test Files  6 failed | 37 passed (43)         Tests  14 failed | 312 passed | 1 skipped (327)
+@bb/scripts:test:  Test Files  5 failed | 21 passed (26)         Tests  10 failed | 156 passed | 2 skipped (168)
+bb-plugin-environment-git-worktree:test:  Test Files  1 failed | 3 passed (4)   Tests  8 failed | 33 passed (41)
+@bb/host-daemon:test:  Test Files  21 failed | 30 passed | 1 skipped (52)   Tests  62 failed | 544 passed | 1 skipped (608)
+@bb/server:test:  Test Files  33 failed | 205 passed | 2 skipped (240)   Tests  166 failed | 2274 passed | 5 skipped (2445)
+@bb/app:test:  Test Files  10 failed | 497 passed (507)          Tests  17 failed | 4331 passed | 3 skipped (4351)
+```
+
+## Table 3R: what the fix changed in `@bb/server`
+
+`comm` of this run's 33 failing files against the first run's 45 (identical command, identical concurrency,
+only the commit differs):
+
+**Fixed — 13 files went fail → pass**
+
+```
+test/provider-corpus/timeline-perf.test.ts
+test/services/plugin-catalog/bb-official-generator.test.ts
+test/services/plugins/ask-user-question-plugin.test.ts
+test/services/plugins/heroes.test.ts
+test/services/plugins/official-plugins.test.ts
+test/services/plugins/plugin-app-bundle.test.ts
+test/services/plugins/plugin-icons.test.ts
+test/services/plugins/plugin-logo.test.ts
+test/services/plugins/plugin-manifest.test.ts
+test/services/plugins/plugin-provider-registration.test.ts
+test/services/plugins/plugin-sdk.test.ts
+test/services/plugins/plugin-thread-events.test.ts
+test/skills/shipped-skills-quality.test.ts
+```
+
+**Newly failing — 1 file**
+
+```
+test/threads/system-message-taxonomy-stamping.test.ts   Error: Test timed out in 5000ms.
+```
+
+Against the per-file list Task 6 established for this package (29 files), six of those 29 now pass —
+exactly the plugin/manifest suites the asset-guard fix unblocks:
+
+```
+test/services/plugins/official-plugins.test.ts
+test/services/plugins/plugin-icons.test.ts
+test/services/plugins/plugin-logo.test.ts
+test/services/plugins/plugin-manifest.test.ts
+test/services/plugins/plugin-provider-registration.test.ts
+test/skills/shipped-skills-quality.test.ts
+```
+
+and the ten files failing here that are not in that list are all vitest timeouts:
+
+```
+test/ai/commit-message.test.ts                          Test timed out in 5000ms
+test/ai/voice-transcription.test.ts                     Test timed out in 5000ms
+test/public/public-project-skills.test.ts               Test timed out in 5000ms
+test/services/plugins/keep-awake.test.ts                Test timed out in 30000ms
+test/services/plugins/plugin-ai-services.test.ts        Test timed out in 5000ms
+test/services/plugins/plugin-wire.test.ts               Hook timed out in 10000ms
+test/services/threads/timeline-event-budget.test.ts     Test timed out in 5000ms
+test/services/threads/timeline-in-turn-window.test.ts   Test timed out in 5000ms / 15000ms
+test/threads/generated-thread-titles.test.ts            Test timed out in 5000ms
+test/threads/system-message-taxonomy-stamping.test.ts   Test timed out in 5000ms
+```
+
+(The two `AssertionError`s inside `commit-message.test.ts` and `generated-thread-titles.test.ts` —
+`expected null to be 'fix: recover with fallback model'`, `expected "vi.fn()" to be called 1 times, but got
+2 times` — are the retry-timer cascade of a fake-clock test that has already timed out, the same shape the
+original section documents.)
+
+## Per-file failing lists at this head
+
+`@bb/app` (10): `src/components/plugin/PluginPanelRightPanelHost.test.tsx`,
+`src/components/plugin/management/BrowsePluginsTab.test.tsx`,
+`src/components/plugin/management/UpdatePluginDialog.test.tsx`,
+`src/components/secondary-panel/FilePreview.test.tsx`,
+`src/components/secondary-panel/useThreadStorageBrowser.test.tsx`,
+`src/components/settings/UsageLimitsSettingsSection.test.tsx`,
+`src/components/settings/browser-import-wizard.test.ts`,
+`src/components/thread/WorkspaceChangesList.test.tsx`,
+`src/components/ui/markdown-preview.test.tsx`,
+`src/hooks/cache-owners/cache-owner-registry.test.ts`.
+Versus the first run: `src/views/ToolsView.plugin-detail.test.tsx` now passes, and
+`PluginPanelRightPanelHost.test.tsx` (`Unable to find an element by: [data-testid="plugin-page-terminal"]`)
+and `markdown-preview.test.tsx` (`expected null not to be null`) now fail — both the expiring-`findBy*`
+shape that the WSL A/B in `40-posix-check.md` showed passes when the file runs on its own. The package
+total, 10, is exactly the Phase 0 baseline.
+
+`@bb/config` (1): `test/config.test.ts`.
+
+`@bb/scripts` (5): `test/archive-codex-tmp-bb-sessions.test.ts`, `test/ci-workflow.test.ts`,
+`test/pr-approval-workflows.test.ts`, `test/run-dev.test.ts`, `test/source-cli-wrapper.test.ts`.
+`test/provider-literal-ratchet.test.mjs`, the only file above the baseline in the first run, passes here —
+the package is back to the Phase 0 baseline's 5 files / 10 tests exactly.
+
+`@bb/desktop` (6): `test/app-paths.test.ts`, `test/bb-process.test.ts`, `test/browser-import.test.ts`,
+`test/desktop-browser-view-manager.test.ts`, `test/electron-builder-config.test.ts`,
+`test/log-viewer.test.ts` — identical to the first run.
+
+`@bb/host-daemon` (21): `src/auth-state.test.ts`, `src/command-discovery.test.ts`,
+`src/command-handlers/file-list.test.ts`, `src/command-handlers/file-write.test.ts`,
+`src/command-handlers/install-global-skills.test.ts`, `src/command-handlers/project.test.ts`,
+`src/command-handlers/workspace-path-list.test.ts`, `src/desktop-browser-broker.test.ts`,
+`src/environment-lifecycle-script.test.ts`, `src/identity.test.ts`, `src/injected-skills.test.ts`,
+`src/runtime-manager.test.ts`, `src/runtime-shell-env.test.ts`, `src/terminals/terminal-manager.test.ts`,
+`test/command/environment-dispatch.test.ts`, `test/command/environment-hook.test.ts`,
+`test/command/host-branches-dispatch.test.ts`, `test/command/thread-dispatch.test.ts`,
+`test/command/thread-stop-races.test.ts`, `test/command/workspace-dispatch.test.ts`,
+`test/parcel-watcher-not-loaded-in-parent.test.ts`.
+
+`bb-plugin-environment-git-worktree` (1): `host.test.ts`.
+`bb-plugin-environment-personal-workspace` (1): `host.test.ts`.
+
+## Step 3 verdict at this head
+
+**PASS, and strictly better than the first measurement.** No package regressed; `@bb/db` and
+`@bb/scripts` returned to green/baseline; `@bb/server` dropped from 45 to 33 failing files with 13 fixed
+against 1 new, and the six plugin/manifest suites the asset-guard fix targets are among the fixed. Every
+file still failing above the Phase 0 baseline set fails only with a vitest timeout or a direct cascade from
+one.
+
