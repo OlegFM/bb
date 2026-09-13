@@ -56,11 +56,13 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
 - Project and environment paths may be drive-absolute (`C:\Users\me\repo`,
   `C:/Users/me/repo`). UNC (`\\server\share`), device (`\\.\`) and
   extended-length (`\\?\`) paths are rejected with a message naming
-  drive-letter paths as the remedy. `host.canonicalize_path` also rejects a
-  relative path, a POSIX-shaped path on Windows, a bare drive letter (`C:`), a
-  missing path, and a non-directory, all as HTTP 400 `invalid_path`; a request
-  that fails schema validation before it reaches the daemon (UNC, relative, or
-  a filesystem root) is HTTP 400 `invalid_request` instead.
+  drive-letter paths as the remedy. The request schema refuses UNC, device,
+  relative and root paths — a bare drive letter (`C:`) counts as a root — with
+  HTTP 400 `invalid_request` before any daemon call; for paths that do reach
+  it (provider-produced paths, the environment directory tool, and the
+  offline fallback's shape check), `host.canonicalize_path` refuses UNC,
+  device, relative and bare-drive input, a POSIX-shaped path on Windows, a
+  missing path, and a non-directory, all as HTTP 400 `invalid_path`.
 - The host daemon owns canonical paths: `host.canonicalize_path` resolves the
   on-disk casing and symlinks with `fs.realpath.native`, strips any `\\?\`
   prefix, and returns `{ path, pathKey }`. `path_key` is the comparison key
