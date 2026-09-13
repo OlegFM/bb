@@ -123,7 +123,7 @@ describe("environments", () => {
     const first = createEnvironment(db, noopNotifier, {
       projectId: project.id,
       hostId: host.id,
-      path: "C:\Work\bb",
+      path: "C:\\Work\\bb",
       pathKey: "c:/work/bb",
       providerOwnsPath: false,
     });
@@ -135,7 +135,7 @@ describe("environments", () => {
       createEnvironment(db, noopNotifier, {
         projectId: project.id,
         hostId: host.id,
-        path: "c:\work\BB",
+        path: "c:\\work\\BB",
         pathKey: "c:/work/bb",
         providerOwnsPath: false,
       }).pathKey,
