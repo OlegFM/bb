@@ -54,10 +54,12 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   200); WSL daemons keep reporting `wsl`. The Machines settings label it
   "Windows".
 - Project and environment paths may be drive-absolute (`C:\Users\me\repo`,
-  `C:/Users/me/repo`). UNC (`\\server\share`), device (`\\.\`) and
-  extended-length (`\\?\`) paths are rejected with a message naming
-  drive-letter paths as the remedy. The request schema refuses UNC, device,
-  relative and root paths — a bare drive letter (`C:`) counts as a root — with
+  `C:/Users/me/repo`). UNC (`\\server\share`, `//server/share`), device
+  (`\\.\`) and extended-length (`\\?\`) paths are rejected with a message
+  naming an absolute path of either flavor as the remedy, because the same
+  two-leading-separator rule applies on POSIX hosts. The request schema refuses
+  UNC, device, relative and root paths — a bare drive letter (`C:`) counts as a
+  root — with
   HTTP 400 `invalid_request` before any daemon call; for paths that do reach
   it (provider-produced paths, the environment directory tool, and the
   offline fallback's shape check), `host.canonicalize_path` refuses UNC,
@@ -75,8 +77,10 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   shape-derived key (the same rule the migration backfill applies), so
   projects can still be registered for a disconnected machine. The offline
   fallback enforces the same shape checks as the daemon — UNC, device,
-  relative and bare-drive input is refused with the same wording — even
-  though no real filesystem lookup runs.
+  relative and bare-drive input is refused — even though no real filesystem
+  lookup runs. Because the server does not know the offline host's flavor, its
+  UNC refusal names an absolute path of either flavor, while a `win32` daemon
+  names a drive-letter path.
 - Creating a project on a connected host looks its source up by shape key
   first; on a miss, it canonicalizes the path through the daemon, which
   requires the directory to exist. Re-adding an existing project whose

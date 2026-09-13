@@ -419,8 +419,13 @@ unattached launch holds the host/path, this attempt is no longer creating, or
 this attempt already reserved another path. Repeating the same claim succeeds.
 Core retains the durable claim through attachment or completed cancellation
 cleanup, including after failed creation. Check existing attached threads after
-claiming and before mutating a shared checkout. Core normalizes trailing slashes
-on claims. Reuse, directory switching and restored dispatch enforce claims;
+claiming and before mutating a shared checkout. Core stores the claim as a host
+path key: trailing separators are removed, and on Windows the drive letter is
+lower-cased and `\` folded to `/`, so `C:\Work\bb` and `c:/work/bb` are the same
+claim. At bind time the claim moves to the daemon-canonical key when the
+provider produced the path it claimed. A non-absolute claim is refused with a
+message naming both accepted shapes.
+Reuse, directory switching and restored dispatch enforce claims;
 only the owning launch is exempt. `bb.sdk.environments.list({ hostId, path })`
 compares stored paths in the database and does not contact hosts.
 Scoped discovery omits providers whose declared requirements are unmet without
