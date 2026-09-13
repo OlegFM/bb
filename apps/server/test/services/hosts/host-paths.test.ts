@@ -116,13 +116,36 @@ describe("canonicalizeHostPath", () => {
       await refuse("C:");
     }));
 
+  it("keeps POSIX paths as typed in the offline fallback", async () =>
+    withTestHarness(async (harness) => {
+      const host = seedHost(harness.deps, { id: "host-canon-offline-posix" });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "/srv/missing/repo/",
+        }),
+      ).resolves.toEqual({
+        path: "/srv/missing/repo",
+        pathKey: "/srv/missing/repo",
+      });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "//server/share/bb",
+        }),
+      ).resolves.toEqual({
+        path: "//server/share/bb",
+        pathKey: "//server/share/bb",
+      });
+    }));
+
   it("names both accepted shapes when the offline fallback refuses a UNC path", async () =>
     withTestHarness(async (harness) => {
       const host = seedHost(harness.deps, { id: "host-canon-offline-unc" });
       await expect(
         canonicalizeHostPath(harness.deps, {
           hostId: host.id,
-          path: "//server/share/bb",
+          path: "\\\\server\\share\\bb",
         }),
       ).rejects.toMatchObject({
         status: 400,

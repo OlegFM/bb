@@ -19,7 +19,7 @@ describe("isAbsoluteFilePath", () => {
     ["C:", false],
     ["c:", false],
     ["C:Users\\me", false],
-    ["//srv/x", false],
+    ["//srv/x", true],
     ["\\\\server\\share\\README.md", false],
     ["\\\\?\\C:\\Users\\me", false],
     ["docs/README.md", false],
@@ -30,7 +30,12 @@ describe("isAbsoluteFilePath", () => {
 
   it("produces no normalized path for a bare drive or a UNC path", () => {
     expect(normalizeAbsoluteFilePath({ path: "C:" })).toBeNull();
-    expect(normalizeAbsoluteFilePath({ path: "//srv/x" })).toBeNull();
+    expect(normalizeAbsoluteFilePath({ path: "\\\\srv\\share\\x" })).toBeNull();
+  });
+
+  it("collapses repeated leading separators in POSIX paths", () => {
+    expect(normalizeAbsoluteFilePath({ path: "//srv/x" })).toBe("/srv/x");
+    expect(normalizeAbsoluteFilePath({ path: "///x" })).toBe("/x");
   });
 });
 

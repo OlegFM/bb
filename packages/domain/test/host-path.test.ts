@@ -22,18 +22,20 @@ describe("host-path", () => {
     expect(detectHostPathFlavor("C:Users\\me")).toBeNull();
     expect(detectHostPathFlavor("relative/path")).toBeNull();
     expect(detectHostPathFlavor("\\\\server\\share\\repo")).toBeNull();
-    expect(detectHostPathFlavor("//server/share/repo")).toBeNull();
+    expect(detectHostPathFlavor("//server/share/repo")).toBe("posix");
+    expect(detectHostPathFlavor("///repo")).toBe("posix");
     expect(detectHostPathFlavor("\\\\?\\C:\\Users\\me")).toBeNull();
     expect(detectHostPathFlavor("")).toBeNull();
   });
 
-  it("recognizes UNC and device paths", () => {
+  it("recognizes UNC and device paths by their leading backslashes", () => {
     expect(isUncOrDeviceHostPath("\\\\server\\share")).toBe(true);
-    expect(isUncOrDeviceHostPath("//server/share")).toBe(true);
     expect(isUncOrDeviceHostPath("\\\\?\\C:\\x")).toBe(true);
     expect(isUncOrDeviceHostPath("\\\\.\\pipe\\x")).toBe(true);
     expect(isUncOrDeviceHostPath("C:\\x")).toBe(false);
     expect(isUncOrDeviceHostPath("/x")).toBe(false);
+    expect(isUncOrDeviceHostPath("//server/share")).toBe(false);
+    expect(isUncOrDeviceHostPath("///x")).toBe(false);
   });
 
   it("recognizes a bare drive letter without a separator", () => {
@@ -48,6 +50,7 @@ describe("host-path", () => {
 
   it("answers absolute and windows checks", () => {
     expect(isAbsoluteHostPath("/srv/repo")).toBe(true);
+    expect(isAbsoluteHostPath("//srv/repo")).toBe(true);
     expect(isAbsoluteHostPath("D:/repo")).toBe(true);
     expect(isAbsoluteHostPath("repo")).toBe(false);
     expect(detectHostPathFlavor("D:/repo")).toBe("windows");
@@ -67,6 +70,7 @@ describe("host-path", () => {
   it("normalizes POSIX paths by trimming trailing separators only", () => {
     expect(normalizeHostPath("/srv/repo/")).toBe("/srv/repo");
     expect(normalizeHostPath("/srv//repo")).toBe("/srv//repo");
+    expect(normalizeHostPath("//srv/repo/")).toBe("//srv/repo");
     expect(normalizeHostPath("/")).toBe("/");
     expect(normalizeHostPath("///")).toBe("/");
   });

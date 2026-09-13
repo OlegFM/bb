@@ -1,5 +1,4 @@
 import { realpath as realpathCallback } from "node:fs";
-import fs from "node:fs/promises";
 import { promisify } from "node:util";
 import {
   buildHostPathKey,
@@ -25,13 +24,17 @@ export interface CanonicalizeHostPathArgs {
   path: string;
   platform: NodeJS.Platform;
   realpath: (path: string) => Promise<string>;
-  stat: (path: string) => Promise<{ isDirectory(): boolean }>;
 }
 
 function stripExtendedLengthPrefix(path: string): string {
   return path.startsWith(WINDOWS_EXTENDED_LENGTH_PREFIX)
     ? path.slice(WINDOWS_EXTENDED_LENGTH_PREFIX.length)
     : path;
+}
+
+function shapeCanonicalPath(path: string): CanonicalHostPath {
+  const normalized = normalizeHostPath(path);
+  return { path: normalized, pathKey: buildHostPathKey(normalized) };
 }
 
 function assertAcceptedShape(path: string, platform: NodeJS.Platform): void {
@@ -58,48 +61,39 @@ function assertAcceptedShape(path: string, platform: NodeJS.Platform): void {
   }
 }
 
-export async function canonicalizeHostPath(
+async function canonicalizeWindowsHostPath(
   args: CanonicalizeHostPathArgs,
 ): Promise<CanonicalHostPath> {
-  assertAcceptedShape(args.path, args.platform);
-  let isDirectory: boolean;
+  let resolved: string;
   try {
-    isDirectory = (await args.stat(args.path)).isDirectory();
+    resolved = await args.realpath(args.path);
   } catch (error) {
-    if (isFsErrorWithCode(error, "ENOENT")) {
-      throw new ExpectedCommandDispatchError(
-        "invalid_path",
-        `Path "${args.path}" does not exist`,
-      );
-    }
-    if (isFsErrorWithCode(error, "ENOTDIR")) {
-      throw new ExpectedCommandDispatchError(
-        "invalid_path",
-        `Path "${args.path}" is not a directory`,
-      );
+    if (
+      isFsErrorWithCode(error, "ENOENT") ||
+      isFsErrorWithCode(error, "ENOTDIR")
+    ) {
+      return shapeCanonicalPath(args.path);
     }
     throw error;
   }
-  if (!isDirectory) {
-    throw new ExpectedCommandDispatchError(
-      "invalid_path",
-      `Path "${args.path}" is not a directory`,
-    );
-  }
-  const resolved = await args.realpath(args.path);
-  const candidate =
-    args.platform === "win32" ? stripExtendedLengthPrefix(resolved) : resolved;
-  if (
-    args.platform === "win32" &&
-    detectHostPathFlavor(candidate) !== "windows"
-  ) {
+  const candidate = stripExtendedLengthPrefix(resolved);
+  if (detectHostPathFlavor(candidate) !== "windows") {
     throw new ExpectedCommandDispatchError(
       "invalid_path",
       `Path "${args.path}" resolves to "${resolved}", which is not a drive-letter path`,
     );
   }
-  const path = normalizeHostPath(candidate);
-  return { path, pathKey: buildHostPathKey(path) };
+  return shapeCanonicalPath(candidate);
+}
+
+export async function canonicalizeHostPath(
+  args: CanonicalizeHostPathArgs,
+): Promise<CanonicalHostPath> {
+  assertAcceptedShape(args.path, args.platform);
+  if (args.platform !== "win32") {
+    return shapeCanonicalPath(args.path);
+  }
+  return canonicalizeWindowsHostPath(args);
 }
 
 export async function canonicalizeHostPathCommand(
@@ -109,6 +103,5 @@ export async function canonicalizeHostPathCommand(
     path: command.path,
     platform: process.platform,
     realpath: (path) => realpathNative(path),
-    stat: (path) => fs.stat(path),
   });
 }

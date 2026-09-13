@@ -79,9 +79,6 @@ describe("project-path", () => {
     expect(getProjectPathValidationMessage(uncProjectPath)).toBe(
       UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE,
     );
-    expect(getProjectPathValidationMessage("//server/share/bb")).toBe(
-      UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE,
-    );
     expect(
       getProjectPathValidationMessage("\\\\?\\C:\\Users\\michael\\bb"),
     ).toBe(UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE);
@@ -89,7 +86,17 @@ describe("project-path", () => {
 
   it("names both accepted path shapes when refusing a UNC path", () => {
     expect(UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE).toBe(
-      "UNC and device paths (\\\\server\\share, //server/share) are not supported. Use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo.",
+      "UNC and device paths (\\\\server\\share) are not supported. Use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo.",
     );
+  });
+
+  it("keeps POSIX paths with repeated leading separators absolute", () => {
+    expect(isAbsoluteProjectPath("//server/share/bb")).toBe(true);
+    expect(isAbsoluteProjectPath("///srv/bb")).toBe(true);
+    expect(getProjectPathValidationMessage("//server/share/bb")).toBeNull();
+    expect(normalizeProjectPathInput("//server/share/bb/")).toBe(
+      "//server/share/bb",
+    );
+    expect(deriveProjectNameFromPath("//server/share/bb")).toBe("bb");
   });
 });

@@ -5,7 +5,7 @@ const WINDOWS_DRIVE_ROOT_PATTERN = /^[A-Za-z]:[\\/]*$/u;
 const WINDOWS_DRIVE_PREFIX_PATTERN = /^([A-Za-z]):/u;
 const WINDOWS_CANONICAL_ROOT_PATTERN = /^[A-Z]:\\$/u;
 const BARE_DRIVE_PATTERN = /^[A-Za-z]:$/u;
-const UNC_OR_DEVICE_PATH_PATTERN = /^[\\/]{2}(?![\\/])/u;
+const UNC_OR_DEVICE_PATH_PATTERN = /^\\\\/u;
 const WINDOWS_SEPARATOR_RUN_PATTERN = /[\\/]+/u;
 const POSIX_SEPARATOR_RUN_PATTERN = /\/+/u;
 

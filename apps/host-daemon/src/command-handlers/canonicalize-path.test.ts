@@ -22,8 +22,22 @@ afterEach(async () => {
   );
 });
 
-function directoryStat() {
-  return async () => ({ isDirectory: () => true });
+function fsError(code: string): Error {
+  return Object.assign(new Error(code), { code });
+}
+
+function throwingRealpath(): {
+  calls: string[];
+  realpath: (path: string) => Promise<string>;
+} {
+  const calls: string[] = [];
+  return {
+    calls,
+    realpath: (path) => {
+      calls.push(path);
+      return Promise.reject(fsError("ENOENT"));
+    },
+  };
 }
 
 describe("canonicalizeHostPath", () => {
@@ -33,7 +47,6 @@ describe("canonicalizeHostPath", () => {
         path: "c:/work/bb/",
         platform: "win32",
         realpath: async () => "C:\\Work\\bb",
-        stat: directoryStat(),
       }),
     ).resolves.toEqual({ path: "C:\\Work\\bb", pathKey: "c:/work/bb" });
   });
@@ -44,18 +57,17 @@ describe("canonicalizeHostPath", () => {
         path: "C:\\Work\\bb",
         platform: "win32",
         realpath: async () => "\\\\?\\C:\\Work\\bb\\",
-        stat: directoryStat(),
       }),
     ).resolves.toEqual({ path: "C:\\Work\\bb", pathKey: "c:/work/bb" });
   });
 
-  it("rejects UNC, device and relative input on Windows", async () => {
+  it("rejects UNC, device, POSIX-shaped and relative input on Windows", async () => {
     for (const input of [
       "\\\\server\\share\\bb",
       "\\\\?\\C:\\bb",
-      "//server/share",
       "bb\\repo",
       "/srv/bb",
+      "//server/share",
       "C:",
       "c:",
     ]) {
@@ -64,7 +76,6 @@ describe("canonicalizeHostPath", () => {
           path: input,
           platform: "win32",
           realpath: async () => input,
-          stat: directoryStat(),
         }),
       ).rejects.toMatchObject({ code: "invalid_path" });
     }
@@ -76,7 +87,6 @@ describe("canonicalizeHostPath", () => {
         path: "Z:\\repo",
         platform: "win32",
         realpath: async () => "\\\\?\\UNC\\server\\share\\repo",
-        stat: directoryStat(),
       }),
     ).rejects.toMatchObject({
       code: "invalid_path",
@@ -84,142 +94,105 @@ describe("canonicalizeHostPath", () => {
     });
   });
 
-  it("keeps POSIX paths and keys identical after realpath", async () => {
+  it("returns the shape-normalized path when a Windows path does not exist", async () => {
+    for (const code of ["ENOENT", "ENOTDIR"]) {
+      await expect(
+        canonicalizeHostPath({
+          path: "c:/Work/missing/",
+          platform: "win32",
+          realpath: () => Promise.reject(fsError(code)),
+        }),
+      ).resolves.toEqual({
+        path: "C:\\Work\\missing",
+        pathKey: "c:/work/missing",
+      });
+    }
+  });
+
+  it("propagates Windows realpath errors other than ENOENT and ENOTDIR", async () => {
+    await expect(
+      canonicalizeHostPath({
+        path: "C:\\Work\\protected",
+        platform: "win32",
+        realpath: () => Promise.reject(fsError("EACCES")),
+      }),
+    ).rejects.toMatchObject({ code: "EACCES" });
+  });
+
+  it("returns POSIX paths as typed without touching the filesystem", async () => {
+    const stub = throwingRealpath();
     await expect(
       canonicalizeHostPath({
         path: "/home/me/link/",
         platform: "linux",
-        realpath: async () => "/home/me/repo",
-        stat: directoryStat(),
+        realpath: stub.realpath,
       }),
-    ).resolves.toEqual({ path: "/home/me/repo", pathKey: "/home/me/repo" });
+    ).resolves.toEqual({ path: "/home/me/link", pathKey: "/home/me/link" });
+    await expect(
+      canonicalizeHostPath({
+        path: "/srv/missing",
+        platform: "linux",
+        realpath: stub.realpath,
+      }),
+    ).resolves.toEqual({ path: "/srv/missing", pathKey: "/srv/missing" });
+    await expect(
+      canonicalizeHostPath({
+        path: "/srv/file.txt",
+        platform: "linux",
+        realpath: stub.realpath,
+      }),
+    ).resolves.toEqual({ path: "/srv/file.txt", pathKey: "/srv/file.txt" });
+    expect(stub.calls).toEqual([]);
+  });
+
+  it("accepts POSIX paths that start with more than one separator", async () => {
+    const stub = throwingRealpath();
+    await expect(
+      canonicalizeHostPath({
+        path: "//srv/x",
+        platform: "linux",
+        realpath: stub.realpath,
+      }),
+    ).resolves.toEqual({ path: "//srv/x", pathKey: "//srv/x" });
+    expect(stub.calls).toEqual([]);
   });
 
   it("rejects relative and Windows input on POSIX", async () => {
-    for (const input of ["repo", "C:\\repo"]) {
+    for (const input of ["repo", "C:\\repo", "\\\\server\\share\\bb"]) {
       await expect(
         canonicalizeHostPath({
           path: input,
           platform: "linux",
           realpath: async () => input,
-          stat: directoryStat(),
         }),
-      ).rejects.toMatchObject({ code: "invalid_path" });
+      ).rejects.toMatchObject({
+        code: "invalid_path",
+        message: expect.stringContaining("must be an absolute path"),
+      });
     }
   });
 
-  it("rejects UNC-shaped input on POSIX with the POSIX message", async () => {
-    await expect(
-      canonicalizeHostPath({
-        path: "//srv/x",
-        platform: "linux",
-        realpath: async () => "//srv/x",
-        stat: directoryStat(),
-      }),
-    ).rejects.toMatchObject({
-      code: "invalid_path",
-      message: expect.stringContaining("must be an absolute path"),
-    });
-  });
-
-  it("rejects missing paths and files", async () => {
-    const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
-    await expect(
-      canonicalizeHostPath({
-        path: "/srv/missing",
-        platform: "linux",
-        realpath: async () => "/srv/missing",
-        stat: async () => {
-          throw missing;
-        },
-      }),
-    ).rejects.toMatchObject({
-      code: "invalid_path",
-      message: expect.stringContaining("does not exist"),
-    });
-    await expect(
-      canonicalizeHostPath({
-        path: "/srv/file.txt",
-        platform: "linux",
-        realpath: async () => "/srv/file.txt",
-        stat: async () => ({ isDirectory: () => false }),
-      }),
-    ).rejects.toMatchObject({
-      code: "invalid_path",
-      message: expect.stringContaining("not a directory"),
-    });
-  });
-
-  it("reports a path segment that is a file as not a directory", async () => {
-    const notADirectory = Object.assign(new Error("not a directory"), {
-      code: "ENOTDIR",
-    });
-    await expect(
-      canonicalizeHostPath({
-        path: "/srv/file.txt/sub",
-        platform: "linux",
-        realpath: async () => "/srv/file.txt/sub",
-        stat: async () => {
-          throw notADirectory;
-        },
-      }),
-    ).rejects.toMatchObject({
-      code: "invalid_path",
-      message: expect.stringContaining("not a directory"),
-    });
-  });
-
   it("marks every invalid_path rejection as an expected failure", async () => {
-    const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
-    const notADirectory = Object.assign(new Error("not a directory"), {
-      code: "ENOTDIR",
-    });
     const cases: CanonicalizeHostPathArgs[] = [
       {
         path: "\\\\server\\share\\bb",
         platform: "win32",
         realpath: async () => "\\\\server\\share\\bb",
-        stat: directoryStat(),
       },
       {
         path: "C:",
         platform: "win32",
         realpath: async () => "C:",
-        stat: directoryStat(),
       },
       {
         path: "Z:\\repo",
         platform: "win32",
         realpath: async () => "\\\\?\\UNC\\server\\share\\repo",
-        stat: directoryStat(),
       },
       {
         path: "repo",
         platform: "linux",
         realpath: async () => "repo",
-        stat: directoryStat(),
-      },
-      {
-        path: "/srv/missing",
-        platform: "linux",
-        realpath: async () => "/srv/missing",
-        stat: async () => {
-          throw missing;
-        },
-      },
-      {
-        path: "/srv/file.txt/sub",
-        platform: "linux",
-        realpath: async () => "/srv/file.txt/sub",
-        stat: async () => {
-          throw notADirectory;
-        },
-      },
-      {
-        path: "/srv/file.txt",
-        platform: "linux",
-        realpath: async () => "/srv/file.txt",
-        stat: async () => ({ isDirectory: () => false }),
       },
     ];
     for (const args of cases) {
@@ -231,22 +204,6 @@ describe("canonicalizeHostPath", () => {
       expect(error).toMatchObject({ code: "invalid_path" });
     }
   });
-
-  it("propagates stat errors other than ENOENT and ENOTDIR unchanged", async () => {
-    const forbidden = Object.assign(new Error("forbidden"), {
-      code: "EACCES",
-    });
-    await expect(
-      canonicalizeHostPath({
-        path: "/srv/protected",
-        platform: "linux",
-        realpath: async () => "/srv/protected",
-        stat: async () => {
-          throw forbidden;
-        },
-      }),
-    ).rejects.toMatchObject({ code: "EACCES" });
-  });
 });
 
 describe("canonicalizeHostPathCommand", () => {
@@ -255,7 +212,8 @@ describe("canonicalizeHostPathCommand", () => {
     tempDirs.push(root);
     const target = path.join(root, "Mixed Case");
     await fs.mkdir(target);
-    const expected = await fs.realpath(target);
+    const expected =
+      process.platform === "win32" ? await fs.realpath(target) : target;
     const result = await canonicalizeHostPathCommand({
       type: "host.canonicalize_path",
       path: `${target}${path.sep}`,
@@ -265,6 +223,22 @@ describe("canonicalizeHostPathCommand", () => {
       process.platform === "win32"
         ? result.path.replace(/\\/gu, "/").toLowerCase()
         : result.path,
+    );
+  });
+
+  it("returns a path that does not exist on this host", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "bb-canonical-"));
+    tempDirs.push(root);
+    const missing = path.join(root, "missing");
+    const result = await canonicalizeHostPathCommand({
+      type: "host.canonicalize_path",
+      path: missing,
+    });
+    expect(result.path.toLowerCase()).toBe(missing.toLowerCase());
+    expect(result.pathKey).toBe(
+      process.platform === "win32"
+        ? missing.replace(/\\/gu, "/").toLowerCase()
+        : missing,
     );
   });
 

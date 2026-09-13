@@ -11,7 +11,7 @@ export const INVALID_PROJECT_PATH_MESSAGE =
 export const PROJECT_PATH_ROOT_MESSAGE =
   "Project path must point to a project directory, not the filesystem root.";
 export const UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE =
-  "UNC and device paths (\\\\server\\share, //server/share) are not supported. Use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo.";
+  "UNC and device paths (\\\\server\\share) are not supported. Use an absolute path on the machine, such as /home/me/repo or C:\\Users\\me\\repo.";
 
 export function isAbsoluteProjectPath(path: string): boolean {
   return isAbsoluteHostPath(path.trim());

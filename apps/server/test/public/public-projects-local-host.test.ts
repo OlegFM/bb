@@ -206,27 +206,15 @@ describe("public project local host routes", () => {
     });
   });
 
-  it("returns the existing project when the daemon refuses its directory", async () => {
+  it("creates a project on a directory the daemon cannot resolve yet", async () => {
     await withTestHarness(async (harness) => {
-      const { host, session } = seedHostSession(harness.deps, {
+      const { host } = seedHostSession(harness.deps, {
         id: "host-vanished-directory",
       });
       seedPrimaryHost(harness.deps, host.id);
       const { project } = seedProjectWithSource(harness.deps, {
         hostId: host.id,
         path: "/tmp/vanished-project",
-      });
-      registerHostRpcResponder(harness, {
-        hostId: host.id,
-        sessionId: session.id,
-        handle: (request) => ({
-          ok: false,
-          errorCode: "invalid_path",
-          errorMessage:
-            request.command.type === "host.canonicalize_path"
-              ? `Path "${request.command.path}" does not exist`
-              : "unexpected command",
-        }),
       });
 
       const create = (path: string) =>
@@ -245,11 +233,65 @@ describe("public project local host routes", () => {
         id: project.id,
       });
 
-      const fresh = await create("/tmp/missing-project");
-      expect(fresh.status).toBe(400);
-      await expect(readJson(fresh)).resolves.toMatchObject({
+      const freshPromise = create("/tmp/missing-project/");
+      const inspection = await waitForQueuedCommand(
+        harness,
+        ({ command }) => command.type === "project.inspect",
+      );
+      expect(inspection.command).toMatchObject({
+        path: "/tmp/missing-project",
+      });
+      await reportQueuedCommandSuccess(harness, inspection, {
+        path: "/tmp/missing-project",
+        gitRemoteUrl: null,
+      });
+      const fresh = await freshPromise;
+      expect(fresh.status).toBe(201);
+      const freshProject = projectResponseSchema.parse(await readJson(fresh));
+      expect(freshProject.id).not.toBe(project.id);
+      expect(freshProject.sources).toEqual([
+        expect.objectContaining({ path: "/tmp/missing-project" }),
+      ]);
+    });
+  });
+
+  it("returns 400 invalid_path when the daemon refuses the path shape", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-refused-shape",
+      });
+      seedPrimaryHost(harness.deps, host.id);
+      registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => ({
+          ok: false,
+          errorCode: "invalid_path",
+          errorMessage:
+            request.command.type === "host.canonicalize_path"
+              ? `Path "${request.command.path}" must be a drive-absolute path such as C:\\Users\\me\\repo`
+              : "unexpected command",
+        }),
+      });
+
+      const response = await harness.app.request("/api/v1/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Foreign Flavor Project",
+          source: {
+            type: "local_path",
+            hostId: host.id,
+            path: "/tmp/posix-on-windows",
+          },
+        }),
+      });
+
+      expect(response.status).toBe(400);
+      await expect(readJson(response)).resolves.toMatchObject({
         code: "invalid_path",
-        message: 'Path "/tmp/missing-project" does not exist',
+        message:
+          'Path "/tmp/posix-on-windows" must be a drive-absolute path such as C:\\Users\\me\\repo',
       });
     });
   });
@@ -304,7 +346,7 @@ describe("public project local host routes", () => {
       await expect(readJson(response)).resolves.toMatchObject({
         code: "invalid_request",
         message: expect.stringContaining(
-          "UNC and device paths (\\\\server\\share, //server/share) are not supported",
+          "UNC and device paths (\\\\server\\share) are not supported",
         ),
       });
     });

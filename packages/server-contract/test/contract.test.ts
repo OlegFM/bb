@@ -1153,7 +1153,7 @@ describe("server-contract canonical schemas", () => {
       }),
     ).toThrow(
       JSON.stringify(
-        "UNC and device paths (\\\\server\\share, //server/share) are not supported",
+        "UNC and device paths (\\\\server\\share) are not supported",
       ).slice(1, -1),
     );
 
