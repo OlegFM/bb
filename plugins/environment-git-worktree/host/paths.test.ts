@@ -1,6 +1,13 @@
 import { WorkspaceError } from "bb-environment-provider-host/git";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { deriveRepoDirName } from "./paths.js";
+import {
+  deriveRepoDirName,
+  resolveWorktreeAttemptRoot,
+  resolveWorktreesRoot,
+  resolveWorktreeTargetPath,
+} from "./paths.js";
 
 describe("deriveRepoDirName", () => {
   it.each([
@@ -19,6 +26,14 @@ describe("deriveRepoDirName", () => {
       "Hello-World",
     ],
     ["dotted name", "/Users/me/code/my.repo", "my.repo"],
+    ["Windows local path", "C:\\Users\\someone\\code\\my-repo", "my-repo"],
+    [
+      "Windows path with forward slashes and trailing slash",
+      "C:/Users/someone/code/my-repo/",
+      "my-repo",
+    ],
+    ["Windows path with trailing backslash", "C:\\code\\my-repo\\", "my-repo"],
+    ["Windows dotted name", "D:\\code\\my.repo", "my.repo"],
   ])("derives %s", (_label, input, expected) => {
     expect(deriveRepoDirName(input)).toBe(expected);
   });
@@ -37,5 +52,20 @@ describe("deriveRepoDirName", () => {
     ],
   ])("rejects %s", (_label, input) => {
     expect(() => deriveRepoDirName(input)).toThrowError(WorkspaceError);
+  });
+
+  it("builds managed paths with the host's native separator", () => {
+    const dataDir = path.join(os.tmpdir(), "bb-data");
+    expect(resolveWorktreesRoot(dataDir)).toBe(path.join(dataDir, "worktrees"));
+    expect(
+      resolveWorktreeTargetPath({
+        dataDir,
+        pathKey: "thr_1",
+        sourcePath: "/x/repo",
+      }),
+    ).toBe(path.join(dataDir, "worktrees", "thr_1", "repo"));
+    expect(() =>
+      resolveWorktreeAttemptRoot({ dataDir, pathKey: "../escape" }),
+    ).toThrow(/single path segment/u);
   });
 });

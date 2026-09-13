@@ -2,6 +2,7 @@ import { WorkspaceError } from "bb-environment-provider-host/git";
 import path from "node:path";
 
 const REPO_DIR_NAME_PATTERN = /^[A-Za-z0-9._][A-Za-z0-9._-]*$/;
+const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/u;
 
 function tryParseUrlPath(value: string): string | null {
   try {
@@ -17,14 +18,21 @@ function tryParseUrlPath(value: string): string | null {
   return null;
 }
 
+function sourceBasename(pathPart: string): string {
+  if (WINDOWS_DRIVE_PATH_PATTERN.test(pathPart)) {
+    return path.win32.basename(pathPart.replace(/[\\/]+$/u, ""));
+  }
+  return path.posix.basename(pathPart.replace(/\/+$/u, ""));
+}
+
 export function deriveRepoDirName(sourcePath: string): string {
   const trimmed = sourcePath.replace(/\/+$/, "");
 
-  const scpMatch = /^[^:/]+@[^:]+:(?<path>.+)$/.exec(trimmed);
+  const scpMatch = /^[^:/\\]+@[^:]+:(?<path>.+)$/.exec(trimmed);
   const pathPart =
     scpMatch?.groups?.path ?? tryParseUrlPath(trimmed) ?? trimmed;
 
-  const basename = path.posix.basename(pathPart);
+  const basename = sourceBasename(pathPart);
   const candidate = basename.endsWith(".git")
     ? basename.slice(0, -".git".length)
     : basename;
@@ -44,7 +52,7 @@ export function deriveRepoDirName(sourcePath: string): string {
 }
 
 export function resolveWorktreesRoot(dataDir: string): string {
-  return path.posix.join(dataDir, "worktrees");
+  return path.join(dataDir, "worktrees");
 }
 
 export function resolveWorktreeAttemptRoot(args: {
@@ -54,14 +62,15 @@ export function resolveWorktreeAttemptRoot(args: {
   if (
     args.pathKey === "." ||
     args.pathKey === ".." ||
-    path.posix.basename(args.pathKey) !== args.pathKey
+    path.basename(args.pathKey) !== args.pathKey ||
+    /[\\/]/u.test(args.pathKey)
   ) {
     throw new WorkspaceError(
       "invalid_path_key",
       "A worktree path key must be a single path segment",
     );
   }
-  return path.posix.join(resolveWorktreesRoot(args.dataDir), args.pathKey);
+  return path.join(resolveWorktreesRoot(args.dataDir), args.pathKey);
 }
 
 export function resolveWorktreeTargetPath(args: {
@@ -69,7 +78,7 @@ export function resolveWorktreeTargetPath(args: {
   pathKey: string;
   sourcePath: string;
 }): string {
-  return path.posix.join(
+  return path.join(
     resolveWorktreeAttemptRoot(args),
     deriveRepoDirName(args.sourcePath),
   );

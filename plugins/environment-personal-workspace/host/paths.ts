@@ -11,7 +11,8 @@ function isSinglePathSegment(value: string): boolean {
     value.length > 0 &&
     value !== "." &&
     value !== ".." &&
-    path.basename(value) === value
+    path.basename(value) === value &&
+    !/[\\/]/u.test(value)
   );
 }
 
@@ -24,7 +25,7 @@ export function resolveWorkspacePath(args: {
       `Personal workspace key must be a single path segment: ${args.pathKey}`,
     );
   }
-  return path.posix.join(args.dataDir, WORKSPACES_DIR_NAME, args.pathKey);
+  return path.join(args.dataDir, WORKSPACES_DIR_NAME, args.pathKey);
 }
 
 export function assertRemovableWorkspacePath(args: {
