@@ -800,6 +800,7 @@ describe("thread creation child-thread boundary validation", () => {
         hostId: host.id,
         projectId: PERSONAL_PROJECT_ID,
         path: "/tmp/personal-side-chat",
+        pathKey: "/tmp/personal-side-chat",
         status: "ready",
         environmentProvider: {
           environmentProviderId: "personal-workspace",

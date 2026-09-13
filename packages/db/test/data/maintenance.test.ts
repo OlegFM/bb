@@ -57,7 +57,7 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "maintenance-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/project" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/project", pathKey: "/tmp/project" },
   });
   return { db, host, project };
 }

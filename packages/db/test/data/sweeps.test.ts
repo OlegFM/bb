@@ -36,7 +36,7 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/test", pathKey: "/tmp/test" },
   });
   return { db, host, project };
 }
@@ -234,6 +234,7 @@ describe("pruneDestroyedEnvironments", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/destroyed-with-event-history",
+      pathKey: "/tmp/destroyed-with-event-history",
       status: "destroyed",
     });
     db.update(environments)
@@ -343,6 +344,7 @@ describe("pruneDestroyedEnvironments", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/stale-destroyed",
+      pathKey: "/tmp/stale-destroyed",
       status: "destroyed",
     });
     const freshEnvironment = createEnvironment(db, noopNotifier, {
@@ -350,6 +352,7 @@ describe("pruneDestroyedEnvironments", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/fresh-destroyed",
+      pathKey: "/tmp/fresh-destroyed",
       status: "destroyed",
     });
 
@@ -393,6 +396,7 @@ describe("pruneDestroyedEnvironments", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/destroyed-then-renamed",
+      pathKey: "/tmp/destroyed-then-renamed",
       status: "destroyed",
     });
     db.update(environments)
@@ -430,6 +434,7 @@ describe("pruneDestroyedEnvironments", () => {
         projectId: project.id,
         hostId: host.id,
         path,
+        pathKey: path,
         status: "destroyed",
       });
       db.update(environments)
@@ -531,6 +536,7 @@ describe("pruneDestroyedEnvironments", () => {
         projectId: project.id,
         hostId: host.id,
         path,
+        pathKey: path,
         status: "destroyed",
       });
       db.update(environments)

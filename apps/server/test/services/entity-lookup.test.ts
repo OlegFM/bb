@@ -47,6 +47,7 @@ function setup(): SetupResult {
       type: "local_path",
       hostId: hostRow.id,
       path: "/tmp/entity-lookup",
+      pathKey: "/tmp/entity-lookup",
     },
   });
   const host = makeHost({

@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import {
   listEvents,
-  claimEnvironmentPath,
+  claimEnvironmentPathKey,
   createEnvironment,
   environments,
   getEnvironment,
@@ -152,6 +152,7 @@ function setup(
       environment.id,
       {
         path: prepared.path,
+        pathKey: prepared.path,
         isGitRepo: false,
         isWorktree: false,
         branchName: null,
@@ -295,6 +296,7 @@ describe("core environment orchestration", () => {
         projectId: foreign.project.id,
         hostId: fixture.host.id,
         path: "/tmp/foreign",
+        pathKey: "/tmp/foreign",
         status: "ready",
         providerOwnsPath: true,
       });
@@ -501,6 +503,7 @@ describe("core environment orchestration", () => {
           projectId: fixture.context.project.id,
           hostId: fixture.host.id,
           path: "/tmp/other",
+          pathKey: "/tmp/other",
           status: "ready",
           providerOwnsPath: false,
         });
@@ -617,25 +620,26 @@ describe("core environment orchestration", () => {
         ownerThreadId: competitor.id,
         status: "creating" as const,
         path: null,
+        pathKey: null,
         claimPath: null,
       });
       let cleanup: Promise<void> | undefined;
       try {
-        expect(claimEnvironmentPath(harness.db, second, "/tmp/project")).toBe(
-          false,
-        );
+        expect(
+          claimEnvironmentPathKey(harness.db, second, "/tmp/project"),
+        ).toBe(false);
         cleanup = cancelProviderEnvironmentCreation(
           harness.deps,
           fixture.thread.id,
         );
-        expect(claimEnvironmentPath(harness.db, second, "/tmp/project")).toBe(
-          false,
-        );
+        expect(
+          claimEnvironmentPathKey(harness.db, second, "/tmp/project"),
+        ).toBe(false);
       } finally {
         release();
         await cleanup;
       }
-      expect(claimEnvironmentPath(harness.db, second, "/tmp/project")).toBe(
+      expect(claimEnvironmentPathKey(harness.db, second, "/tmp/project")).toBe(
         true,
       );
     }));
@@ -659,9 +663,10 @@ describe("core environment orchestration", () => {
         ownerThreadId: competitor.id,
         status: "creating" as const,
         path: null,
+        pathKey: null,
         claimPath: null,
       });
-      expect(claimEnvironmentPath(harness.db, second, "/tmp/project")).toBe(
+      expect(claimEnvironmentPathKey(harness.db, second, "/tmp/project")).toBe(
         false,
       );
       expect(fixture.row().path).toBe("/tmp/project");
@@ -869,6 +874,7 @@ describe("core environment orchestration", () => {
         projectId: fixture.context.project.id,
         hostId: fixture.host.id,
         path: "/tmp/same-project-worktree",
+        pathKey: "/tmp/same-project-worktree",
         status: "ready",
         providerOwnsPath: true,
         environmentProvider: {
@@ -928,6 +934,7 @@ describe("core environment orchestration", () => {
           ownerThreadId: second.id,
           environmentProviderInstanceKey: second.id,
           path: "/tmp/second",
+          pathKey: "/tmp/second",
         });
         if (kind === "removal") {
           fixture.attach();
@@ -1698,6 +1705,7 @@ it("keeps a shared workspace ready when its preparing owner cancels before attac
       projectId: fixture.context.project.id,
       hostId: fixture.host.id,
       path: "/tmp/shared-ready",
+      pathKey: "/tmp/shared-ready",
       status: "ready",
       providerOwnsPath: false,
     });

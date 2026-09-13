@@ -275,6 +275,7 @@ describe("environment providers are asked inside provisioning", () => {
         hostId: host.id,
         projectId: PERSONAL_PROJECT_ID,
         path: "/tmp/projectless-parent",
+        pathKey: "/tmp/projectless-parent",
         status: "ready",
         environmentProvider: {
           environmentProviderId: "personal-workspace",
@@ -1826,6 +1827,7 @@ describe("environment provider listing", () => {
         type: "local_path",
         hostId: targetHost.id,
         path: "/tmp/target-checkout",
+        pathKey: "/tmp/target-checkout",
       });
 
       const after = await listProviders(harness, path);

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createProjectSourceId } from "../../src/ids.js";
 import { noopNotifier } from "../../src/notifier.js";
@@ -25,7 +26,7 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/test", pathKey: "/tmp/test" },
   });
   return { db, host, project };
 }
@@ -42,6 +43,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: newHost.id,
       path: "/tmp/code",
+      pathKey: "/tmp/code",
     });
 
     expect(source.id).toMatch(/^src_/);
@@ -51,6 +53,22 @@ describe("project-sources", () => {
     }
     expect(source.path).toBe("/tmp/code");
     expect(source.isDefault).toBe(false);
+  });
+
+  it("re-points a source with a new path and key", () => {
+    const { db, project } = setup();
+    const source = listProjectSources(db, project.id)[0]!;
+    const updated = updateProjectSource(db, noopNotifier, source.id, {
+      location: { path: "D:\\Work\\bb", pathKey: "d:/work/bb" },
+    });
+    expect(updated?.path).toBe("D:\\Work\\bb");
+    expect(
+      db
+        .select({ pathKey: projectSources.pathKey })
+        .from(projectSources)
+        .where(eq(projectSources.id, source.id))
+        .get()?.pathKey,
+    ).toBe("d:/work/bb");
   });
 
   it("lists sources by project", () => {
@@ -68,12 +86,14 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: host2.id,
       path: "/tmp/code1",
+      pathKey: "/tmp/code1",
     });
     createProjectSource(db, noopNotifier, {
       projectId: project.id,
       type: "local_path",
       hostId: host3.id,
       path: "/tmp/code2",
+      pathKey: "/tmp/code2",
     });
 
     const sources = listProjectSources(db, project.id);
@@ -96,6 +116,7 @@ describe("project-sources", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/other-project",
+        pathKey: "/tmp/other-project",
       },
     });
     createProjectSource(db, noopNotifier, {
@@ -103,12 +124,14 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: host2.id,
       path: "/tmp/repo-a",
+      pathKey: "/tmp/repo-a",
     });
     createProjectSource(db, noopNotifier, {
       projectId: otherProject.id,
       type: "local_path",
       hostId: host3.id,
       path: "/tmp/repo-b",
+      pathKey: "/tmp/repo-b",
     });
 
     expect(listProjectSourcesByProjectIds(db, [project.id])).toHaveLength(2);
@@ -129,6 +152,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: secondaryHost.id,
       path: "/tmp/secondary",
+      pathKey: "/tmp/secondary",
     });
 
     expect(source).toMatchObject({
@@ -151,6 +175,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: secondaryHost.id,
       path: "/tmp/code-2",
+      pathKey: "/tmp/code-2",
     });
 
     expect(getProjectSourceByHost(db, project.id, secondaryHost.id)?.id).toBe(
@@ -179,6 +204,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: secondaryHost.id,
       path: "/tmp/source-id",
+      pathKey: "/tmp/source-id",
     });
 
     expect(
@@ -205,6 +231,7 @@ describe("project-sources", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/duplicate",
+        pathKey: "/tmp/duplicate",
       }),
     ).toThrow();
     expect(listProjectSources(db, project.id)).toHaveLength(1);
@@ -227,6 +254,7 @@ describe("project-sources", () => {
           type: "local_path",
           hostId: conflictHost.id,
           path: "/tmp/default-conflict",
+          pathKey: "/tmp/default-conflict",
           isDefault: true,
           createdAt: now,
           updatedAt: now,
@@ -248,10 +276,11 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: updateHost.id,
       path: "/tmp/code",
+      pathKey: "/tmp/code",
     });
 
     const updated = updateProjectSource(db, noopNotifier, source.id, {
-      path: "/tmp/renamed",
+      location: { path: "/tmp/renamed", pathKey: "/tmp/renamed" },
     });
     if (!updated || updated.type !== "local_path") {
       throw new Error(
@@ -272,6 +301,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: deleteHost.id,
       path: "/tmp/code",
+      pathKey: "/tmp/code",
     });
 
     expect(deleteProjectSource(db, noopNotifier, source.id)).toBe(true);
@@ -290,6 +320,7 @@ describe("project-sources", () => {
       type: "local_path",
       hostId: host2.id,
       path: "/tmp/code-2",
+      pathKey: "/tmp/code-2",
     });
 
     const initialDefault = getDefaultProjectSource(db, project.id)!;

@@ -22,6 +22,7 @@ export interface CreateEnvironmentInput {
   projectId: string;
   hostId: string;
   path?: string | null;
+  pathKey?: string | null;
   isGitRepo?: boolean;
   branchName?: string | null;
   baseBranch?: string | null;
@@ -42,6 +43,9 @@ export function createEnvironment(
   notifier: DbNotifier,
   input: CreateEnvironmentInput,
 ) {
+  if ((input.path == null) !== (input.pathKey == null)) {
+    throw new Error("Environment path and pathKey must be set together");
+  }
   const now = Date.now();
   const id = createEnvironmentId();
   const row = db
@@ -52,6 +56,7 @@ export function createEnvironment(
       projectId: input.projectId,
       hostId: input.hostId,
       path: input.path ?? null,
+      pathKey: input.pathKey ?? null,
       isGitRepo: input.isGitRepo ?? false,
       branchName: input.branchName ?? null,
       baseBranch: input.baseBranch ?? null,
@@ -81,11 +86,11 @@ export function getEnvironment(db: EnvironmentReadConnection, id: string) {
   );
 }
 
-export function findProjectEnvironmentByHostPath(
+export function findProjectEnvironmentByHostPathKey(
   db: DbConnection,
   projectId: string,
   hostId: string,
-  path: string,
+  pathKey: string,
 ) {
   return (
     db
@@ -95,22 +100,22 @@ export function findProjectEnvironmentByHostPath(
         and(
           eq(environments.projectId, projectId),
           eq(environments.hostId, hostId),
-          eq(environments.path, path),
+          eq(environments.pathKey, pathKey),
         ),
       )
       .get() ?? null
   );
 }
 
-export interface FindForeignManagedEnvironmentAtHostPathArgs {
+export interface FindForeignManagedEnvironmentAtHostPathKeyArgs {
   hostId: string;
-  path: string;
+  pathKey: string;
   projectId: string;
 }
 
-export function findProviderEnvironmentContainingPath(
+export function findProviderEnvironmentContainingPathKey(
   db: DbConnection,
-  path: string,
+  pathKey: string,
 ) {
   return (
     db
@@ -119,8 +124,8 @@ export function findProviderEnvironmentContainingPath(
       .where(
         and(
           or(
-            eq(environments.path, path),
-            sql`${path} LIKE ${environments.path} || '/%'`,
+            eq(environments.pathKey, pathKey),
+            sql`${pathKey} LIKE ${environments.pathKey} || '/%'`,
           ),
           eq(environments.providerOwnsPath, true),
           ne(environments.status, "destroyed"),
@@ -130,9 +135,9 @@ export function findProviderEnvironmentContainingPath(
   );
 }
 
-export function findForeignManagedEnvironmentAtHostPath(
+export function findForeignManagedEnvironmentAtHostPathKey(
   db: DbConnection,
-  args: FindForeignManagedEnvironmentAtHostPathArgs,
+  args: FindForeignManagedEnvironmentAtHostPathKeyArgs,
 ) {
   return (
     db
@@ -142,8 +147,8 @@ export function findForeignManagedEnvironmentAtHostPath(
         and(
           eq(environments.hostId, args.hostId),
           or(
-            eq(environments.path, args.path),
-            sql`${args.path} LIKE ${environments.path} || '/%'`,
+            eq(environments.pathKey, args.pathKey),
+            sql`${args.pathKey} LIKE ${environments.pathKey} || '/%'`,
           ),
           eq(environments.providerOwnsPath, true),
           ne(environments.projectId, args.projectId),
@@ -211,6 +216,7 @@ interface EnvironmentMetadataUpdateColumns {
   mergeBaseBranch?: string | null;
   name?: string | null;
   path?: string | null;
+  pathKey?: string | null;
 }
 
 interface EnvironmentMetadataChangeArgs {
@@ -269,6 +275,7 @@ function buildEnvironmentMetadataUpdateSet(
   const set: EnvironmentMetadataUpdateColumns = {};
   if ("baseBranch" in input) set.baseBranch = input.baseBranch;
   if ("path" in input) set.path = input.path;
+  if ("pathKey" in input) set.pathKey = input.pathKey;
   if ("isGitRepo" in input) set.isGitRepo = input.isGitRepo;
   if ("isWorktree" in input) set.isWorktree = input.isWorktree;
   if ("branchName" in input) set.branchName = input.branchName;
@@ -285,6 +292,8 @@ function environmentMetadataChanged(
     ("baseBranch" in args.metadata &&
       args.updated.baseBranch !== args.existing.baseBranch) ||
     ("path" in args.metadata && args.updated.path !== args.existing.path) ||
+    ("pathKey" in args.metadata &&
+      args.updated.pathKey !== args.existing.pathKey) ||
     ("isGitRepo" in args.metadata &&
       args.updated.isGitRepo !== args.existing.isGitRepo) ||
     ("isWorktree" in args.metadata &&
@@ -392,6 +401,7 @@ export function recordEnvironmentProviderProvenance(
 export interface RecordProvisionedEnvironmentWorkspaceInput extends DiscoveredWorkspaceProperties {
   baseBranch?: string | null;
   mergeBaseBranch?: string | null;
+  pathKey: string;
 }
 
 export function recordProvisionedEnvironmentWorkspace(
@@ -402,6 +412,7 @@ export function recordProvisionedEnvironmentWorkspace(
 ) {
   return updateEnvironmentMetadataRecord(db, notifier, id, {
     path: input.path,
+    pathKey: input.pathKey,
     isGitRepo: input.isGitRepo,
     isWorktree: input.isWorktree,
     branchName: input.branchName,
@@ -495,6 +506,7 @@ export function applyEnvironmentLifecycleEventInTransaction(
   };
   if (evaluation.to === "destroyed") {
     set.path = null;
+    set.pathKey = null;
   }
 
   const conditions = [
@@ -560,7 +572,7 @@ export function reserveEnvironment(db: EnvironmentWriteConnection, input: Omit<t
     const now = Date.now();
     if (existing !== null) {
       if (existing.teardownStatus !== "removed") throw new Error("Previous environment cleanup is incomplete");
-      return tx.update(environments).set({ ...input, path: null, resource: null, claimPath: null, teardownStatus: null, teardownMessage: null, teardownAttempt: 0, retireAt: null, pendingLog: "", updatedAt: now }).where(eq(environments.id, existing.id)).returning().get()!;
+      return tx.update(environments).set({ ...input, path: null, pathKey: null, resource: null, claimPath: null, teardownStatus: null, teardownMessage: null, teardownAttempt: 0, retireAt: null, pendingLog: "", updatedAt: now }).where(eq(environments.id, existing.id)).returning().get()!;
     }
     return tx.insert(environments).values({ ...input, id: createEnvironmentId(), createdAt: now, updatedAt: now }).returning().get();
   });
@@ -582,34 +594,39 @@ export function releaseFinishedEnvironmentPreparationOwners(db: EnvironmentWrite
   db.update(environments).set({ ownerThreadId: null }).where(and(eq(environments.teardownStatus, "removed"), sql`not exists (select 1 from ${threads} where ${threads.id} = ${environments.ownerThreadId} and ${threads.deletedAt} is null)`)).run();
 }
 
-export function claimEnvironmentPath(db: DbConnection, provisioning: EnvironmentRow, path: string, allowCancelled = false): boolean {
+export function claimEnvironmentPathKey(db: DbConnection, provisioning: EnvironmentRow, pathKey: string, allowCancelled = false): boolean {
   return db.transaction((tx) => {
     const current = getEnvironment(tx, provisioning.id);
     if (current === null || current.attempt !== provisioning.attempt || current.ownerThreadId !== provisioning.ownerThreadId || (current.status !== "creating" && !(allowCancelled && current.teardownStatus === "running"))) return false;
-    if (current.claimPath !== null && current.claimPath !== path) return false;
-    if (findEnvironmentPathClaim(tx, current.hostId, path, current) !== null) return false;
-    return updatePreparingEnvironment(tx, { ...current, claimPath: path });
+    if (current.claimPath !== null && current.claimPath !== pathKey) return false;
+    if (findEnvironmentPathClaim(tx, current.hostId, pathKey, current) !== null) return false;
+    return updatePreparingEnvironment(tx, { ...current, claimPath: pathKey });
   }, { behavior: "immediate" });
 }
 
-export function findEnvironmentPathClaim(db: EnvironmentWriteConnection, hostId: string, path: string | null, owner: EnvironmentRow | null): EnvironmentRow | null {
+export function findEnvironmentPathClaim(db: EnvironmentWriteConnection, hostId: string, pathKey: string | null, owner: EnvironmentRow | null): EnvironmentRow | null {
   return db.select().from(environments).where(and(
     eq(environments.hostId, hostId),
-    path === null ? sql`${environments.claimPath} is not null` : eq(environments.claimPath, path),
+    pathKey === null ? sql`${environments.claimPath} is not null` : eq(environments.claimPath, pathKey),
     owner === null ? undefined : ne(environments.id, owner.id),
     ne(environments.status, "destroyed"),
   )).limit(1).get() ?? null;
 }
 
-export function bindEnvironmentPath(db: DbConnection, provisioning: EnvironmentRow, path: string): EnvironmentRow {
+export interface EnvironmentPathLocation {
+  path: string;
+  pathKey: string;
+}
+
+export function bindEnvironmentPath(db: DbConnection, provisioning: EnvironmentRow, location: EnvironmentPathLocation): EnvironmentRow {
   return db.transaction((tx) => {
     const current = getEnvironment(tx, provisioning.id);
     if (current === null || current.attempt !== provisioning.attempt || current.ownerThreadId !== provisioning.ownerThreadId) throw new Error("Environment preparation is no longer current");
-    const existing = tx.select().from(environments).where(and(eq(environments.hostId, current.hostId), eq(environments.path, path), eq(environments.projectId, current.projectId))).get();
+    const existing = tx.select().from(environments).where(and(eq(environments.hostId, current.hostId), eq(environments.pathKey, location.pathKey), eq(environments.projectId, current.projectId))).get();
     if (existing === undefined || existing.id === current.id) return current;
     if (existing.teardownStatus !== null || (existing.status !== "ready" && existing.status !== "provisioning")) throw new Error("Workspace is not ready or cleanup is still pending");
     if (existing.ownerThreadId !== null) throw new Error("Workspace is still being prepared by another thread");
-    tx.update(environments).set({ ownerThreadId: null, status: "destroyed", teardownStatus: "removed", claimPath: null, resource: null, path: null }).where(eq(environments.id, current.id)).run();
+    tx.update(environments).set({ ownerThreadId: null, status: "destroyed", teardownStatus: "removed", claimPath: null, resource: null, path: null, pathKey: null }).where(eq(environments.id, current.id)).run();
     return tx.update(environments).set({ ownerThreadId: current.ownerThreadId, attempt: current.attempt, status: existing.status === "ready" ? "ready" : current.status, teardownStatus: current.teardownStatus, retireAt: current.retireAt, statusMessage: current.statusMessage, pendingLog: current.pendingLog, claimPath: current.claimPath, environmentProviderId: current.environmentProviderId, environmentProviderPluginId: current.environmentProviderPluginId, environmentProviderSelection: current.environmentProviderSelection, environmentProviderInstanceKey: current.environmentProviderInstanceKey }).where(eq(environments.id, existing.id)).returning().get()!;
   }, { behavior: "immediate" });
 }

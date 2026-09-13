@@ -122,7 +122,12 @@ function markDatabaseBusy(db: DbConnection): void {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "maintenance-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/project" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/project",
+      pathKey: "/tmp/project",
+    },
   });
   createThread(db, noopNotifier, {
     projectId: project.id,

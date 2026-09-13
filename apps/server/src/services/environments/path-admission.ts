@@ -1,4 +1,5 @@
 import { findEnvironmentPathClaim, getPreparingEnvironment } from "@bb/db";
+import { buildHostPathKey } from "@bb/domain";
 import type { WorkSessionDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
 
@@ -13,13 +14,13 @@ export function assertEnvironmentPathAvailable(
     args.path !== null &&
     findEnvironmentPathClaim(deps.db, args.hostId, null, null) !== null
   ) {
-    const path = args.path.replace(/\/+$/u, "") || "/";
+    const pathKey = buildHostPathKey(args.path.replace(/\/+$/u, "") || "/");
     const provisioning =
       args.threadId === null
         ? null
         : getPreparingEnvironment(deps.db, args.threadId);
     if (
-      findEnvironmentPathClaim(deps.db, args.hostId, path, provisioning) !==
+      findEnvironmentPathClaim(deps.db, args.hostId, pathKey, provisioning) !==
       null
     )
       throw new ApiError(409, "workspace_busy", CHECKOUT_BUSY_MESSAGE);

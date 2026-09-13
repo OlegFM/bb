@@ -25,9 +25,9 @@ import {
   environments,
   getEnvironment,
   getThread,
-  findProjectEnvironmentByHostPath,
+  findProjectEnvironmentByHostPathKey,
   getPreparingEnvironment,
-  claimEnvironmentPath,
+  claimEnvironmentPathKey,
   bindEnvironmentPath,
   listProviderLifecycleEnvironments,
   updatePreparingEnvironment,
@@ -40,6 +40,7 @@ import {
   threads,
 } from "@bb/db";
 import {
+  buildHostPathKey,
   jsonValueSchema,
   type Environment,
   type EnvironmentMachineSelection,
@@ -369,10 +370,10 @@ async function runCreate(
                 .refine((path) => !path.includes("\0"))
                 .parse(value);
               if (signal.aborted) return false;
-              return claimEnvironmentPath(
+              return claimEnvironmentPathKey(
                 deps.db,
                 provisioning,
-                path.replace(/\/+$/u, "") || "/",
+                buildHostPathKey(path.replace(/\/+$/u, "") || "/"),
               );
             },
             previous:
@@ -391,6 +392,7 @@ async function runCreate(
     if (result.status === "created") {
       try {
         const producedPath = result.path.replace(/\/+$/u, "") || "/";
+        const producedPathKey = buildHostPathKey(producedPath);
         const { dataDir } = await ensureHostSessionReadyForWork(deps, {
           hostId: context.host.id,
         });
@@ -403,21 +405,21 @@ async function runCreate(
               projectId: context.project.id,
             });
             if (refusal !== null) throw new Error(refusal);
-            const claimed = claimEnvironmentPath(
+            const claimed = claimEnvironmentPathKey(
               deps.db,
               provisioning,
-              producedPath,
+              producedPathKey,
               true,
             );
             if (!claimed)
               throw new Error(
                 "Workspace path is already claimed by another provisioning.",
               );
-            const existing = findProjectEnvironmentByHostPath(
+            const existing = findProjectEnvironmentByHostPathKey(
               deps.db,
               context.project.id,
               context.host.id,
-              producedPath,
+              producedPathKey,
             );
             if (
               existing !== null &&
@@ -429,11 +431,10 @@ async function runCreate(
                 `Workspace ${producedPath} is owned by the "${existing.environmentProviderId}" environment provider (plugin "${existing.environmentProviderPluginId ?? "unknown"}").`,
               );
             }
-            provisioning = bindEnvironmentPath(
-              deps.db,
-              provisioning,
-              producedPath,
-            );
+            provisioning = bindEnvironmentPath(deps.db, provisioning, {
+              path: producedPath,
+              pathKey: producedPathKey,
+            });
           },
           { behavior: "immediate" },
         );
@@ -447,6 +448,7 @@ async function runCreate(
             row.teardownStatus = "removed";
             row.claimPath = null;
             row.path = null;
+            row.pathKey = null;
             row.resource = null;
           },
         );
@@ -460,6 +462,7 @@ async function runCreate(
         (row) => {
           row.hostId = context.host.id;
           row.path = produced.path;
+          row.pathKey = buildHostPathKey(produced.path);
           row.providerOwnsPath = produced.ownsPath;
           row.mergeBaseBranch = produced.mergeBaseBranch ?? null;
           row.resource = produced.resource ?? null;
@@ -1205,6 +1208,7 @@ function settleEnvironmentProvisionOutcome(
       args.command.environmentId,
       {
         path: args.report.result.path,
+        pathKey: buildHostPathKey(args.report.result.path),
         isGitRepo: args.report.result.isGitRepo,
         isWorktree: args.report.result.isWorktree,
         branchName: args.report.result.branchName,

@@ -1,8 +1,9 @@
 import {
-  findForeignManagedEnvironmentAtHostPath,
-  findProjectEnvironmentByHostPath,
+  findForeignManagedEnvironmentAtHostPathKey,
+  findProjectEnvironmentByHostPathKey,
   type DbConnection,
 } from "@bb/db";
+import { buildHostPathKey } from "@bb/domain";
 import { isBbManagedWorkspacePath } from "./workspace-paths.js";
 
 interface ForeignProviderOwnedPathCheckArgs {
@@ -18,11 +19,12 @@ export function foreignProviderOwnedPathRefusal(
 ): string | null {
   const refusal =
     "Workspace path is a bb-managed workspace owned by another project";
+  const pathKey = buildHostPathKey(args.path);
 
   if (
-    findForeignManagedEnvironmentAtHostPath(db, {
+    findForeignManagedEnvironmentAtHostPathKey(db, {
       hostId: args.hostId,
-      path: args.path,
+      pathKey,
       projectId: args.projectId,
     })
   ) {
@@ -32,11 +34,11 @@ export function foreignProviderOwnedPathRefusal(
   if (
     args.dataDir !== null &&
     isBbManagedWorkspacePath({ dataDir: args.dataDir, path: args.path }) &&
-    findProjectEnvironmentByHostPath(
+    findProjectEnvironmentByHostPathKey(
       db,
       args.projectId,
       args.hostId,
-      args.path,
+      pathKey,
     ) === null
   ) {
     return refusal;

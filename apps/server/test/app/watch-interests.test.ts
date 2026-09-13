@@ -30,13 +30,19 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/test",
+      pathKey: "/tmp/test",
+    },
   });
   const environment = createEnvironment(db, noopNotifier, {
     providerOwnsPath: false,
     projectId: project.id,
     hostId: host.id,
     path: "/tmp/test-workspace",
+    pathKey: "/tmp/test-workspace",
     status: "ready",
   });
   return { db, environment, host, hub, project, watchInterests };
@@ -175,6 +181,7 @@ describe("WatchInterestCoordinator", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/unready",
+      pathKey: "/tmp/unready",
       status: "provisioning",
     });
     const destroyed = createEnvironment(db, noopNotifier, {
@@ -182,6 +189,7 @@ describe("WatchInterestCoordinator", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/destroyed",
+      pathKey: "/tmp/destroyed",
       status: "destroyed",
     });
     const socket = createMockHubSocket();
@@ -209,6 +217,7 @@ describe("WatchInterestCoordinator", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/later-ready",
+      pathKey: "/tmp/later-ready",
       status: "provisioning",
     });
     hub.registerDaemon("session-1", host.id, daemonSocket);

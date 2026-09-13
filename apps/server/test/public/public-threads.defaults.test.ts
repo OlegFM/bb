@@ -127,6 +127,7 @@ describe("public thread default routes", () => {
         type: "local_path",
         hostId: secondaryHost.id,
         path: "/tmp/secondary-managed-source",
+        pathKey: "/tmp/secondary-managed-source",
       });
       if (secondarySource.type !== "local_path") {
         throw new Error("Expected local_path project source");

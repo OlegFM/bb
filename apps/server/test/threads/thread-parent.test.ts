@@ -28,6 +28,7 @@ function setup() {
     source: {
       hostId: host.id,
       path: "/tmp/thread-parent-test",
+      pathKey: "/tmp/thread-parent-test",
       type: "local_path",
     },
   });
@@ -71,6 +72,7 @@ describe("thread parent validation", () => {
       source: {
         hostId: host.id,
         path: "/tmp/thread-parent-test-other",
+        pathKey: "/tmp/thread-parent-test-other",
         type: "local_path",
       },
     });

@@ -32,7 +32,7 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/test", pathKey: "/tmp/test" },
   });
   const seedEnvironment = (
     input: Omit<
@@ -140,6 +140,7 @@ describe("applyEnvironmentLifecycleEvent", () => {
     const { db, seedEnvironment } = setup();
     const environment = seedEnvironment({
       path: "/tmp/double-destroy",
+      pathKey: "/tmp/double-destroy",
       status: "ready",
     });
 
@@ -191,6 +192,7 @@ describe("applyEnvironmentLifecycleEvent", () => {
     const spy = spyNotifier();
     const environment = seedEnvironment({
       path: "/tmp/destroy-claim",
+      pathKey: "/tmp/destroy-claim",
       status: "ready",
     });
     const thread = createThread(db, noopNotifier, {

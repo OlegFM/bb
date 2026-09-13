@@ -235,6 +235,7 @@ describe("public thread fork route", () => {
       createProjectSource(harness.db, harness.hub, {
         hostId: otherHost.id,
         path: "/tmp/public-thread-fork-other",
+        pathKey: "/tmp/public-thread-fork-other",
         projectId: project.id,
         type: "local_path",
       });

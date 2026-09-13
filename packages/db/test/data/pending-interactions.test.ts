@@ -27,6 +27,7 @@ function setup() {
       type: "local_path",
       hostId: host.id,
       path: "/tmp/test-project",
+      pathKey: "/tmp/test-project",
     },
   });
   const environment = createEnvironment(db, noopNotifier, {

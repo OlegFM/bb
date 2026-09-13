@@ -114,6 +114,7 @@ describe("public authorization regressions", () => {
           type: "local_path",
           hostId: sourceHost.id,
           path: "/tmp/managed-check-source",
+          pathKey: "/tmp/managed-check-source",
         },
       });
 

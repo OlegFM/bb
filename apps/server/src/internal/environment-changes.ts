@@ -3,6 +3,7 @@ import type {
   HostDaemonEnvironmentMetadataChangePayload,
 } from "@bb/host-daemon-contract";
 import { getEnvironment, type DbNotifier } from "@bb/db";
+import { buildHostPathKey } from "@bb/domain";
 import { recordProvisionedEnvironmentWorkspace } from "@bb/db/internal-environment-lifecycle";
 import type { AppDeps } from "../types.js";
 
@@ -63,10 +64,8 @@ export function recordDaemonEnvironmentMetadataChange(
     return;
   }
 
-  recordProvisionedEnvironmentWorkspace(
-    deps.db,
-    deps.hub,
-    environment.id,
-    args.workspace,
-  );
+  recordProvisionedEnvironmentWorkspace(deps.db, deps.hub, environment.id, {
+    ...args.workspace,
+    pathKey: buildHostPathKey(args.workspace.path),
+  });
 }

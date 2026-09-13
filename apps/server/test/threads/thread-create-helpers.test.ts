@@ -121,6 +121,7 @@ describe("createThreadRecord", () => {
         source: {
           hostId: host.id,
           path: "/tmp/stale-section-create-project",
+          pathKey: "/tmp/stale-section-create-project",
           type: "local_path",
         },
       });
@@ -128,6 +129,7 @@ describe("createThreadRecord", () => {
         providerOwnsPath: false,
         hostId: host.id,
         path: "/tmp/stale-section-create-project",
+        pathKey: "/tmp/stale-section-create-project",
         projectId: project.id,
         status: "ready",
       });

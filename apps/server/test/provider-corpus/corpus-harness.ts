@@ -85,7 +85,12 @@ export function loadCorpusThreadIntoDb(
   });
   const { project } = createProject(db, noopNotifier, {
     name: "provider-corpus",
-    source: { type: "local_path", hostId: host.id, path: "/provider-corpus" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/provider-corpus",
+      pathKey: "/provider-corpus",
+    },
   });
   const row = corpusThread.thread;
   db.transaction(

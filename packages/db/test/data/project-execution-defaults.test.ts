@@ -20,6 +20,7 @@ function setup() {
       type: "local_path",
       hostId: host.id,
       path: "/tmp/defaults-project",
+      pathKey: "/tmp/defaults-project",
     },
   });
   return { db, project };

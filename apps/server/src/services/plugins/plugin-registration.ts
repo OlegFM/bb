@@ -1,4 +1,5 @@
-import { findProviderEnvironmentContainingPath } from "@bb/db";
+import { findProviderEnvironmentContainingPathKey } from "@bb/db";
+import { buildHostPathKey } from "@bb/domain";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { isBbManagedWorkspacePath } from "../threads/workspace-paths.js";
@@ -421,7 +422,10 @@ export function createPluginRegistration(context: PluginRegistrationContext) {
           );
     if (
       isBbManagedWorkspacePath({ dataDir: deps.dataDir, path: rootDir }) ||
-      findProviderEnvironmentContainingPath(deps.db, rootDir) !== null
+      findProviderEnvironmentContainingPathKey(
+        deps.db,
+        buildHostPathKey(rootDir),
+      ) !== null
     ) {
       logger.warn(
         `plugin "${rootDir}" is installed from inside a bb-managed workspace; ` +

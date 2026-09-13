@@ -329,6 +329,7 @@ function dropRewindAddedTables(db: DbConnection): void {
   dropMarketplaceCatalogSchema(db);
   dropEventParentToolCallIdColumn(db);
   dropQueueReworkSchema(db);
+  dropPathKeyColumns(db);
   db.$client.prepare("DROP TABLE IF EXISTS plugins").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_kv").run();
   db.$client.prepare("DROP TABLE IF EXISTS plugin_settings").run();
@@ -423,6 +424,7 @@ const pendingInteractionsMigrationWhen = 1783626227375;
 const permissionModesMigrationWhen = 1784311522462;
 const branchLocalThreadTabsMigrationWhen = 1783633750817;
 const eventParentToolCallMigrationWhen = 1787181956957;
+const pathKeyMigrationWhen = 1789261268513;
 const eventParentToolCallPreJsonValidMigrationHash =
   "79d39e7b68d1db8ba02614fe4cc227cc0c154d77c7183f2e37ed2d8475412993";
 const eventLargeValuesPreOptimizationHash =
@@ -943,6 +945,22 @@ function dropPluginArtifactGitCheckoutRootColumn(db: DbConnection): void {
   }
 }
 
+function dropPathKeyColumns(db: DbConnection): void {
+  db.$client.exec(`
+    DROP INDEX IF EXISTS environments_live_path_key_idx;
+    DROP INDEX IF EXISTS environments_host_path_key_idx;
+    DROP INDEX IF EXISTS project_sources_host_path_key_idx;
+  `);
+  for (const table of ["environments", "project_sources"]) {
+    const columns = db.$client
+      .prepare<[], TableInfoRow>(`PRAGMA table_info(${table})`)
+      .all();
+    if (columns.some((column) => column.name === "path_key")) {
+      db.$client.prepare(`ALTER TABLE ${table} DROP COLUMN path_key`).run();
+    }
+  }
+}
+
 function dropEnvironmentRetireRequestedAtColumn(db: DbConnection): void {
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_info(environments)")
@@ -994,6 +1012,7 @@ function dropQueuedMessageSenderThreadIdColumn(db: DbConnection): void {
 function dropPost0023Tables(db: DbConnection): void {
   dropEventParentToolCallIdColumn(db);
   dropQueueReworkSchema(db);
+  dropPathKeyColumns(db);
   dropEnvironmentRetireRequestedAtColumn(db);
   dropPluginArtifactGitCheckoutRootColumn(db);
   dropProjectGitRemoteUrlColumn(db);
@@ -1629,6 +1648,7 @@ describe("migrate", () => {
           type: "local_path",
           hostId: host.id,
           path: "/tmp/retained-output-migration",
+          pathKey: "/tmp/retained-output-migration",
         },
       });
       const thread = createThread(db, noopNotifier, {
@@ -2185,6 +2205,7 @@ describe("migrate", () => {
           type: "local_path",
           hostId: host.id,
           path: "/tmp/side-chat-adoption",
+          pathKey: "/tmp/side-chat-adoption",
         },
       });
       const source = createThread(db, noopNotifier, {
@@ -2265,6 +2286,7 @@ describe("migrate", () => {
           type: "local_path",
           hostId: host.id,
           path: "/tmp/permission-migration-project",
+          pathKey: "/tmp/permission-migration-project",
         },
       });
       const sourceWithHistory = createThread(db, noopNotifier, {
@@ -2412,6 +2434,7 @@ describe("migrate", () => {
       dropMarketplaceCatalogSchema(db);
       dropEventParentToolCallIdColumn(db);
       dropQueueReworkSchema(db);
+      dropPathKeyColumns(db);
 
       restoreLegacyThreadOriginColumn(db);
       migrate(db);
@@ -2819,6 +2842,7 @@ describe("migrate", () => {
       dropMarketplaceCatalogSchema(db);
       dropEventParentToolCallIdColumn(db);
       dropQueueReworkSchema(db);
+      dropPathKeyColumns(db);
 
       restoreLegacyThreadOriginColumn(db);
       expect(
@@ -2923,6 +2947,7 @@ describe("migrate", () => {
       dropMarketplaceCatalogSchema(db);
       dropEventParentToolCallIdColumn(db);
       dropQueueReworkSchema(db);
+      dropPathKeyColumns(db);
 
       restoreLegacyThreadOriginColumn(db);
       expect(() => migrate(db)).not.toThrow();
@@ -4866,6 +4891,100 @@ describe("migrate", () => {
     }
   });
 
+  it("fails clearly before the path_key migration when live environments share a host path", () => {
+    const db = createConnection(":memory:");
+
+    try {
+      db.$client.exec(`
+        CREATE TABLE environments (
+          id text PRIMARY KEY,
+          project_id text NOT NULL,
+          host_id text NOT NULL,
+          path text,
+          status text NOT NULL
+        );
+        INSERT INTO environments (id, project_id, host_id, path, status) VALUES
+          ('env_a', 'proj_1', 'host_1', '/srv/repo', 'ready'),
+          ('env_b', 'proj_1', 'host_1', '/srv/repo', 'provisioning'),
+          ('env_c', 'proj_1', 'host_1', '/srv/repo', 'destroyed'),
+          ('env_d', 'proj_1', 'host_1', '/srv/other', 'ready');
+      `);
+
+      expect(() => migrate(db)).toThrow(
+        /Collisions: proj_1\/host_1\/\/srv\/repo ids=env_a, env_b\./u,
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("backfills path_key from path and installs the live-row unique index", () => {
+    const db = createConnection(":memory:");
+
+    try {
+      migrate(db);
+      db.$client.exec(`
+        DROP INDEX environments_live_path_key_idx;
+        DROP INDEX environments_host_path_key_idx;
+        DROP INDEX project_sources_host_path_key_idx;
+        ALTER TABLE environments DROP COLUMN path_key;
+        ALTER TABLE project_sources DROP COLUMN path_key;
+      `);
+      db.$client
+        .prepare<[number]>(
+          "DELETE FROM __drizzle_migrations WHERE created_at = ?",
+        )
+        .run(pathKeyMigrationWhen);
+      const host = upsertHost(db, noopNotifier, {
+        name: "host",
+        type: "persistent",
+      });
+      const now = Date.now();
+      db.$client
+        .prepare(
+          "INSERT INTO projects (id, name, sort_key, created_at, updated_at) VALUES ('proj_1', 'bb', 'a0', ?, ?)",
+        )
+        .run(now, now);
+      db.$client
+        .prepare(
+          "INSERT INTO project_sources (id, project_id, type, host_id, path, is_default, created_at, updated_at) VALUES ('src_1', 'proj_1', 'local_path', ?, '/srv/repo', 1, ?, ?)",
+        )
+        .run(host.id, now, now);
+      db.$client
+        .prepare(
+          "INSERT INTO environments (id, project_id, host_id, path, status, created_at, updated_at) VALUES ('env_1', 'proj_1', ?, '/srv/repo', 'ready', ?, ?)",
+        )
+        .run(host.id, now, now);
+
+      migrate(db);
+
+      expect(
+        db.$client
+          .prepare<[], { pathKey: string }>(
+            "SELECT path_key AS pathKey FROM project_sources WHERE id = 'src_1'",
+          )
+          .get(),
+      ).toEqual({ pathKey: "/srv/repo" });
+      expect(
+        db.$client
+          .prepare<[], { pathKey: string }>(
+            "SELECT path_key AS pathKey FROM environments WHERE id = 'env_1'",
+          )
+          .get(),
+      ).toEqual({ pathKey: "/srv/repo" });
+      expect(
+        db.$client
+          .prepare<[], { name: string; partial: number; unique: number }>(
+            "PRAGMA index_list(environments)",
+          )
+          .all()
+          .find((index) => index.name === "environments_live_path_key_idx"),
+      ).toMatchObject({ partial: 1, unique: 1 });
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("rejects a non-published migration row with a matching timestamp and wrong hash", () => {
     const db = createConnection(":memory:");
 
@@ -5415,6 +5534,7 @@ describe("migrate", () => {
           type: "local_path",
           hostId: host.id,
           path: "/tmp/side-chat-visibility",
+          pathKey: "/tmp/side-chat-visibility",
         },
       });
       const originKindSideChat = createThread(db, noopNotifier, {
@@ -5484,6 +5604,7 @@ describe("migrate", () => {
           type: "local_path",
           hostId: host.id,
           path: "/tmp/event-parent-migration",
+          pathKey: "/tmp/event-parent-migration",
         },
       });
       const thread = createThread(db, noopNotifier, {
@@ -5496,6 +5617,7 @@ describe("migrate", () => {
       dropEventParentToolCallIdColumn(db);
       dropMarketplaceStatsColumn(db);
       dropQueueReworkSchema(db);
+      dropPathKeyColumns(db);
       db.$client
         .prepare<DeleteMigrationParameters>(
           "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
@@ -5591,6 +5713,7 @@ describe("environment providers migration", () => {
     db.$client.prepare("DROP TABLE retained_event_outputs").run();
     rewindEnvironmentRowFactsMigration(db);
     rewindEnvironmentProvidersMigration(db);
+    dropPathKeyColumns(db);
     db.$client
       .prepare<[number]>(
         "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
@@ -5956,6 +6079,8 @@ describe("environment providers migration", () => {
 });
 
 describe("environment and thread startup ownership migration", () => {
+  const environmentProvisioningMigrationWhen = 1789075667774;
+
   it.each(["creating", "cancelled"])(
     "preserves %s allocation checkpoints and keeps attached environment resources authoritative",
     (phase) => {
@@ -5970,9 +6095,12 @@ describe("environment and thread startup ownership migration", () => {
           "utf8",
         ).split("--> statement-breakpoint")[0]!;
         db.$client.exec(legacySchema);
-        db.$client.exec(
-          "DELETE FROM __drizzle_migrations WHERE created_at = (SELECT MAX(created_at) FROM __drizzle_migrations)",
-        );
+        dropPathKeyColumns(db);
+        db.$client
+          .prepare<[number]>(
+            "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+          )
+          .run(environmentProvisioningMigrationWhen);
         db.$client.exec(`
         INSERT INTO hosts (id, name, type, created_at, updated_at) VALUES ('host_ownership', 'test', 'persistent', 1, 1);
         INSERT INTO projects (id, name, created_at, updated_at) VALUES ('proj_ownership', 'test', 1, 1);

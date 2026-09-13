@@ -23,7 +23,12 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/source" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/source",
+      pathKey: "/tmp/source",
+    },
   });
   const environment = createEnvironment(db, noopNotifier, {
     providerOwnsPath: false,

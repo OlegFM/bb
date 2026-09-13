@@ -33,6 +33,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/same-project",
+        pathKey: "/tmp/same-project",
       },
     });
 
@@ -42,11 +43,39 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/same-project",
+        pathKey: "/tmp/same-project",
       },
     });
 
     expect(repeated).toEqual(first);
     expect(listPublicProjects(db)).toEqual([first.project]);
+  });
+
+  it("returns the existing project for a differently spelled path with the same key", () => {
+    const { db, host } = setup();
+    const first = findOrCreateProjectByLocalPathSource(db, noopNotifier, {
+      name: "bb",
+      source: {
+        type: "local_path",
+        hostId: host.id,
+        path: "C:\\Work\\bb",
+        pathKey: "c:/work/bb",
+      },
+    });
+    const second = findOrCreateProjectByLocalPathSource(db, noopNotifier, {
+      name: "bb again",
+      source: {
+        type: "local_path",
+        hostId: host.id,
+        path: "c:\\work\\BB",
+        pathKey: "c:/work/bb",
+      },
+    });
+    expect(second.project.id).toBe(first.project.id);
+    expect(second.source.path).toBe("C:\\Work\\bb");
+    expect(
+      listProjects(db).filter((project) => project.id === first.project.id),
+    ).toHaveLength(1);
   });
 
   it("allows the same path on different hosts", () => {
@@ -62,6 +91,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/shared-path",
+        pathKey: "/tmp/shared-path",
       },
     });
     const second = findOrCreateProjectByLocalPathSource(db, noopNotifier, {
@@ -70,6 +100,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: otherHost.id,
         path: "/tmp/shared-path",
+        pathKey: "/tmp/shared-path",
       },
     });
 
@@ -85,6 +116,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/anchored-project",
+        pathKey: "/tmp/anchored-project",
       },
     });
 
@@ -131,6 +163,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/visible-project",
+        pathKey: "/tmp/visible-project",
       },
     });
     const { project: deletingProject } = createProject(db, noopNotifier, {
@@ -139,6 +172,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/deleting-project",
+        pathKey: "/tmp/deleting-project",
       },
     });
 
@@ -168,6 +202,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/first-project",
+        pathKey: "/tmp/first-project",
       },
     });
     const { project: secondProject } = createProject(db, noopNotifier, {
@@ -176,6 +211,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/second-project",
+        pathKey: "/tmp/second-project",
       },
     });
     const { project: thirdProject } = createProject(db, noopNotifier, {
@@ -184,6 +220,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/third-project",
+        pathKey: "/tmp/third-project",
       },
     });
 
@@ -211,6 +248,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/first-project",
+        pathKey: "/tmp/first-project",
       },
     });
     const { project: secondProject } = createProject(db, noopNotifier, {
@@ -219,6 +257,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/second-project",
+        pathKey: "/tmp/second-project",
       },
     });
     const { project: thirdProject } = createProject(db, noopNotifier, {
@@ -227,6 +266,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/third-project",
+        pathKey: "/tmp/third-project",
       },
     });
 
@@ -271,6 +311,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/first-project",
+        pathKey: "/tmp/first-project",
       },
     });
     const { project: secondProject } = createProject(db, noopNotifier, {
@@ -279,6 +320,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/second-project",
+        pathKey: "/tmp/second-project",
       },
     });
     const { project: thirdProject } = createProject(db, noopNotifier, {
@@ -287,6 +329,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/third-project",
+        pathKey: "/tmp/third-project",
       },
     });
 
@@ -314,6 +357,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/first-project",
+        pathKey: "/tmp/first-project",
       },
     });
     const { project: secondProject } = createProject(db, noopNotifier, {
@@ -322,6 +366,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/second-project",
+        pathKey: "/tmp/second-project",
       },
     });
 
@@ -339,6 +384,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/third-project",
+        pathKey: "/tmp/third-project",
       },
     });
 
@@ -357,6 +403,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/visible-project",
+        pathKey: "/tmp/visible-project",
       },
     });
     const { project: deletingProject } = createProject(db, noopNotifier, {
@@ -365,6 +412,7 @@ describe("projects", () => {
         type: "local_path",
         hostId: host.id,
         path: "/tmp/deleting-project",
+        pathKey: "/tmp/deleting-project",
       },
     });
     markProjectDeleted(db, noopNotifier, {

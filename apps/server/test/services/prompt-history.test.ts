@@ -41,11 +41,21 @@ function setup() {
   });
   const firstProject = createProject(db, noopNotifier, {
     name: "Project A",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/project-a" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/project-a",
+      pathKey: "/tmp/project-a",
+    },
   }).project;
   const secondProject = createProject(db, noopNotifier, {
     name: "Project B",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/project-b" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/project-b",
+      pathKey: "/tmp/project-b",
+    },
   }).project;
   return { db, firstProject, secondProject };
 }

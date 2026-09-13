@@ -21,19 +21,21 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "project-a",
-    source: { type: "local_path", hostId: hostA.id, path: "/tmp/a" },
+    source: { type: "local_path", hostId: hostA.id, path: "/tmp/a", pathKey: "/tmp/a" },
   });
   const environmentA = createEnvironment(db, noopNotifier, {
       providerOwnsPath: false,
     hostId: hostA.id,
     projectId: project.id,
     path: "/tmp/a",
+    pathKey: "/tmp/a",
   });
   const environmentB = createEnvironment(db, noopNotifier, {
       providerOwnsPath: false,
     hostId: hostB.id,
     projectId: project.id,
     path: "/tmp/b",
+    pathKey: "/tmp/b",
   });
   return { db, environmentA, environmentB, hostA, hostB, project };
 }

@@ -15,6 +15,7 @@ export interface CreateProjectLocalPathSourceInput {
   type: "local_path";
   hostId: string;
   path: string;
+  pathKey: string;
 }
 
 export type CreateProjectSourceInput = CreateProjectLocalPathSourceInput;
@@ -120,7 +121,7 @@ function getPublicProjectWithLocalPathSource(
           publicProjectFilter(),
           eq(projectSources.type, source.type),
           eq(projectSources.hostId, source.hostId),
-          eq(projectSources.path, source.path),
+          eq(projectSources.pathKey, source.pathKey),
         ),
       )
       .orderBy(asc(projects.sortKey), asc(projects.id))
@@ -163,6 +164,7 @@ function insertProject(tx: DbTransaction, input: CreateProjectInput) {
       type: input.source.type,
       hostId: input.source.hostId,
       path: input.source.path,
+      pathKey: input.source.pathKey,
       isDefault: true,
       createdAt: now,
       updatedAt: now,

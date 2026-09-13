@@ -17,6 +17,7 @@ import {
   HOST_ID_FILE_NAME,
 } from "@bb/host-daemon-contract";
 import {
+  buildHostPathKey,
   encodeClientTurnRequestIdNumber,
   parseStoredThreadEvent,
   threadScope,
@@ -127,12 +128,14 @@ export function seedProjectWithSource(
   deps: Pick<AppDeps, "db" | "hub">,
   args: { hostId: string; name?: string; path?: string },
 ) {
+  const path = args.path ?? "/tmp/test-project";
   const { project, source } = createProject(deps.db, deps.hub, {
     name: args.name ?? "Test Project",
     source: {
       type: "local_path",
       hostId: args.hostId,
-      path: args.path ?? "/tmp/test-project",
+      path,
+      pathKey: buildHostPathKey(path),
     },
   });
   if (source.type !== "local_path") {
@@ -160,11 +163,13 @@ export function seedEnvironment(
     mergeBaseBranch?: string | null;
   },
 ) {
+  const path = args.path !== undefined ? args.path : "/tmp/test-environment";
   return createEnvironment(deps.db, deps.hub, {
     providerOwnsPath: args.providerOwnsPath ?? false,
     projectId: args.projectId,
     hostId: args.hostId,
-    path: args.path !== undefined ? args.path : "/tmp/test-environment",
+    path,
+    pathKey: path === null ? null : buildHostPathKey(path),
     status: args.status ?? "ready",
     isGitRepo: args.isGitRepo ?? true,
     ...(args.environmentProviderId !== undefined

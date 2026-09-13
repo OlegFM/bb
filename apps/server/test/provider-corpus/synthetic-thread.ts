@@ -460,7 +460,12 @@ export function createSyntheticThread(minimumEvents: number): SyntheticThread {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "synthetic-project",
-    source: { type: "local_path", hostId: host.id, path: "/workspace/project" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/workspace/project",
+      pathKey: "/workspace/project",
+    },
   });
   const thread = createThread(db, noopNotifier, {
     projectId: project.id,

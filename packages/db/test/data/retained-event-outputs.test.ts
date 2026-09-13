@@ -39,6 +39,7 @@ function setup(options: CreateConnectionOptions = {}) {
       type: "local_path",
       hostId: host.id,
       path: "/tmp/retained-output",
+      pathKey: "/tmp/retained-output",
     },
   });
   const source = createThread(db, noopNotifier, {

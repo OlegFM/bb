@@ -4,12 +4,12 @@ import {
   createEnvironment,
   type EnvironmentRow,
   createEventId,
-  findProjectEnvironmentByHostPath,
+  findProjectEnvironmentByHostPathKey,
   getEnvironment,
   getThread,
   updateThread,
 } from "@bb/db";
-import { turnScope } from "@bb/domain";
+import { buildHostPathKey, turnScope } from "@bb/domain";
 import type { DynamicTool, Thread, ToolCallResponse } from "@bb/domain";
 import type { AppDeps } from "../../types.js";
 import { runLiveHostCommand } from "../hosts/live-command.js";
@@ -303,11 +303,11 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     );
   }
 
-  const existingEnvironment = findProjectEnvironmentByHostPath(
+  const existingEnvironment = findProjectEnvironmentByHostPathKey(
     deps.db,
     args.thread.projectId,
     args.currentEnvironment.hostId,
-    normalizedPath,
+    buildHostPathKey(normalizedPath),
   );
   let createdEnvironment = false;
   let targetEnvironment: ReadyEnvironment;

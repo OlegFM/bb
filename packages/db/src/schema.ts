@@ -418,6 +418,7 @@ export const projectSources = sqliteTable(
     type: text("type").$type<ProjectSourceType>().notNull(),
     hostId: text("host_id").references(() => hosts.id, { onDelete: "cascade" }),
     path: text("path"),
+    pathKey: text("path_key"),
     isDefault: integer("is_default", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -427,6 +428,7 @@ export const projectSources = sqliteTable(
   (table) => [
     index("project_sources_project_idx").on(table.projectId),
     index("project_sources_host_idx").on(table.hostId),
+    index("project_sources_host_path_key_idx").on(table.hostId, table.pathKey),
     uniqueIndex("project_sources_project_host_idx").on(
       table.projectId,
       table.hostId,
@@ -452,6 +454,7 @@ export const environments = sqliteTable(
       .notNull()
       .references(() => hosts.id, { onDelete: "cascade" }),
     path: text("path"),
+    pathKey: text("path_key"),
     isGitRepo: integer("is_git_repo", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -497,6 +500,12 @@ export const environments = sqliteTable(
       table.path,
     ),
     index("environments_host_path_lookup_idx").on(table.hostId, table.path),
+    index("environments_host_path_key_idx").on(table.hostId, table.pathKey),
+    uniqueIndex("environments_live_path_key_idx")
+      .on(table.projectId, table.hostId, table.pathKey)
+      .where(
+        sql`${table.status} != 'destroyed' AND ${table.pathKey} IS NOT NULL`,
+      ),
     uniqueIndex("environments_owner_thread_idx").on(table.ownerThreadId),
     index("environments_claim_idx").on(table.hostId, table.claimPath),
     index("environments_project_idx").on(table.projectId),

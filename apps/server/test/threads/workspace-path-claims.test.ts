@@ -106,6 +106,7 @@ describe("foreignProviderOwnedPathRefusal for provider-produced environments", (
         hostId: host.id,
         projectId: owner.id,
         path: "/plugins/environment-git-worktree/worktrees/thr_1/repo",
+        pathKey: "/plugins/environment-git-worktree/worktrees/thr_1/repo",
         status: "ready",
         providerOwnsPath: true,
         environmentProvider: {

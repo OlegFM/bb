@@ -126,13 +126,19 @@ function setup(status: ThreadStatus): Setup {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "Lifecycle Outcome Project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/lifecycle" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/lifecycle",
+      pathKey: "/tmp/lifecycle",
+    },
   });
   const environment = createEnvironment(db, noopNotifier, {
     providerOwnsPath: false,
     hostId: host.id,
     projectId: project.id,
     path: "/tmp/lifecycle/env",
+    pathKey: "/tmp/lifecycle/env",
     status: "ready",
   });
   const thread = createThread(db, noopNotifier, {

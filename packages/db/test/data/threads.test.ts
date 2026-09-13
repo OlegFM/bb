@@ -51,7 +51,7 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/test", pathKey: "/tmp/test" },
   });
   return { db, host, project };
 }
@@ -381,7 +381,7 @@ describe("threads", () => {
     const { db, host, project } = setup();
     const { project: otherProject } = createProject(db, noopNotifier, {
       name: "other-project",
-      source: { type: "local_path", hostId: host.id, path: "/tmp/other" },
+      source: { type: "local_path", hostId: host.id, path: "/tmp/other", pathKey: "/tmp/other" },
     });
     const first = createThread(db, noopNotifier, {
       projectId: project.id,
@@ -571,7 +571,7 @@ describe("threads", () => {
     const { db, host, project } = setup();
     const { project: otherProject } = createProject(db, noopNotifier, {
       name: "other-project",
-      source: { type: "local_path", hostId: host.id, path: "/tmp/other" },
+      source: { type: "local_path", hostId: host.id, path: "/tmp/other", pathKey: "/tmp/other" },
     });
     createThread(db, noopNotifier, {
       projectId: project.id,
@@ -1013,7 +1013,7 @@ describe("threads", () => {
     const { db, host, project } = setup();
     const { project: otherProject } = createProject(db, noopNotifier, {
       name: "other-project",
-      source: { type: "local_path", hostId: host.id, path: "/tmp/other" },
+      source: { type: "local_path", hostId: host.id, path: "/tmp/other", pathKey: "/tmp/other" },
     });
     const section = mustCreateThreadSection(db, "Work");
     const projectThread = createThread(db, noopNotifier, {
@@ -1082,6 +1082,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/test-workspace",
+      pathKey: "/tmp/test-workspace",
       status: "ready",
     });
     const thread = createThread(db, noopNotifier, {
@@ -1275,6 +1276,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/thread-live-count",
+      pathKey: "/tmp/thread-live-count",
       status: "ready",
     });
     const liveThread = createThread(db, noopNotifier, {
@@ -1320,6 +1322,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/thread-host-match",
+      pathKey: "/tmp/thread-host-match",
       status: "ready",
     });
     const otherEnvironment = createEnvironment(db, noopNotifier, {
@@ -1327,6 +1330,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: otherHost.id,
       path: "/tmp/thread-host-other",
+      pathKey: "/tmp/thread-host-other",
       status: "ready",
     });
     const matchingThread = createThread(db, noopNotifier, {
@@ -1363,6 +1367,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/thread-host-match",
+      pathKey: "/tmp/thread-host-match",
       status: "ready",
     });
     const otherEnvironment = createEnvironment(db, noopNotifier, {
@@ -1370,6 +1375,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: otherHost.id,
       path: "/tmp/thread-host-other",
+      pathKey: "/tmp/thread-host-other",
       status: "ready",
     });
     const activeThread = createThread(db, noopNotifier, {
@@ -1418,6 +1424,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/thread-storage-targets",
+      pathKey: "/tmp/thread-storage-targets",
       status: "ready",
     });
     const destroyedEnvironment = createEnvironment(db, noopNotifier, {
@@ -1425,6 +1432,7 @@ describe("threads", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/destroyed-thread-storage-targets",
+      pathKey: "/tmp/destroyed-thread-storage-targets",
       status: "destroyed",
     });
     const activeThread = createThread(db, noopNotifier, {

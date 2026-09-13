@@ -196,13 +196,14 @@ function setup(): TerminalSessionFixture {
   const session = openTestSession(db, host.id);
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/project" },
+    source: { type: "local_path", hostId: host.id, path: "/tmp/project", pathKey: "/tmp/project" },
   });
   const environment = createEnvironment(db, noopNotifier, {
       providerOwnsPath: false,
     projectId: project.id,
     hostId: host.id,
     path: "/tmp/workspace",
+    pathKey: "/tmp/workspace",
     status: "ready",
     isGitRepo: true,
     branchName: "main",

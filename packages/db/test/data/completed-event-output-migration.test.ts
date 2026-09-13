@@ -37,6 +37,7 @@ function setup() {
     source: {
       hostId: host.id,
       path: "/tmp/completed-output-migration",
+      pathKey: "/tmp/completed-output-migration",
       type: "local_path",
     },
   });

@@ -4,8 +4,8 @@ import { noopNotifier } from "../../src/notifier.js";
 import type { DbNotifier } from "../../src/notifier.js";
 import {
   createEnvironment,
-  findForeignManagedEnvironmentAtHostPath,
-  findProviderEnvironmentContainingPath,
+  findForeignManagedEnvironmentAtHostPathKey,
+  findProviderEnvironmentContainingPathKey,
   listRetiredLoadedEnvironmentIdsOnHost,
   recordEnvironmentCurrentBranch,
   recordProvisionedEnvironmentWorkspace,
@@ -24,7 +24,12 @@ function setup() {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/test",
+      pathKey: "/tmp/test",
+    },
   });
   return { db, host, project };
 }
@@ -47,6 +52,7 @@ describe("environments", () => {
       projectId: project.id,
       hostId: host.id,
       path: "/tmp/teardown-path",
+      pathKey: "/tmp/teardown-path",
       status: "ready",
     });
     db.update(environments)
@@ -60,9 +66,84 @@ describe("environments", () => {
         projectId: project.id,
         hostId: host.id,
         path: "/tmp/teardown-path",
+        pathKey: "/tmp/teardown-path",
         status: "provisioning",
       }),
     ).toThrow(/unique/iu);
+  });
+
+  it("keeps one live environment per path key regardless of spelling", () => {
+    const { db, host, project } = setup();
+    createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      path: "C:\\Work\\bb",
+      pathKey: "c:/work/bb",
+      providerOwnsPath: false,
+    });
+    expect(() =>
+      createEnvironment(db, noopNotifier, {
+        projectId: project.id,
+        hostId: host.id,
+        path: "c:\\work\\BB",
+        pathKey: "c:/work/bb",
+        providerOwnsPath: false,
+      }),
+    ).toThrow(/environments_live_path_key_idx|UNIQUE/u);
+  });
+
+  it("lets a destroyed environment's path key be reused", () => {
+    const { db, host, project } = setup();
+    const first = createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      path: "/srv/repo",
+      pathKey: "/srv/repo",
+      providerOwnsPath: false,
+    });
+    db.update(environments)
+      .set({ status: "destroyed", path: null, pathKey: null })
+      .where(eq(environments.id, first.id))
+      .run();
+    expect(
+      createEnvironment(db, noopNotifier, {
+        projectId: project.id,
+        hostId: host.id,
+        path: "/srv/repo",
+        pathKey: "/srv/repo",
+        providerOwnsPath: false,
+      }).pathKey,
+    ).toBe("/srv/repo");
+  });
+
+  it("refuses a path without its key", () => {
+    const { db, host, project } = setup();
+    expect(() =>
+      createEnvironment(db, noopNotifier, {
+        projectId: project.id,
+        hostId: host.id,
+        path: "/srv/repo",
+        providerOwnsPath: false,
+      }),
+    ).toThrow(/pathKey/u);
+  });
+
+  it("finds provider environments containing a Windows path key", () => {
+    const { db, host, project } = setup();
+    const owner = createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      path: "C:\\Work\\bb",
+      pathKey: "c:/work/bb",
+      providerOwnsPath: true,
+    });
+    expect(
+      findProviderEnvironmentContainingPathKey(db, "c:/work/bb/packages/x")?.id,
+    ).toBe(owner.id);
+    expect(findProviderEnvironmentContainingPathKey(db, "c:/work/bb")?.id).toBe(
+      owner.id,
+    );
+    expect(findProviderEnvironmentContainingPathKey(db, "c:/work/bbx")).toBeNull();
   });
 
   it("emits metadata-changed when merge base branch changes", () => {
@@ -159,6 +240,7 @@ describe("environments", () => {
       environment.id,
       {
         path: "/tmp/project",
+        pathKey: "/tmp/project",
         isGitRepo: true,
         isWorktree: true,
         branchName: "bb/test",
@@ -168,6 +250,7 @@ describe("environments", () => {
 
     expect(updated).toMatchObject({
       path: "/tmp/project",
+      pathKey: "/tmp/project",
       status: "provisioning",
       isGitRepo: true,
       isWorktree: true,
@@ -254,6 +337,7 @@ describe("environments", () => {
         type: "local_path",
         hostId: otherHost.id,
         path: "/tmp/other",
+        pathKey: "/tmp/other",
       },
     });
     const retainedEnvironment = createEnvironment(db, noopNotifier, {
@@ -302,6 +386,7 @@ describe("environment path claims", () => {
       projectId: args.project.id,
       hostId: args.host.id,
       path: input.path,
+      pathKey: input.path,
       status: "ready",
       providerOwnsPath: input.providerOwnsPath,
       environmentProvider: {
@@ -329,13 +414,13 @@ describe("environment path claims", () => {
     });
 
     expect(
-      findProviderEnvironmentContainingPath(fixture.db, "/tmp/attached"),
+      findProviderEnvironmentContainingPathKey(fixture.db, "/tmp/attached"),
     ).toBeNull();
     expect(
-      findProviderEnvironmentContainingPath(fixture.db, "/tmp/attached/pkg"),
+      findProviderEnvironmentContainingPathKey(fixture.db, "/tmp/attached/pkg"),
     ).toBeNull();
     expect(
-      findProviderEnvironmentContainingPath(fixture.db, "/tmp/owned/pkg")?.id,
+      findProviderEnvironmentContainingPathKey(fixture.db, "/tmp/owned/pkg")?.id,
     ).toBe(owned.id);
   });
 
@@ -347,6 +432,7 @@ describe("environment path claims", () => {
         type: "local_path",
         hostId: fixture.host.id,
         path: "/tmp/other",
+        pathKey: "/tmp/other",
       },
     });
     seedClaim(fixture, {
@@ -361,16 +447,16 @@ describe("environment path claims", () => {
     });
 
     expect(
-      findForeignManagedEnvironmentAtHostPath(fixture.db, {
+      findForeignManagedEnvironmentAtHostPathKey(fixture.db, {
         hostId: fixture.host.id,
-        path: "/tmp/shared-checkout",
+        pathKey: "/tmp/shared-checkout",
         projectId: other.id,
       }),
     ).toBeNull();
     expect(
-      findForeignManagedEnvironmentAtHostPath(fixture.db, {
+      findForeignManagedEnvironmentAtHostPathKey(fixture.db, {
         hostId: fixture.host.id,
-        path: "/tmp/owned-worktree",
+        pathKey: "/tmp/owned-worktree",
         projectId: other.id,
       })?.id,
     ).toBe(owned.id);

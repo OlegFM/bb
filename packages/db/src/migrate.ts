@@ -134,6 +134,14 @@ interface PendingInteractionProviderRequestDuplicateRow {
   providerThreadId: string;
 }
 
+interface LiveEnvironmentPathCollisionRow {
+  projectId: string;
+  hostId: string;
+  path: string;
+  ids: string;
+  duplicateCount: number;
+}
+
 type AppliedMigrationHistoryViolationReason =
   | "hash-mismatch"
   | "missing-created-at";
@@ -799,6 +807,54 @@ function assertNoDuplicatePendingInteractionProviderRequests(
         .map(
           (row) =>
             `${row.providerId}/${row.providerThreadId}/${row.providerRequestId} count=${row.duplicateCount}`,
+        )
+        .join("; ")}.`,
+    ].join(" "),
+  );
+}
+
+function assertNoLiveEnvironmentPathCollisions(db: DbConnection): void {
+  const columnNames = getTableInfo(db, "environments").map(
+    (column) => column.name,
+  );
+  if (
+    columnNames.includes("path_key") ||
+    !columnNames.includes("path") ||
+    !columnNames.includes("status")
+  ) {
+    return;
+  }
+
+  const collisions = db.$client
+    .prepare<[], LiveEnvironmentPathCollisionRow>(
+      `
+        SELECT
+          project_id AS projectId,
+          host_id AS hostId,
+          path,
+          GROUP_CONCAT(id, ', ') AS ids,
+          COUNT(*) AS duplicateCount
+        FROM environments
+        WHERE path IS NOT NULL
+          AND status != 'destroyed'
+        GROUP BY project_id, host_id, path
+        HAVING COUNT(*) > 1
+        ORDER BY duplicateCount DESC, project_id, host_id, path
+        LIMIT 10
+      `,
+    )
+    .all();
+  if (collisions.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    [
+      "Cannot add environments.path_key because live environments already share a path on one host.",
+      "Each project keeps one live environment per host path; destroy or delete the duplicates before restarting.",
+      `Collisions: ${collisions
+        .map(
+          (row) => `${row.projectId}/${row.hostId}/${row.path} ids=${row.ids}`,
         )
         .join("; ")}.`,
     ].join(" "),
@@ -1488,6 +1544,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   sqlite.pragma("foreign_keys = OFF");
   try {
     assertNoDuplicatePendingInteractionProviderRequests(db);
+    assertNoLiveEnvironmentPathCollisions(db);
     if (options.deferDestructiveLegacyCleanup === true) {
       applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
     }

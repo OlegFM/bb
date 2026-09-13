@@ -1386,12 +1386,18 @@ function seedEnvironmentAtPath(
   });
   const { project } = createProject(db, noopNotifier, {
     name: "Plugin source project",
-    source: { type: "local_path", hostId: host.id, path: args.path },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: args.path,
+      pathKey: args.path,
+    },
   });
   createEnvironment(db, noopNotifier, {
     projectId: project.id,
     hostId: host.id,
     path: args.path,
+    pathKey: args.path,
     status: "ready",
     providerOwnsPath: args.providerOwnsPath,
     environmentProvider: {

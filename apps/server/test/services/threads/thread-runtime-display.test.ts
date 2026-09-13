@@ -189,6 +189,7 @@ function createThreadWithEnvironment(args: CreateThreadWithEnvironmentArgs) {
       type: "local_path",
       hostId: args.hostId,
       path: `/tmp/${args.hostId}/project/${suffix}`,
+      pathKey: `/tmp/${args.hostId}/project/${suffix}`,
     },
   });
   const environment = createEnvironment(args.db, noopNotifier, {
@@ -196,6 +197,7 @@ function createThreadWithEnvironment(args: CreateThreadWithEnvironmentArgs) {
     hostId: args.hostId,
     projectId: project.id,
     path: `/tmp/${args.hostId}/environment/${suffix}`,
+    pathKey: `/tmp/${args.hostId}/environment/${suffix}`,
     status: "ready",
     environmentProvider:
       args.environmentProviderId === undefined

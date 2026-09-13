@@ -12,6 +12,7 @@ export interface CreateLocalPathProjectSourceInput {
   type: "local_path";
   hostId: string;
   path: string;
+  pathKey: string;
   isDefault?: boolean;
 }
 
@@ -64,6 +65,7 @@ export function createProjectSource(
         type: input.type,
         hostId: input.hostId,
         path: input.path,
+        pathKey: input.pathKey,
         isDefault: shouldBeDefault,
         createdAt: now,
         updatedAt: now,
@@ -153,7 +155,7 @@ export function countProjectSources(
 }
 
 export interface UpdateLocalPathProjectSourceInput {
-  path?: string;
+  location?: { path: string; pathKey: string };
   isDefault?: true;
 }
 
@@ -182,12 +184,13 @@ export function updateProjectSource(
         .where(eq(projectSources.projectId, existing.projectId))
         .run();
     }
-    const { isDefault: _isDefault, ...rest } = input;
     const updatedRow =
       tx
         .update(projectSources)
         .set({
-          ...rest,
+          ...(input.location
+            ? { path: input.location.path, pathKey: input.location.pathKey }
+            : {}),
           ...(input.isDefault ? { isDefault: true } : {}),
           updatedAt: now,
         })

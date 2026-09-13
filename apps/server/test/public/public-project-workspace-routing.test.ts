@@ -186,6 +186,7 @@ describe("public project workspace routing", () => {
         projectId: project.id,
         hostId: remoteHost.id,
         path: "/remote/project",
+        pathKey: "/remote/project",
         type: "local_path",
       });
       const environment = seedEnvironment(harness.deps, {

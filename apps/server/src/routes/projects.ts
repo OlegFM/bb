@@ -47,7 +47,7 @@ import {
   requirePublicProject,
   requirePublicStandardProject,
 } from "../services/lib/entity-lookup.js";
-import { PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
+import { buildHostPathKey, PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
 import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
 import { runLiveHostCommand } from "../services/hosts/live-command.js";
@@ -357,7 +357,10 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   );
 
   post(routes.create, async (context, payload) => {
-    const { source } = payload;
+    const source = {
+      ...payload.source,
+      pathKey: buildHostPathKey(payload.source.path),
+    };
     if (source.type === "local_path") {
       requireNonDestroyedHostWithStatus(deps, source.hostId);
       assertUsableHostId(deps, { hostId: source.hostId });
@@ -506,6 +509,7 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
         type: "local_path",
         hostId: payload.hostId,
         path: resolved.path,
+        pathKey: buildHostPathKey(resolved.path),
       });
     } catch (error) {
       if (
@@ -553,7 +557,14 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
       deps.hub,
       context.req.param("sourceId"),
       {
-        ...(payload.path ? { path: payload.path } : {}),
+        ...(payload.path
+          ? {
+              location: {
+                path: payload.path,
+                pathKey: buildHostPathKey(payload.path),
+              },
+            }
+          : {}),
         ...(payload.isDefault ? { isDefault: payload.isDefault } : {}),
       },
     );

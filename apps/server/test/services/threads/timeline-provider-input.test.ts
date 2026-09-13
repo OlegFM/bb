@@ -31,7 +31,12 @@ function setup(): { db: DbConnection; thread: Thread } {
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
-    source: { type: "local_path", hostId: host.id, path: "/tmp/test" },
+    source: {
+      type: "local_path",
+      hostId: host.id,
+      path: "/tmp/test",
+      pathKey: "/tmp/test",
+    },
   });
   const thread = createThread(db, noopNotifier, {
     projectId: project.id,
