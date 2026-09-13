@@ -9,10 +9,12 @@ import {
   listRetiredLoadedEnvironmentIdsOnHost,
   recordEnvironmentCurrentBranch,
   recordProvisionedEnvironmentWorkspace,
+  reserveEnvironment,
   updateEnvironmentMetadata,
 } from "../../src/data/environments.js";
 import { environments } from "../../src/schema.js";
 import { createProject } from "../../src/data/projects.js";
+import { createThread } from "../../src/data/threads.js";
 import { upsertHost } from "../../src/data/hosts.js";
 import { createMigratedConnection } from "../helpers/migrated-connection.js";
 
@@ -116,6 +118,37 @@ describe("environments", () => {
     ).toBe("/srv/repo");
   });
 
+  it("frees a path key for a destroyed environment that kept its key", () => {
+    const { db, host, project } = setup();
+    const first = createEnvironment(db, noopNotifier, {
+      projectId: project.id,
+      hostId: host.id,
+      path: "C:\Work\bb",
+      pathKey: "c:/work/bb",
+      providerOwnsPath: false,
+    });
+    db.update(environments)
+      .set({ status: "destroyed" })
+      .where(eq(environments.id, first.id))
+      .run();
+    expect(
+      createEnvironment(db, noopNotifier, {
+        projectId: project.id,
+        hostId: host.id,
+        path: "c:\work\BB",
+        pathKey: "c:/work/bb",
+        providerOwnsPath: false,
+      }).pathKey,
+    ).toBe("c:/work/bb");
+    expect(
+      db
+        .select({ pathKey: environments.pathKey })
+        .from(environments)
+        .where(eq(environments.id, first.id))
+        .get()?.pathKey,
+    ).toBe("c:/work/bb");
+  });
+
   it("refuses a path without its key", () => {
     const { db, host, project } = setup();
     expect(() =>
@@ -123,6 +156,23 @@ describe("environments", () => {
         projectId: project.id,
         hostId: host.id,
         path: "/srv/repo",
+        providerOwnsPath: false,
+      }),
+    ).toThrow(/pathKey/u);
+  });
+
+  it("refuses a reserved path without its key", () => {
+    const { db, host, project } = setup();
+    const thread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      providerId: "codex",
+    });
+    expect(() =>
+      reserveEnvironment(db, {
+        projectId: project.id,
+        hostId: host.id,
+        ownerThreadId: thread.id,
+        path: "/srv/reserved",
         providerOwnsPath: false,
       }),
     ).toThrow(/pathKey/u);

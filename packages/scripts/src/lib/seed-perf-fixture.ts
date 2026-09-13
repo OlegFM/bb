@@ -9,6 +9,7 @@ import {
   threads,
   type DbConnection,
 } from "@bb/db";
+import { buildHostPathKey } from "@bb/domain";
 
 export interface SeedPerfFixtureOptions {
   hostId: string;
@@ -817,6 +818,7 @@ export function seedPerfFixture(
       type: "local_path",
       hostId: options.hostId,
       path: workspacePath,
+      pathKey: buildHostPathKey(workspacePath),
       isDefault: true,
       createdAt,
       updatedAt: createdAt,
@@ -828,6 +830,7 @@ export function seedPerfFixture(
       projectId,
       hostId: options.hostId,
       path: workspacePath,
+      pathKey: buildHostPathKey(workspacePath),
       isGitRepo: true,
       branchName: "main",
       baseBranch: null,
@@ -899,12 +902,14 @@ export function seedPerfFixture(
       let environmentId = project.rootEnvironmentId;
       if (usesWorktree) {
         environmentId = `env_${rng.idSuffix()}`;
+        const worktreePath = `${options.workspacesRootPath}/plugins/environment-git-worktree/host-data/worktrees/${threadId}/${project.name}`;
         environmentRows.push({
           id: environmentId,
           name: null,
           projectId: project.id,
           hostId: options.hostId,
-          path: `${options.workspacesRootPath}/plugins/environment-git-worktree/host-data/worktrees/${threadId}/${project.name}`,
+          path: worktreePath,
+          pathKey: buildHostPathKey(worktreePath),
           isGitRepo: true,
           branchName: `bb/${title
             .toLowerCase()

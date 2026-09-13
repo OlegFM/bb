@@ -4918,6 +4918,56 @@ describe("migrate", () => {
     }
   });
 
+  it("adds path_key when several live environments share a host without a path", () => {
+    const db = createConnection(":memory:");
+
+    try {
+      migrate(db);
+      db.$client.exec(`
+        DROP INDEX environments_live_path_key_idx;
+        DROP INDEX environments_host_path_key_idx;
+        DROP INDEX project_sources_host_path_key_idx;
+        ALTER TABLE environments DROP COLUMN path_key;
+        ALTER TABLE project_sources DROP COLUMN path_key;
+      `);
+      db.$client
+        .prepare<[number]>(
+          "DELETE FROM __drizzle_migrations WHERE created_at = ?",
+        )
+        .run(pathKeyMigrationWhen);
+      const host = upsertHost(db, noopNotifier, {
+        name: "host",
+        type: "persistent",
+      });
+      const now = Date.now();
+      db.$client
+        .prepare(
+          "INSERT INTO projects (id, name, sort_key, created_at, updated_at) VALUES ('proj_1', 'bb', 'a0', ?, ?)",
+        )
+        .run(now, now);
+      const insertEnvironment = db.$client.prepare(
+        "INSERT INTO environments (id, project_id, host_id, path, status, created_at, updated_at) VALUES (?, 'proj_1', ?, NULL, 'provisioning', ?, ?)",
+      );
+      insertEnvironment.run("env_pending_1", host.id, now, now);
+      insertEnvironment.run("env_pending_2", host.id, now, now);
+
+      expect(() => migrate(db)).not.toThrow();
+
+      expect(
+        db.$client
+          .prepare<[], { id: string; pathKey: string | null }>(
+            "SELECT id, path_key AS pathKey FROM environments ORDER BY id",
+          )
+          .all(),
+      ).toEqual([
+        { id: "env_pending_1", pathKey: null },
+        { id: "env_pending_2", pathKey: null },
+      ]);
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("backfills path_key from path and installs the live-row unique index", () => {
     const db = createConnection(":memory:");
 

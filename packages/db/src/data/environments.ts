@@ -38,14 +38,21 @@ export interface CreateEnvironmentInput {
   } | null;
 }
 
+function assertPathAndKeyTravelTogether(input: {
+  path?: string | null;
+  pathKey?: string | null;
+}): void {
+  if ((input.path == null) !== (input.pathKey == null)) {
+    throw new Error("Environment path and pathKey must be set together");
+  }
+}
+
 export function createEnvironment(
   db: EnvironmentWriteConnection,
   notifier: DbNotifier,
   input: CreateEnvironmentInput,
 ) {
-  if ((input.path == null) !== (input.pathKey == null)) {
-    throw new Error("Environment path and pathKey must be set together");
-  }
+  assertPathAndKeyTravelTogether(input);
   const now = Date.now();
   const id = createEnvironmentId();
   const row = db
@@ -566,6 +573,7 @@ export function getPreparingEnvironment(db: EnvironmentWriteConnection, threadId
 }
 
 export function reserveEnvironment(db: EnvironmentWriteConnection, input: Omit<typeof environments.$inferInsert, "id" | "createdAt" | "updatedAt">) {
+  assertPathAndKeyTravelTogether(input);
   return db.transaction((tx) => {
     if (input.ownerThreadId == null) throw new Error("Missing environment preparation owner");
     const existing = getPreparingEnvironment(tx, input.ownerThreadId);
