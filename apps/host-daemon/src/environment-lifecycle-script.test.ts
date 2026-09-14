@@ -1,9 +1,12 @@
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { queryWindowsProcess } from "@bb/process-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildSetupScriptCommand,
+  buildTeardownScriptCommand,
+  resolveLifecycleScript,
   runSetupScript,
   runTeardownScript,
 } from "./environment-lifecycle-script.js";
@@ -19,6 +22,16 @@ async function workspace(
   return directory;
 }
 
+async function powerShellWorkspace(
+  kind: "setup" | "teardown",
+  script: string,
+): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "bb-core-hooks-"));
+  directories.push(directory);
+  await writeFile(join(directory, `.bb-env-${kind}.ps1`), script);
+  return directory;
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -29,123 +42,316 @@ afterEach(async () => {
   );
 });
 
-describe("core environment scripts", () => {
-  it("runs in the environment directory and streams stdout and stderr", async () => {
-    const workspacePath = await workspace(
-      "setup",
-      "pwd > marker\nprintf 'first\\rsecond\\n'\necho stderr >&2\n",
-    );
-    const output: string[] = [];
-    await runSetupScript({
-      workspacePath,
-      timeoutMs: 5000,
-      onProgress: (entry) => output.push(entry.text),
-    });
-    expect((await readFile(join(workspacePath, "marker"), "utf8")).trim()).toBe(
-      await realpath(workspacePath),
-    );
-    expect(output).toContain("second");
-    expect(output).toContain("stderr");
-    expect(output).toContain("Running .bb-env-setup.sh");
-  });
-
-  it("surfaces output before setup failure", async () => {
-    const workspacePath = await workspace(
-      "setup",
-      "echo failed-details >&2\nexit 7\n",
-    );
-    const output: string[] = [];
-    await expect(
-      runSetupScript({
-        workspacePath,
-        timeoutMs: 5000,
-        onProgress: (entry) => output.push(entry.text),
-      }),
-    ).rejects.toThrow("exit code 7");
-    expect(output).toContain("failed-details");
-  });
-
-  it.each(["setup", "teardown"] as const)(
-    "enforces the %s timeout",
-    async (kind) => {
+describe.skipIf(process.platform === "win32")(
+  "core environment scripts",
+  () => {
+    it("runs in the environment directory and streams stdout and stderr", async () => {
       const workspacePath = await workspace(
-        kind,
-        "echo before-timeout\nsleep 120\n",
+        "setup",
+        "pwd > marker\nprintf 'first\\rsecond\\n'\necho stderr >&2\n",
       );
       const output: string[] = [];
-      const run = kind === "setup" ? runSetupScript : runTeardownScript;
-      const result = run({
-        workspacePath,
-        timeoutMs: 100,
-        onProgress: (entry) => output.push(entry.text),
-      });
-      if (kind === "setup")
-        await expect(result).rejects.toThrow("timed out after 100ms");
-      else {
-        await expect(result).resolves.toEqual({ ran: true });
-        expect(output.join("\n")).toContain("timed out after 100ms");
-      }
-    },
-  );
-
-  it("reports teardown failure without rejecting removal", async () => {
-    const workspacePath = await workspace(
-      "teardown",
-      "echo teardown-details\nexit 9\n",
-    );
-    const output: string[] = [];
-    await expect(
-      runTeardownScript({
+      await runSetupScript({
         workspacePath,
         timeoutMs: 5000,
         onProgress: (entry) => output.push(entry.text),
-      }),
-    ).resolves.toEqual({ ran: true });
-    expect(output.join("\n")).toContain("exit code 9");
-    expect(output).toContain("teardown-details");
-  });
+      });
+      expect(
+        (await readFile(join(workspacePath, "marker"), "utf8")).trim(),
+      ).toBe(await realpath(workspacePath));
+      expect(output).toContain("second");
+      expect(output).toContain("stderr");
+      expect(output).toContain("Running .bb-env-setup.sh");
+    });
 
-  it("cancels a running setup before returning to cleanup", async () => {
-    const workspacePath = await workspace("setup", "echo started\nsleep 120\n");
-    const controller = new AbortController();
+    it("surfaces output before setup failure", async () => {
+      const workspacePath = await workspace(
+        "setup",
+        "echo failed-details >&2\nexit 7\n",
+      );
+      const output: string[] = [];
+      await expect(
+        runSetupScript({
+          workspacePath,
+          timeoutMs: 5000,
+          onProgress: (entry) => output.push(entry.text),
+        }),
+      ).rejects.toThrow("exit code 7");
+      expect(output).toContain("failed-details");
+    });
+
+    it.each(["setup", "teardown"] as const)(
+      "enforces the %s timeout",
+      async (kind) => {
+        const workspacePath = await workspace(
+          kind,
+          "echo before-timeout\nsleep 120\n",
+        );
+        const output: string[] = [];
+        const run = kind === "setup" ? runSetupScript : runTeardownScript;
+        const result = run({
+          workspacePath,
+          timeoutMs: 100,
+          onProgress: (entry) => output.push(entry.text),
+        });
+        if (kind === "setup")
+          await expect(result).rejects.toThrow("timed out after 100ms");
+        else {
+          await expect(result).resolves.toEqual({ ran: true });
+          expect(output.join("\n")).toContain("timed out after 100ms");
+        }
+      },
+    );
+
+    it("reports teardown failure without rejecting removal", async () => {
+      const workspacePath = await workspace(
+        "teardown",
+        "echo teardown-details\nexit 9\n",
+      );
+      const output: string[] = [];
+      await expect(
+        runTeardownScript({
+          workspacePath,
+          timeoutMs: 5000,
+          onProgress: (entry) => output.push(entry.text),
+        }),
+      ).resolves.toEqual({ ran: true });
+      expect(output.join("\n")).toContain("exit code 9");
+      expect(output).toContain("teardown-details");
+    });
+
+    it("cancels a running setup before returning to cleanup", async () => {
+      const workspacePath = await workspace(
+        "setup",
+        "echo started\nsleep 120\n",
+      );
+      const controller = new AbortController();
+      await expect(
+        runSetupScript({
+          workspacePath,
+          timeoutMs: 5000,
+          signal: controller.signal,
+          onProgress: (entry) => {
+            if (entry.text === "started") controller.abort();
+          },
+        }),
+      ).rejects.toThrow("cancelled");
+    });
+
+    it("skips absent scripts", async () => {
+      const workspacePath = await workspace("setup", "exit 0\n");
+      await expect(
+        runTeardownScript({ workspacePath, timeoutMs: 5000 }),
+      ).resolves.toEqual({ ran: false });
+    });
+  },
+);
+
+describe("windows environment scripts", () => {
+  it("fails setup when only the POSIX hook exists on Windows", async () => {
+    const workspacePath = await workspace("setup", "exit 0\n");
+    const output: string[] = [];
+
     await expect(
       runSetupScript({
         workspacePath,
-        timeoutMs: 5000,
-        signal: controller.signal,
-        onProgress: (entry) => {
-          if (entry.text === "started") controller.abort();
-        },
+        timeoutMs: 5_000,
+        platform: "win32",
+        onProgress: (entry) => output.push(entry.text),
       }),
-    ).rejects.toThrow("cancelled");
+    ).rejects.toThrow(
+      ".bb-env-setup.sh is a POSIX shell script; on Windows bb runs .bb-env-setup.ps1 instead (pwsh.exe or powershell.exe)",
+    );
+    expect(output).toEqual([".bb-env-setup.sh failed"]);
   });
 
-  it("reports unsupported POSIX scripts on Windows for each hook", async () => {
-    expect(() =>
-      buildSetupScriptCommand({
-        platform: "win32",
-        scriptPath: ".bb-env-setup.sh",
-      }),
-    ).toThrow("POSIX shell setup scripts are not supported on Windows");
+  it("reports a POSIX-only teardown on Windows without blocking removal", async () => {
     const workspacePath = await workspace("teardown", "exit 0\n");
-    vi.stubGlobal("process", { ...process, platform: "win32" });
     const output: string[] = [];
+
     await expect(
       runTeardownScript({
         workspacePath,
-        timeoutMs: 5000,
+        timeoutMs: 5_000,
+        platform: "win32",
         onProgress: (entry) => output.push(entry.text),
       }),
     ).resolves.toEqual({ ran: true });
     expect(output.join("\n")).toContain(
-      "POSIX shell teardown scripts are not supported on Windows",
+      ".bb-env-teardown.sh is a POSIX shell script; on Windows bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)",
     );
   });
 
-  it("skips absent scripts", async () => {
+  it("prefers the PowerShell hook when both hooks exist", async () => {
     const workspacePath = await workspace("setup", "exit 0\n");
+    await writeFile(join(workspacePath, ".bb-env-setup.ps1"), "exit 0\r\n");
+
     await expect(
-      runTeardownScript({ workspacePath, timeoutMs: 5000 }),
-    ).resolves.toEqual({ ran: false });
+      resolveLifecycleScript({
+        kind: "setup",
+        platform: "win32",
+        workspacePath,
+      }),
+    ).resolves.toEqual({
+      scriptPath: join(workspacePath, ".bb-env-setup.ps1"),
+      scriptName: ".bb-env-setup.ps1",
+      posixOnly: false,
+    });
+    await expect(
+      resolveLifecycleScript({
+        kind: "setup",
+        platform: "linux",
+        workspacePath,
+      }),
+    ).resolves.toEqual({
+      scriptPath: join(workspacePath, ".bb-env-setup.sh"),
+      scriptName: ".bb-env-setup.sh",
+      posixOnly: false,
+    });
   });
+
+  it("builds a non-interactive PowerShell -File command", () => {
+    const command = buildSetupScriptCommand({
+      env: {
+        Path: "C:\\Windows\\System32",
+        ProgramFiles: "C:\\Program Files",
+        SystemRoot: "C:\\Windows",
+      },
+      platform: "win32",
+      scriptPath: "C:\\ws\\.bb-env-setup.ps1",
+    });
+
+    expect(command.command.toLowerCase()).toMatch(/(pwsh|powershell)\.exe$/u);
+    expect(command.args).toEqual([
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "C:\\ws\\.bb-env-setup.ps1",
+    ]);
+    expect(command.text).toMatch(
+      /^(pwsh|powershell) -File \.bb-env-setup\.ps1$/u,
+    );
+  });
+
+  it("builds the teardown command and refuses a POSIX teardown hook", () => {
+    const command = buildTeardownScriptCommand({
+      env: {
+        Path: "C:\\Windows\\System32",
+        ProgramFiles: "C:\\Program Files",
+        SystemRoot: "C:\\Windows",
+      },
+      platform: "win32",
+      scriptPath: "C:\\ws\\.bb-env-teardown.ps1",
+    });
+
+    expect(command.args).toEqual([
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "C:\\ws\\.bb-env-teardown.ps1",
+    ]);
+    expect(command.text).toMatch(
+      /^(pwsh|powershell) -File \.bb-env-teardown\.ps1$/u,
+    );
+    expect(() =>
+      buildTeardownScriptCommand({
+        env: { SystemRoot: "C:\\Windows" },
+        platform: "win32",
+        scriptPath: "C:\\ws\\.bb-env-teardown.sh",
+      }),
+    ).toThrow(
+      ".bb-env-teardown.sh is a POSIX shell script; on Windows bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)",
+    );
+  });
+
+  it.runIf(process.platform === "win32")(
+    "streams PowerShell hook output",
+    async () => {
+      const workspacePath = await powerShellWorkspace(
+        "setup",
+        [
+          'Write-Output "first"',
+          'Write-Output "second"',
+          '[Console]::Error.WriteLine("third")',
+          "exit 0",
+          "",
+        ].join("\r\n"),
+      );
+      const output: string[] = [];
+
+      await expect(
+        runSetupScript({
+          workspacePath,
+          timeoutMs: 60_000,
+          onProgress: (entry) => {
+            if (entry.type === "output") output.push(entry.text);
+          },
+        }),
+      ).resolves.toMatchObject({ ran: true, exitCode: 0 });
+
+      expect(output).toHaveLength(3);
+      expect(output).toEqual(
+        expect.arrayContaining(["first", "second", "third"]),
+      );
+      expect(output.indexOf("first")).toBeLessThan(output.indexOf("second"));
+    },
+    60_000,
+  );
+
+  it.runIf(process.platform === "win32")(
+    "times out a sleeping PowerShell hook",
+    async () => {
+      const workspacePath = await powerShellWorkspace(
+        "setup",
+        "Start-Sleep -Seconds 30\r\n",
+      );
+
+      await expect(
+        runSetupScript({ workspacePath, timeoutMs: 1_000 }),
+      ).rejects.toThrow("timed out after 1000ms");
+    },
+    60_000,
+  );
+
+  it.runIf(process.platform === "win32")(
+    "cancels a PowerShell hook and leaves no descendant",
+    async () => {
+      const workspacePath = await powerShellWorkspace(
+        "setup",
+        [
+          `$child = Start-Process -FilePath '${process.execPath}' -ArgumentList '-e','setTimeout(() => {}, 60000)' -PassThru -WindowStyle Hidden`,
+          'Write-Output ("child=" + $child.Id)',
+          "Start-Sleep -Seconds 30",
+          "",
+        ].join("\r\n"),
+      );
+      const controller = new AbortController();
+      const childPids: number[] = [];
+
+      await expect(
+        runSetupScript({
+          workspacePath,
+          timeoutMs: 60_000,
+          signal: controller.signal,
+          onProgress: (entry) => {
+            const match = entry.text.match(/^child=(\d+)$/u);
+            if (match?.[1] !== undefined) {
+              childPids.push(Number(match[1]));
+              controller.abort();
+            }
+          },
+        }),
+      ).rejects.toThrow("cancelled");
+
+      expect(childPids).toHaveLength(1);
+      await expect(queryWindowsProcess(childPids[0] ?? 0)).resolves.toBeNull();
+    },
+    120_000,
+  );
 });
