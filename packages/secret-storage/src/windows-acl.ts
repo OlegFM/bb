@@ -1,3 +1,4 @@
+import { win32 as win32Path } from "node:path";
 import {
   resolveWindowsSystemToolPath,
   spawnPortableOutputProcess,
@@ -17,6 +18,7 @@ export interface WindowsAclCommandResult {
 export type WindowsAclCommandRunner = (
   command: string,
   args: string[],
+  cwd?: string,
 ) => Promise<WindowsAclCommandResult>;
 
 export interface WindowsAclDeps {
@@ -34,23 +36,45 @@ export const SECRET_FILE_ACL_REMEDY =
 
 const WINDOWS_SID_PATTERN = /^S-\d+(?:-\d+)+$/u;
 const WINDOWS_USER_CSV_ROW_PATTERN = /^"([^"]*)","([^"]*)"$/u;
+const ASCII_FILE_NAME_PATTERN = /^[ -~]+$/u;
+const WINDOWS_ACL_COMMAND_TIMEOUT_MS = 30_000;
 
 function runWindowsAclTool(
   command: string,
   args: string[],
+  cwd?: string,
 ): Promise<WindowsAclCommandResult> {
   return new Promise((resolveRun, rejectRun) => {
     const child = spawnPortableOutputProcess({
       command,
       args,
       platform: "win32",
+      ...(cwd !== undefined ? { cwd } : {}),
     });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      child.kill("SIGKILL");
+      rejectRun(
+        new Error(
+          `Timed out after ${String(WINDOWS_ACL_COMMAND_TIMEOUT_MS)}ms waiting for "${command}". ${SECRET_FILE_ACL_REMEDY}.`,
+        ),
+      );
+    }, WINDOWS_ACL_COMMAND_TIMEOUT_MS);
     child.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
     child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
-    child.once("error", rejectRun);
+    child.once("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      rejectRun(error);
+    });
     child.once("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       resolveRun({
         stdout: Buffer.concat(stdoutChunks).toString("utf8"),
         stderr: Buffer.concat(stderrChunks).toString("utf8"),
@@ -64,6 +88,16 @@ function describeCommandFailure(result: WindowsAclCommandResult): string {
   const detail = result.stderr.trim();
   const exit = `exited with ${String(result.exitCode)}`;
   return detail.length > 0 ? `${exit}: ${detail}` : exit;
+}
+
+function secretFileName(path: string): string {
+  const name = win32Path.basename(path);
+  if (!ASCII_FILE_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Could not secure the secret file "${path}": the secret file name "${name}" must use ASCII characters only.`,
+    );
+  }
+  return name;
 }
 
 export function parseWindowsUserCsv(stdout: string): WindowsSecretUser {
@@ -116,14 +150,14 @@ export async function tightenSecretFileAcl(
   user: WindowsSecretUser,
   deps: WindowsAclDeps = {},
 ): Promise<void> {
+  const name = secretFileName(path);
   const run = deps.runCommand ?? runWindowsAclTool;
   const command = resolveWindowsSystemToolPath("icacls.exe", deps.env);
-  const result = await run(command, [
-    path,
-    "/inheritance:r",
-    "/grant:r",
-    `*${user.sid}:F`,
-  ]);
+  const result = await run(
+    command,
+    [name, "/inheritance:r", "/grant:r", `*${user.sid}:F`],
+    win32Path.dirname(path),
+  );
   if (result.exitCode !== 0) {
     throw new Error(
       `Could not restrict the secret file "${path}" to ${user.accountName}: icacls ${describeCommandFailure(result)}. ${SECRET_FILE_ACL_REMEDY}.`,
@@ -135,6 +169,7 @@ export function parseSecretFileAcl(
   path: string,
   stdout: string,
 ): WindowsFileAce[] {
+  const name = secretFileName(path);
   const aces: WindowsFileAce[] = [];
   let sawFirstLine = false;
   for (const rawLine of stdout.split(/\r?\n/u)) {
@@ -142,12 +177,12 @@ export function parseSecretFileAcl(
     let line = rawLine;
     if (!sawFirstLine) {
       sawFirstLine = true;
-      if (!line.startsWith(path)) {
+      if (!line.startsWith(name)) {
         throw new Error(
           `Could not parse the permissions of the secret file "${path}": ${JSON.stringify(stdout)}`,
         );
       }
-      line = line.slice(path.length);
+      line = line.slice(name.length);
     }
     const entry = line.trim();
     const separator = entry.lastIndexOf(":");
@@ -173,9 +208,10 @@ export async function readSecretFileAcl(
   path: string,
   deps: WindowsAclDeps = {},
 ): Promise<WindowsFileAce[]> {
+  const name = secretFileName(path);
   const run = deps.runCommand ?? runWindowsAclTool;
   const command = resolveWindowsSystemToolPath("icacls.exe", deps.env);
-  const result = await run(command, [path]);
+  const result = await run(command, [name], win32Path.dirname(path));
   if (result.exitCode !== 0) {
     throw new Error(
       `Could not read the permissions of the secret file "${path}": icacls ${describeCommandFailure(result)}. ${SECRET_FILE_ACL_REMEDY}.`,

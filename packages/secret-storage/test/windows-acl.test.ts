@@ -14,12 +14,20 @@ const USER = {
   sid: "S-1-5-21-3327206002-2370753384-3252136475-1001",
 };
 
-const SECRET_PATH = "C:\\Users\\olege\\AppData\\Local\\Temp\\bb-acl\\secret";
-const PAD = " ".repeat(SECRET_PATH.length + 1);
+const SECRET_DIR = "C:\\Users\\olege\\AppData\\Local\\Temp\\bb-acl";
+const SECRET_NAME = "secret";
+const SECRET_PATH = `${SECRET_DIR}\\${SECRET_NAME}`;
+const PAD = " ".repeat(SECRET_NAME.length + 1);
 const SUMMARY =
   "\nSuccessfully processed 1 files; Failed processing 0 files\r\n";
 
 const WHOAMI_CSV = `"\u0418\u043c\u044f \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f","SID"\r\n"omen\\olege","${USER.sid}"\r\n`;
+
+interface RecordedCall {
+  command: string;
+  args: string[];
+  cwd: string | undefined;
+}
 
 function ok(stdout: string): WindowsAclCommandResult {
   return { stdout, stderr: "", exitCode: 0 };
@@ -42,7 +50,7 @@ describe("parseSecretFileAcl", () => {
     expect(
       parseSecretFileAcl(
         SECRET_PATH,
-        `${SECRET_PATH} OMEN\\olege:(F)\n${SUMMARY}`,
+        `${SECRET_NAME} OMEN\\olege:(F)\n${SUMMARY}`,
       ),
     ).toEqual([{ identity: "OMEN\\olege", rights: "(F)" }]);
   });
@@ -51,7 +59,7 @@ describe("parseSecretFileAcl", () => {
     expect(
       parseSecretFileAcl(
         SECRET_PATH,
-        `${SECRET_PATH} \u0412\u0441\u0435:(F)\n${PAD}OMEN\\olege:(F)\n${SUMMARY}`,
+        `${SECRET_NAME} \u0412\u0441\u0435:(F)\n${PAD}OMEN\\olege:(F)\n${SUMMARY}`,
       ),
     ).toEqual([
       { identity: "\u0412\u0441\u0435", rights: "(F)" },
@@ -63,7 +71,7 @@ describe("parseSecretFileAcl", () => {
     expect(
       parseSecretFileAcl(
         SECRET_PATH,
-        `${SECRET_PATH} OMEN\\CodexSandboxUsers:(I)(M)\n${PAD}S-1-5-21-3069236128-2815927062-1964413744-1774302275:(I)(M)\n${PAD}OMEN\\olege:(I)(F)\n${SUMMARY}`,
+        `${SECRET_NAME} OMEN\\CodexSandboxUsers:(I)(M)\n${PAD}S-1-5-21-3069236128-2815927062-1964413744-1774302275:(I)(M)\n${PAD}OMEN\\olege:(I)(F)\n${SUMMARY}`,
       ),
     ).toEqual([
       { identity: "OMEN\\CodexSandboxUsers", rights: "(I)(M)" },
@@ -75,13 +83,28 @@ describe("parseSecretFileAcl", () => {
     ]);
   });
 
-  it("throws when the first line does not carry the requested path", () => {
+  it("throws when the first line does not carry the requested file name", () => {
     expect(() =>
-      parseSecretFileAcl(SECRET_PATH, `C:\\other OMEN\\olege:(F)\n${SUMMARY}`),
+      parseSecretFileAcl(
+        SECRET_PATH,
+        `${SECRET_PATH} OMEN\\olege:(F)\n${SUMMARY}`,
+      ),
+    ).toThrow(/Could not parse the permissions/u);
+    expect(() =>
+      parseSecretFileAcl(SECRET_PATH, `other OMEN\\olege:(F)\n${SUMMARY}`),
     ).toThrow(/Could not parse the permissions/u);
     expect(() => parseSecretFileAcl(SECRET_PATH, "")).toThrow(
       /Could not parse the permissions/u,
     );
+  });
+
+  it("refuses a non-ASCII secret file name", () => {
+    expect(() =>
+      parseSecretFileAcl(
+        `${SECRET_DIR}\\\u0441\u0435\u043a\u0440\u0435\u0442`,
+        `\u0441\u0435\u043a\u0440\u0435\u0442 OMEN\\olege:(F)\n${SUMMARY}`,
+      ),
+    ).toThrow(/must use ASCII/u);
   });
 });
 
@@ -149,11 +172,11 @@ describe("assertSecretFileAclIsPrivate", () => {
 
 describe("windows acl commands", () => {
   it("resolves the current user through whoami", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
+    const calls: RecordedCall[] = [];
     await expect(
       resolveCurrentWindowsUser({
-        runCommand: async (command, args) => {
-          calls.push({ command, args });
+        runCommand: async (command, args, cwd) => {
+          calls.push({ command, args, cwd });
           return ok(WHOAMI_CSV);
         },
       }),
@@ -161,6 +184,7 @@ describe("windows acl commands", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].command.endsWith("whoami.exe")).toBe(true);
     expect(calls[0].args).toEqual(["/user", "/fo", "csv"]);
+    expect(calls[0].cwd).toBeUndefined();
   });
 
   it("throws when whoami fails", async () => {
@@ -177,17 +201,18 @@ describe("windows acl commands", () => {
     );
   });
 
-  it("grants full control to the user's SID and nothing else", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
+  it("grants full control to the user's SID from the secret's directory", async () => {
+    const calls: RecordedCall[] = [];
     await tightenSecretFileAcl(SECRET_PATH, USER, {
-      runCommand: async (command, args) => {
-        calls.push({ command, args });
+      runCommand: async (command, args, cwd) => {
+        calls.push({ command, args, cwd });
         return ok("");
       },
     });
     expect(calls[0].command.endsWith("icacls.exe")).toBe(true);
+    expect(calls[0].cwd).toBe(SECRET_DIR);
     expect(calls[0].args).toEqual([
-      SECRET_PATH,
+      SECRET_NAME,
       "/inheritance:r",
       "/grant:r",
       `*${USER.sid}:F`,
@@ -208,12 +233,42 @@ describe("windows acl commands", () => {
     ).rejects.toThrow(/bb-acl\\secret[\s\S]*NTFS volume/u);
   });
 
-  it("reads the ACEs back through icacls", async () => {
+  it("reads the ACEs back through icacls from the secret's directory", async () => {
+    const calls: RecordedCall[] = [];
     await expect(
       readSecretFileAcl(SECRET_PATH, {
-        runCommand: async () =>
-          ok(`${SECRET_PATH} OMEN\\olege:(F)\n${SUMMARY}`),
+        runCommand: async (command, args, cwd) => {
+          calls.push({ command, args, cwd });
+          return ok(`${SECRET_NAME} OMEN\\olege:(F)\n${SUMMARY}`);
+        },
       }),
     ).resolves.toEqual([{ identity: "OMEN\\olege", rights: "(F)" }]);
+    expect(calls[0].cwd).toBe(SECRET_DIR);
+    expect(calls[0].args).toEqual([SECRET_NAME]);
+  });
+
+  it("refuses a non-ASCII secret file name before spawning anything", async () => {
+    const calls: RecordedCall[] = [];
+    const runCommand = async (
+      command: string,
+      args: string[],
+      cwd?: string,
+    ): Promise<WindowsAclCommandResult> => {
+      calls.push({ command, args, cwd });
+      return ok("");
+    };
+    const cyrillicPath = `${SECRET_DIR}\\\u0441\u0435\u043a\u0440\u0435\u0442`;
+
+    await expect(
+      tightenSecretFileAcl(cyrillicPath, USER, { runCommand }),
+    ).rejects.toThrow(
+      /\u0441\u0435\u043a\u0440\u0435\u0442[\s\S]*must use ASCII/u,
+    );
+    await expect(
+      readSecretFileAcl(cyrillicPath, { runCommand }),
+    ).rejects.toThrow(
+      /\u0441\u0435\u043a\u0440\u0435\u0442[\s\S]*must use ASCII/u,
+    );
+    expect(calls).toEqual([]);
   });
 });

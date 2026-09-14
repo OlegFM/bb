@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import {
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
@@ -48,6 +49,7 @@ afterEach(async () => {
 interface RecordedAclCall {
   command: string;
   args: string[];
+  cwd: string | undefined;
   sizeAtCall: number;
 }
 
@@ -56,18 +58,21 @@ function createFakeWindowsAcl(aclOutput?: (target: string) => string): {
   runCommand: (
     command: string,
     args: string[],
+    cwd?: string,
   ) => Promise<WindowsAclCommandResult>;
 } {
   const calls: RecordedAclCall[] = [];
   return {
     calls,
-    runCommand: async (command, args) => {
+    runCommand: async (command, args, cwd) => {
       const target = args.length > 0 ? args[0] : "";
       let sizeAtCall = -1;
       try {
-        sizeAtCall = (await stat(target)).size;
+        sizeAtCall = (
+          await stat(cwd === undefined ? target : path.join(cwd, target))
+        ).size;
       } catch {}
-      calls.push({ command, args, sizeAtCall });
+      calls.push({ command, args, cwd, sizeAtCall });
       if (command.endsWith("whoami.exe")) {
         return { stdout: WHOAMI_CSV, stderr: "", exitCode: 0 };
       }
@@ -89,7 +94,7 @@ function everyoneAcl(target: string): string {
 }
 
 describe("secret files on win32 (injected runner)", () => {
-  it("creates the file empty, tightens it, and only then writes the bytes", async () => {
+  it("tightens a staged file, writes it, and links it into place", async () => {
     const dataDir = await makeTempDir();
     const acl = createFakeWindowsAcl();
 
@@ -104,23 +109,28 @@ describe("secret files on win32 (injected runner)", () => {
 
     const secretPath = path.join(dataDir, "secret");
     expect((await readFile(secretPath, "utf8")).trim()).toBe(secret);
+    expect(await readdir(dataDir)).toEqual(["secret"]);
     const grant = acl.calls.find((call) =>
       call.args.includes("/inheritance:r"),
     );
-    const verify = acl.calls.find(
-      (call) => call.args.length === 1 && call.args[0] === secretPath,
-    );
-    expect(grant?.args).toEqual([
-      secretPath,
+    const stagedName = grant?.args[0] ?? "";
+    expect(stagedName.startsWith("secret.")).toBe(true);
+    expect(stagedName.endsWith(".tmp")).toBe(true);
+    expect(grant?.cwd).toBe(dataDir);
+    expect(grant?.args.slice(1)).toEqual([
       "/inheritance:r",
       "/grant:r",
       `*${USER_SID}:F`,
     ]);
     expect(grant?.sizeAtCall).toBe(0);
+    const verify = acl.calls.find(
+      (call) => call.args.length === 1 && call.args[0] === stagedName,
+    );
     expect(verify?.sizeAtCall).toBe(0);
+    expect(acl.calls.some((call) => call.args[0] === "secret")).toBe(false);
   });
 
-  it("removes the file it created when verification fails", async () => {
+  it("removes the staged file and creates nothing when verification fails", async () => {
     const dataDir = await makeTempDir();
     const acl = createFakeWindowsAcl(everyoneAcl);
 
@@ -135,6 +145,25 @@ describe("secret files on win32 (injected runner)", () => {
       }),
     ).rejects.toThrow(/is not restricted to/u);
     expect(await readdir(dataDir)).toEqual([]);
+  });
+
+  it("replaces a wedged empty secret file", async () => {
+    const dataDir = await makeTempDir();
+    const secretPath = path.join(dataDir, "secret");
+    await writeFile(secretPath, "", "utf8");
+    const acl = createFakeWindowsAcl();
+
+    const secret = await readOrCreateSecretFile({
+      bytes: 32,
+      dataDir,
+      encoding: "base64",
+      fileName: "secret",
+      platform: "win32",
+      deps: { runCommand: acl.runCommand },
+    });
+
+    expect((await readFile(secretPath, "utf8")).trim()).toBe(secret);
+    expect(await readdir(dataDir)).toEqual(["secret"]);
   });
 
   it("tightens the temp file before writing and renames it into place", async () => {
@@ -153,6 +182,7 @@ describe("secret files on win32 (injected runner)", () => {
       call.args.includes("/inheritance:r"),
     );
     expect(grant?.args[0].endsWith(".tmp")).toBe(true);
+    expect(grant?.cwd).toBe(dir);
     expect(grant?.sizeAtCall).toBe(0);
   });
 
@@ -241,12 +271,111 @@ describe("secret files on real NTFS", () => {
       });
       const secretPath = path.join(dataDir, "secret");
       expect((await readFile(secretPath, "utf8")).trim()).toBe(secret);
+      expect(await readdir(dataDir)).toEqual(["secret"]);
 
       const user = await resolveCurrentWindowsUser();
       const aces = await readSecretFileAcl(secretPath);
       expect(aces).toHaveLength(1);
       expect(() =>
         assertSecretFileAclIsPrivate(secretPath, aces, user),
+      ).not.toThrow();
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "returns the same secret to two concurrent creators",
+    async () => {
+      const dataDir = await makeTempDir();
+      const [first, second] = await Promise.all([
+        readOrCreateSecretFile({
+          bytes: 32,
+          dataDir,
+          encoding: "base64",
+          fileName: "secret",
+        }),
+        readOrCreateSecretFile({
+          bytes: 32,
+          dataDir,
+          encoding: "base64",
+          fileName: "secret",
+        }),
+      ]);
+
+      expect(second).toBe(first);
+      const secretPath = path.join(dataDir, "secret");
+      expect((await readFile(secretPath, "utf8")).trim()).toBe(first);
+      expect(await readdir(dataDir)).toEqual(["secret"]);
+
+      const user = await resolveCurrentWindowsUser();
+      const aces = await readSecretFileAcl(secretPath);
+      expect(aces).toHaveLength(1);
+      expect(() =>
+        assertSecretFileAclIsPrivate(secretPath, aces, user),
+      ).not.toThrow();
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "repairs a secret file left empty by an earlier crash",
+    async () => {
+      const dataDir = await makeTempDir();
+      const secretPath = path.join(dataDir, "secret");
+      await writeFile(secretPath, "", "utf8");
+
+      const secret = await readOrCreateSecretFile({
+        bytes: 32,
+        dataDir,
+        encoding: "base64",
+        fileName: "secret",
+      });
+
+      expect((await readFile(secretPath, "utf8")).trim()).toBe(secret);
+      expect(await readdir(dataDir)).toEqual(["secret"]);
+      const user = await resolveCurrentWindowsUser();
+      const aces = await readSecretFileAcl(secretPath);
+      expect(aces).toHaveLength(1);
+      expect(() =>
+        assertSecretFileAclIsPrivate(secretPath, aces, user),
+      ).not.toThrow();
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "secures secrets inside a directory whose name is not ASCII",
+    async () => {
+      const dataDir = path.join(
+        await makeTempDir(),
+        "\u041e\u043b\u0435\u0433 \u043a\u0430\u0442\u0430\u043b\u043e\u0433",
+      );
+      await mkdir(dataDir, { recursive: true });
+      const user = await resolveCurrentWindowsUser();
+
+      const secret = await readOrCreateSecretFile({
+        bytes: 32,
+        dataDir,
+        encoding: "base64",
+        fileName: "secret",
+      });
+      const secretPath = path.join(dataDir, "secret");
+      expect((await readFile(secretPath, "utf8")).trim()).toBe(secret);
+      const created = await readSecretFileAcl(secretPath);
+      expect(created).toHaveLength(1);
+      expect(() =>
+        assertSecretFileAclIsPrivate(secretPath, created, user),
+      ).not.toThrow();
+
+      const inheritedPath = path.join(dataDir, "inherited");
+      await writeFile(inheritedPath, "inherited-secret\n", "utf8");
+      const before = await readSecretFileAcl(inheritedPath);
+      expect(before.some((ace) => ace.rights.includes("(I)"))).toBe(true);
+
+      await expect(readSecretFile(inheritedPath)).resolves.toBe(
+        "inherited-secret\n",
+      );
+      const after = await readSecretFileAcl(inheritedPath);
+      expect(after).toHaveLength(1);
+      expect(() =>
+        assertSecretFileAclIsPrivate(inheritedPath, after, user),
       ).not.toThrow();
     },
   );

@@ -86,6 +86,7 @@ describe("secret file", () => {
         dataDir,
         encoding: "base64",
         fileName: "secret",
+        platform: "linux",
       }),
     ).rejects.toThrow("Failed to initialize secret");
   });

@@ -1,6 +1,15 @@
 import { randomBytes } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   ensureSecretFileIsPrivate,
@@ -38,11 +47,24 @@ async function createPrivateSecretFile(
   const handle = await open(path, "wx");
   await handle.close();
   await ensureSecretFileIsPrivate(path, options.deps ?? {});
-  verifiedSecretPaths.add(path.toLowerCase());
 }
 
 function errorCodeOf(error: unknown): unknown {
   return error instanceof Error && "code" in error ? error.code : undefined;
+}
+
+async function removeWedgedSecretFile(path: string): Promise<void> {
+  try {
+    if ((await readFile(path, "utf8")).trim().length > 0) {
+      return;
+    }
+  } catch (error) {
+    if (errorCodeOf(error) !== "ENOENT") {
+      throw error;
+    }
+    return;
+  }
+  await rm(path, { force: true });
 }
 
 export async function readOrCreateSecretFile(
@@ -71,11 +93,20 @@ export async function readOrCreateSecretFile(
   const generatedSecret = randomBytes(args.bytes).toString(args.encoding);
 
   if (platform === "win32") {
+    await removeWedgedSecretFile(secretPath);
+    const stagedPath = `${secretPath}.${randomBytes(6).toString("hex")}.tmp`;
     try {
-      await createPrivateSecretFile(secretPath, { deps: args.deps });
+      await createPrivateSecretFile(stagedPath, { deps: args.deps });
+      await writeFile(stagedPath, `${generatedSecret}\n`, { encoding: "utf8" });
     } catch (error) {
+      await rm(stagedPath, { force: true });
+      throw error;
+    }
+    try {
+      await link(stagedPath, secretPath);
+    } catch (error) {
+      await unlink(stagedPath);
       if (errorCodeOf(error) !== "EEXIST") {
-        await rm(secretPath, { force: true });
         throw error;
       }
       const racedSecret = (await readFile(secretPath, "utf8")).trim();
@@ -85,12 +116,8 @@ export async function readOrCreateSecretFile(
       await ensureSecretFileIsPrivateOnce(secretPath, { deps: args.deps });
       return racedSecret;
     }
-    try {
-      await writeFile(secretPath, `${generatedSecret}\n`, { encoding: "utf8" });
-    } catch (error) {
-      await rm(secretPath, { force: true });
-      throw error;
-    }
+    await unlink(stagedPath);
+    verifiedSecretPaths.add(secretPath.toLowerCase());
     return generatedSecret;
   }
 
