@@ -297,7 +297,7 @@ export function scriptSpawnOptions(args: {
 }): SpawnOptions {
   return {
     cwd: args.cwd,
-    detached: process.platform !== "win32",
+    detached: args.platform !== "win32",
     env: args.env,
     stdio: ["ignore", "pipe", "pipe"],
     ...(args.platform === "win32" ? { windowsHide: true } : {}),
@@ -417,7 +417,7 @@ export async function executeStoredScript(args: {
   });
   const platform = args.platform ?? process.platform;
   const interpreter =
-    args.interpreter ?? resolveDefaultInterpreter(args.scriptFile);
+    args.interpreter ?? resolveDefaultInterpreter(args.scriptFile, platform);
   const { command, argsPrefix } = await resolveInterpreterCommand(
     interpreter,
     platform,

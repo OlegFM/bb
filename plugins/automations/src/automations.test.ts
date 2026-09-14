@@ -1660,12 +1660,25 @@ describe("Windows automation interpreters", () => {
     );
   });
 
-  it("maps .ps1 to the powershell interpreter and keeps the POSIX map", () => {
-    expect(resolveDefaultInterpreter("watch.ps1")).toBe("powershell");
-    expect(resolveDefaultInterpreter("watch.PS1")).toBe("powershell");
-    expect(resolveDefaultInterpreter("watch.sh")).toBe("bash");
-    expect(resolveDefaultInterpreter("watch.py")).toBe("python3");
-    expect(resolveDefaultInterpreter("watch.unknown")).toBe("bash");
+  it("maps .ps1 to the powershell interpreter on win32", () => {
+    expect(resolveDefaultInterpreter("watch.ps1", "win32")).toBe("powershell");
+    expect(resolveDefaultInterpreter("watch.PS1", "win32")).toBe("powershell");
+    expect(resolveDefaultInterpreter("watch.sh", "win32")).toBe("bash");
+    expect(resolveDefaultInterpreter("watch.py", "win32")).toBe("python3");
+    expect(resolveDefaultInterpreter("watch.unknown", "win32")).toBe("bash");
+  });
+
+  it("keeps the pre-Windows POSIX extension fallback for .ps1", () => {
+    for (const platform of ["darwin", "linux"] as const) {
+      expect(resolveDefaultInterpreter("watch.ps1", platform)).toBe("bash");
+      expect(resolveDefaultInterpreter("watch.PS1", platform)).toBe("bash");
+      expect(resolveDefaultInterpreter("watch.sh", platform)).toBe("bash");
+      expect(resolveDefaultInterpreter("watch.bash", platform)).toBe("bash");
+      expect(resolveDefaultInterpreter("watch.js", platform)).toBe("node");
+      expect(resolveDefaultInterpreter("watch.mjs", platform)).toBe("node");
+      expect(resolveDefaultInterpreter("watch.py", platform)).toBe("python3");
+      expect(resolveDefaultInterpreter("watch.unknown", platform)).toBe("bash");
+    }
   });
 
   it("keeps the POSIX interpreter argv at command plus script", async () => {
@@ -1810,9 +1823,15 @@ describe("Windows bb probe and script spawn", () => {
         .windowsHide,
     ).toBe(true);
     expect(
+      scriptSpawnOptions({ cwd: "/tmp", env: {}, platform: "win32" }).detached,
+    ).toBe(false);
+    expect(
       "windowsHide" in
         scriptSpawnOptions({ cwd: "/tmp", env: {}, platform: "darwin" }),
     ).toBe(false);
+    expect(
+      scriptSpawnOptions({ cwd: "/tmp", env: {}, platform: "darwin" }).detached,
+    ).toBe(true);
   });
 
   it.runIf(process.platform === "win32")(

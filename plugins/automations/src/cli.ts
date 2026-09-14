@@ -226,12 +226,23 @@ const INTERPRETER_BY_EXTENSION: Record<string, AutomationScriptInterpreter> = {
   ".js": "node",
   ".mjs": "node",
   ".py": "python3",
+};
+
+const WINDOWS_INTERPRETER_BY_EXTENSION: Record<
+  string,
+  AutomationScriptInterpreter
+> = {
+  ...INTERPRETER_BY_EXTENSION,
   ".ps1": "powershell",
 };
 
 function inferInterpreterFromPath(
   filePath: string,
+  platform: NodeJS.Platform = process.platform,
 ): AutomationScriptInterpreter | undefined {
+  if (platform === "win32") {
+    return WINDOWS_INTERPRETER_BY_EXTENSION[extname(filePath).toLowerCase()];
+  }
   return INTERPRETER_BY_EXTENSION[extname(filePath).toLowerCase()];
 }
 

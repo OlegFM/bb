@@ -99,7 +99,7 @@ export async function maybeReexecViaBbCli(
     return;
   }
 
-  const exitProcess = options.exit ?? process.exit;
+  const exitProcess = options.exit ?? ((code: number) => process.exit(code));
 
   let plan: NodeLauncherSpawnPlan;
   try {

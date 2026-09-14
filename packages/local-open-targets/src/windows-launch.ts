@@ -37,6 +37,7 @@ const WINDOWS_JETBRAINS_SHIM_EXTENSIONS = [".cmd", ".bat", ".exe"];
 const WINDOWS_TERMINAL_COMMAND = "wt";
 const WINDOWS_TERMINAL_ALIAS_SEGMENTS = ["Microsoft", "WindowsApps", "wt.exe"];
 const WINDOWS_UNSUPPORTED_TARGET_ID_PREFIXES = ["desktop-app:", "mac-app:"];
+const WINDOWS_CMD_SHIM_ARGUMENT_ENV_PREFIX = "BBOPENTARGETARG";
 
 type WindowsAppPathCache = Map<string, Promise<string | null>>;
 
@@ -371,14 +372,17 @@ async function resolveWindowsLauncherExecutable(
   });
 }
 
-function buildWindowsCmdShimCommandLine(
+function buildWindowsCmdShimCommand(
   executablePath: string,
   args: string[],
-): string {
-  const quoted = [executablePath, ...args]
-    .map((value) => `"${value}"`)
-    .join(" ");
-  return `"${quoted}"`;
+): { commandLine: string; env: NodeJS.ProcessEnv } {
+  const env: NodeJS.ProcessEnv = {};
+  const references = [executablePath, ...args].map((value, index) => {
+    const name = `${WINDOWS_CMD_SHIM_ARGUMENT_ENV_PREFIX}${index}`;
+    env[name] = value;
+    return `"%${name}%"`;
+  });
+  return { commandLine: `"${references.join(" ")}"`, env };
 }
 
 function buildWindowsStartConsoleCommandLine(shellPath: string): string {
@@ -398,15 +402,11 @@ async function buildWindowsExecutableInvocation(
       env: runtime.env,
     };
   }
+  const shim = buildWindowsCmdShimCommand(executablePath, args);
   return {
     file: resolveWindowsSystemToolPath("cmd.exe", runtime.env),
-    args: [
-      "/d",
-      "/s",
-      "/c",
-      buildWindowsCmdShimCommandLine(executablePath, args),
-    ],
-    env: runtime.env,
+    args: ["/d", "/s", "/c", shim.commandLine],
+    env: { ...(runtime.env ?? process.env), ...shim.env },
     windowsVerbatimArguments: true,
   };
 }

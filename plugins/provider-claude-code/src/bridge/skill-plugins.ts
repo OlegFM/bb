@@ -53,6 +53,11 @@ export function ensureClaudeSkillPlugin(args: {
   root: ClaudeSkillPluginRoot;
   takenNames?: Map<string, string>;
   platform?: NodeJS.Platform;
+  symlink?: (
+    target: string,
+    linkPath: string,
+    type: "junction" | "dir",
+  ) => void;
 }): string {
   const directory = pluginDirectoryName(args.root);
   const pluginPath = join(args.pluginsRoot, directory);
@@ -84,7 +89,12 @@ export function ensureClaudeSkillPlugin(args: {
   }
   if (current !== args.root.path) {
     rmSync(skillsLink, { recursive: true, force: true });
-    symlinkSync(
+    const symlink =
+      args.symlink ??
+      ((target: string, linkPath: string, type: "junction" | "dir") => {
+        symlinkSync(target, linkPath, type);
+      });
+    symlink(
       args.root.path,
       skillsLink,
       (args.platform ?? process.platform) === "win32" ? "junction" : "dir",

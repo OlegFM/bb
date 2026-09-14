@@ -25,6 +25,13 @@ const INTERPRETER_BY_EXTENSION: Record<string, AutomationScriptInterpreter> = {
   ".js": "node",
   ".mjs": "node",
   ".py": "python3",
+};
+
+const WINDOWS_INTERPRETER_BY_EXTENSION: Record<
+  string,
+  AutomationScriptInterpreter
+> = {
+  ...INTERPRETER_BY_EXTENSION,
   ".ps1": "powershell",
 };
 
@@ -54,7 +61,14 @@ function sanitizeScriptFileName(name: string): string {
 
 export function resolveDefaultInterpreter(
   scriptFile: string,
+  platform: NodeJS.Platform = process.platform,
 ): AutomationScriptInterpreter {
+  if (platform === "win32") {
+    return (
+      WINDOWS_INTERPRETER_BY_EXTENSION[extname(scriptFile).toLowerCase()] ??
+      "bash"
+    );
+  }
   return INTERPRETER_BY_EXTENSION[extname(scriptFile).toLowerCase()] ?? "bash";
 }
 

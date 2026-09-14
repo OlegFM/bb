@@ -2751,8 +2751,10 @@ describe("workspace open targets", () => {
           "/d",
           "/s",
           "/c",
-          `""${codeCmd}" "${workspacePath}""`,
+          '""%BBOPENTARGETARG0%" "%BBOPENTARGETARG1%""',
         ]);
+        expect(call?.options?.env?.BBOPENTARGETARG0).toBe(codeCmd);
+        expect(call?.options?.env?.BBOPENTARGETARG1).toBe(workspacePath);
         expect(call?.options?.windowsVerbatimArguments).toBe(true);
       } finally {
         await rm(localAppData, { force: true, recursive: true });
@@ -3007,12 +3009,11 @@ describe("workspace open targets", () => {
           });
         };
 
-        let launched: WindowsProcessSnapshotEntry[] = [];
+        const before = await takeWindowsProcessSnapshot();
+        const beforePids = new Set(before.map((entry) => entry.pid));
+
         try {
           await mkdir(workspacePath, { recursive: true });
-
-          const before = await takeWindowsProcessSnapshot();
-          const beforePids = new Set(before.map((entry) => entry.pid));
 
           await openPathInTargetWithRuntime(
             {
@@ -3027,7 +3028,7 @@ describe("workspace open targets", () => {
 
           await new Promise((resolveWait) => setTimeout(resolveWait, 2000));
 
-          launched = (await takeWindowsProcessSnapshot()).filter(
+          const launched = (await takeWindowsProcessSnapshot()).filter(
             (entry) =>
               !beforePids.has(entry.pid) && isInteractiveShellConsole(entry),
           );
@@ -3055,8 +3056,16 @@ describe("workspace open targets", () => {
             expect(await queryWindowsProcess(entry.pid)).toBeNull();
           }
         } finally {
-          for (const entry of launched) {
-            await killFallbackShell(entry.pid);
+          const remaining = await takeWindowsProcessSnapshot().catch(
+            (): WindowsProcessSnapshotEntry[] => [],
+          );
+          for (const entry of remaining) {
+            if (
+              !beforePids.has(entry.pid) &&
+              isInteractiveShellConsole(entry)
+            ) {
+              await killFallbackShell(entry.pid);
+            }
           }
           await rm(workspaceRoot, { force: true, recursive: true }).catch(
             () => undefined,
@@ -3339,15 +3348,30 @@ describe("workspace open targets", () => {
           runtime,
         );
 
-        expect(
-          calls.find((call) => windowsExecutableName(call.file) === "cmd.exe")
-            ?.args,
-        ).toEqual([
+        const ideaCall = calls.find(
+          (call) => windowsExecutableName(call.file) === "cmd.exe",
+        );
+        expect(ideaCall?.args).toEqual([
           "/d",
           "/s",
           "/c",
-          `""${ideaCmd}" "--line" "15" "--column" "6" "${filePath}""`,
+          [
+            '""%BBOPENTARGETARG0%"',
+            '"%BBOPENTARGETARG1%"',
+            '"%BBOPENTARGETARG2%"',
+            '"%BBOPENTARGETARG3%"',
+            '"%BBOPENTARGETARG4%"',
+            '"%BBOPENTARGETARG5%""',
+          ].join(" "),
         ]);
+        expect([
+          ideaCall?.options?.env?.BBOPENTARGETARG0,
+          ideaCall?.options?.env?.BBOPENTARGETARG1,
+          ideaCall?.options?.env?.BBOPENTARGETARG2,
+          ideaCall?.options?.env?.BBOPENTARGETARG3,
+          ideaCall?.options?.env?.BBOPENTARGETARG4,
+          ideaCall?.options?.env?.BBOPENTARGETARG5,
+        ]).toEqual([ideaCmd, "--line", "15", "--column", "6", filePath]);
         expect(calls.find((call) => call.file === webstormExe)?.args).toEqual([
           "--line",
           "15",
@@ -3385,7 +3409,7 @@ describe("workspace open targets", () => {
       }
     });
 
-    it("quotes a .cmd shim and its arguments into one verbatim command line", async () => {
+    it("passes a .cmd shim and its arguments through environment variables", async () => {
       const localAppData = await mkdtemp(path.join(tmpdir(), "bb-localapp-"));
       const codeCmd = path.join(
         localAppData,
@@ -3423,8 +3447,10 @@ describe("workspace open targets", () => {
           "/d",
           "/s",
           "/c",
-          `""${codeCmd}" "${workspacePath}""`,
+          '""%BBOPENTARGETARG0%" "%BBOPENTARGETARG1%""',
         ]);
+        expect(call?.options?.env?.BBOPENTARGETARG0).toBe(codeCmd);
+        expect(call?.options?.env?.BBOPENTARGETARG1).toBe(workspacePath);
         expect(call?.options?.windowsVerbatimArguments).toBe(true);
       } finally {
         await rm(localAppData, { force: true, recursive: true });
@@ -3444,7 +3470,10 @@ describe("workspace open targets", () => {
           "code.cmd",
         );
         const workspaceRoot = await mkdtemp(path.join(tmpdir(), "bb-ws-"));
-        const workspacePath = path.join(workspaceRoot, "my project");
+        const workspacePath = path.join(
+          workspaceRoot,
+          "my 100%PATH%done project",
+        );
         const argvOutput = path.join(workspaceRoot, "argv out.txt");
         const calls: WindowsExecFileCall[] = [];
 
@@ -3480,6 +3509,8 @@ describe("workspace open targets", () => {
             (candidate) => windowsExecutableName(candidate.file) === "cmd.exe",
           );
           expect(call).toBeDefined();
+          expect(workspacePath).toContain("%PATH%");
+          expect(call?.args[3]).not.toContain("%PATH%");
 
           const runtime = createWorkspaceOpenTargetRuntime();
           await runtime.execFile(

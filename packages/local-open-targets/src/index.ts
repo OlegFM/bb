@@ -532,7 +532,9 @@ async function defaultExecFile(
 
   const result = await execFileAsync(file, args, {
     env: sanitizeInheritedChildProcessEnv({ env: options?.env ?? process.env }),
-    windowsHide: options?.windowsHide ?? true,
+    ...(process.platform === "win32"
+      ? { windowsHide: options?.windowsHide ?? true }
+      : {}),
     ...(options?.windowsVerbatimArguments === undefined
       ? {}
       : { windowsVerbatimArguments: options.windowsVerbatimArguments }),

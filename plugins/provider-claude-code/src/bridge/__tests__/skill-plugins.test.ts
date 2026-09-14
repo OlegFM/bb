@@ -58,32 +58,65 @@ describe("claude skill plugins", () => {
     ).toContain("name: demo");
   });
 
-  it("links the skills directory as a junction on Windows", () => {
+  it("passes the junction link type on win32 and the dir type off win32", () => {
     const pluginsRoot = createClaudeSkillPluginsRoot(baseDir);
-    const skillsPath = stageSkills("win");
+    const skillsPath = stageSkills("seam");
+    const calls: Array<{
+      target: string;
+      linkPath: string;
+      type: "junction" | "dir";
+    }> = [];
+    const symlink = (
+      target: string,
+      linkPath: string,
+      type: "junction" | "dir",
+    ): void => {
+      calls.push({ target, linkPath, type });
+    };
 
-    const pluginPath = ensureClaudeSkillPlugin({
-      pluginsRoot,
-      root: { id: "win", path: skillsPath },
-      platform: "win32",
-    });
-
-    const skillsLink = join(pluginPath, "skills");
-    expect(lstatSync(skillsLink).isSymbolicLink()).toBe(true);
-    expect(readlinkSync(skillsLink)).toBe(skillsPath);
-    expect(
-      readFileSync(join(skillsLink, "demo", "SKILL.md"), "utf8"),
-    ).toContain("name: demo");
-
-    expect(
+    for (const platform of ["win32", "linux"] as const) {
       ensureClaudeSkillPlugin({
+        pluginsRoot,
+        root: { id: `seam-${platform}`, path: skillsPath },
+        platform,
+        symlink,
+      });
+    }
+
+    expect(calls.map((call) => call.type)).toEqual(["junction", "dir"]);
+    expect(calls.map((call) => call.target)).toEqual([skillsPath, skillsPath]);
+    expect(calls.every((call) => call.linkPath.endsWith("skills"))).toBe(true);
+  });
+
+  it.runIf(process.platform === "win32")(
+    "links the skills directory as a junction on Windows",
+    () => {
+      const pluginsRoot = createClaudeSkillPluginsRoot(baseDir);
+      const skillsPath = stageSkills("win");
+
+      const pluginPath = ensureClaudeSkillPlugin({
         pluginsRoot,
         root: { id: "win", path: skillsPath },
         platform: "win32",
-      }),
-    ).toBe(pluginPath);
-    expect(readlinkSync(skillsLink)).toBe(skillsPath);
-  });
+      });
+
+      const skillsLink = join(pluginPath, "skills");
+      expect(lstatSync(skillsLink).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(skillsLink)).toBe(skillsPath);
+      expect(
+        readFileSync(join(skillsLink, "demo", "SKILL.md"), "utf8"),
+      ).toContain("name: demo");
+
+      expect(
+        ensureClaudeSkillPlugin({
+          pluginsRoot,
+          root: { id: "win", path: skillsPath },
+          platform: "win32",
+        }),
+      ).toBe(pluginPath);
+      expect(readlinkSync(skillsLink)).toBe(skillsPath);
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "links the skills directory as a directory symlink off Windows",
