@@ -1,13 +1,22 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import {
+  execFile,
+  spawn,
+  type ChildProcess,
+  type ExecFileOptions,
+  type SpawnOptions,
+} from "node:child_process";
 import { constants } from "node:fs";
-import path, { extname } from "node:path";
+import path from "node:path";
 import { promisify } from "node:util";
 import { access, mkdir, stat } from "node:fs/promises";
 import {
   assignPathEnv,
   readNodeCmdShim,
+  readWindowsEnvValue,
   resolveExecutable,
   resolveWindowsSystemToolPath,
+  splitWindowsPathList,
+  terminateProcessTree,
 } from "@bb/process-utils";
 import {
   AUTOMATION_SCRIPT_TIMEOUT_MAX_MS,
@@ -28,54 +37,64 @@ let resolvedBbPath: string | null = null;
 const BB_NOT_INJECTED_WARNING =
   "[bb] warning: could not locate the bb CLI, so `bb` is not on PATH for this script.";
 
-async function resolveProbeSpawnPlan(
+export interface ProbeSpawnPlan {
+  command: string;
+  args: string[];
+  verbatim: boolean;
+}
+
+export async function resolveProbeSpawnPlan(
   command: string,
+  args: string[],
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv,
-): Promise<{ command: string; argsPrefix: string[] }> {
+): Promise<ProbeSpawnPlan> {
   if (platform !== "win32" || !command.toLowerCase().endsWith(".cmd")) {
-    return { command, argsPrefix: [] };
+    return { command, args, verbatim: false };
   }
   const shim = await readNodeCmdShim(command);
   if (shim !== null) {
-    return { command: shim.command, argsPrefix: shim.args };
+    return {
+      command: shim.command,
+      args: [...shim.args, ...args],
+      verbatim: false,
+    };
   }
   return {
     command: resolveWindowsSystemToolPath("cmd.exe", env),
-    argsPrefix: ["/d", "/c", command],
+    args: ["/d", "/s", "/c", `""${command}" ${args.join(" ")}"`],
+    verbatim: true,
   };
 }
 
-async function commandWorks(
+export function probeExecOptions(args: {
+  platform: NodeJS.Platform;
+  verbatim: boolean;
+}): ExecFileOptions {
+  return {
+    timeout: 5_000,
+    ...(args.platform === "win32" ? { windowsHide: true } : {}),
+    ...(args.verbatim ? { windowsVerbatimArguments: true } : {}),
+  };
+}
+
+export async function commandWorks(
   command: string,
   args: string[],
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
   try {
-    const plan = await resolveProbeSpawnPlan(command, platform, env);
-    await execFileAsync(plan.command, [...plan.argsPrefix, ...args], {
-      timeout: 5_000,
-    });
+    const plan = await resolveProbeSpawnPlan(command, args, platform, env);
+    await execFileAsync(
+      plan.command,
+      plan.args,
+      probeExecOptions({ platform, verbatim: plan.verbatim }),
+    );
     return true;
   } catch {
     return false;
   }
-}
-
-function readPathValue(
-  env: NodeJS.ProcessEnv,
-  platform: NodeJS.Platform,
-): string {
-  if (platform !== "win32") {
-    return env.PATH ?? "";
-  }
-  for (const [key, value] of Object.entries(env)) {
-    if (/^path$/iu.test(key) && value !== undefined) {
-      return value;
-    }
-  }
-  return "";
 }
 
 export function bbBinaryCandidates(
@@ -83,7 +102,6 @@ export function bbBinaryCandidates(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   const pathImpl = platform === "win32" ? path.win32 : path.posix;
-  const pathDelimiter = platform === "win32" ? ";" : ":";
   const fileNames = platform === "win32" ? ["bb.cmd", "bb"] : ["bb"];
   const candidates: string[] = [];
   const pushIfAbsolute = (candidate: string): void => {
@@ -101,7 +119,11 @@ export function bbBinaryCandidates(
       pushIfAbsolute(pathImpl.join(fromCliDir, fileName));
     }
   }
-  for (const entry of readPathValue(env, platform).split(pathDelimiter)) {
+  const pathEntries =
+    platform === "win32"
+      ? splitWindowsPathList(readWindowsEnvValue(env, "Path"))
+      : (env.PATH ?? "").split(":");
+  for (const entry of pathEntries) {
     const trimmed = entry.trim();
     if (trimmed.length > 0) {
       for (const fileName of fileNames) {
@@ -115,16 +137,17 @@ export function bbBinaryCandidates(
   return candidates;
 }
 
-async function isExecutableFile(
+export async function isExecutableFile(
   candidate: string,
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
+  const pathImpl = platform === "win32" ? path.win32 : path.posix;
   try {
     const stats = await stat(candidate);
     if (!stats.isFile()) return false;
     if (platform === "win32") {
-      if (extname(candidate).length === 0) return false;
+      if (pathImpl.extname(candidate).length === 0) return false;
       return (
         (await resolveExecutable({
           command: candidate,
@@ -267,12 +290,27 @@ function signalProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
+export function scriptSpawnOptions(args: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  platform: NodeJS.Platform;
+}): SpawnOptions {
+  return {
+    cwd: args.cwd,
+    detached: process.platform !== "win32",
+    env: args.env,
+    stdio: ["ignore", "pipe", "pipe"],
+    ...(args.platform === "win32" ? { windowsHide: true } : {}),
+  };
+}
+
 function executeWithProcessGroup(args: {
   command: string;
   args: string[];
   cwd: string;
   timeoutMs: number;
   env: NodeJS.ProcessEnv;
+  platform: NodeJS.Platform;
 }): Promise<ScriptRunResult> {
   return new Promise((resolve) => {
     let timedOut = false;
@@ -282,14 +320,26 @@ function executeWithProcessGroup(args: {
     const stderrChunks: Buffer[] = [];
     let forceKill: NodeJS.Timeout | undefined;
     let timeout: NodeJS.Timeout;
-    const child = spawn(args.command, args.args, {
-      cwd: args.cwd,
-      detached: process.platform !== "win32",
-      env: args.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    let treeTermination: Promise<unknown> | null = null;
+    const child = spawn(
+      args.command,
+      args.args,
+      scriptSpawnOptions({
+        cwd: args.cwd,
+        env: args.env,
+        platform: args.platform,
+      }),
+    );
 
     const terminateGroup = (): void => {
+      if (args.platform === "win32") {
+        treeTermination = terminateProcessTree({
+          child,
+          graceMs: 1_000,
+          platform: "win32",
+        });
+        return;
+      }
       signalProcessGroup(child, "SIGTERM");
       if (forceKill) return;
       forceKill = setTimeout(() => {
@@ -319,17 +369,26 @@ function executeWithProcessGroup(args: {
     child.once("close", (code) => {
       clearTimeout(timeout);
       if (forceKill) clearTimeout(forceKill);
-      if (timedOut || outputLimitExceeded) {
+      if (args.platform !== "win32" && (timedOut || outputLimitExceeded)) {
         signalProcessGroup(child, "SIGKILL");
       }
       const suffix = outputLimitExceeded ? "\n[output truncated]\n" : "";
-      resolve({
+      const result: ScriptRunResult = {
         exitCode: timedOut ? null : outputLimitExceeded ? 1 : code,
         output: `${Buffer.concat(stdoutChunks).toString("utf8")}${Buffer.concat(
           stderrChunks,
         ).toString("utf8")}${suffix}`,
         timedOut,
-      });
+      };
+      const termination = treeTermination;
+      if (termination === null) {
+        resolve(result);
+        return;
+      }
+      void termination.then(
+        () => resolve(result),
+        () => resolve(result),
+      );
     });
     timeout = setTimeout(() => {
       timedOut = true;
@@ -389,6 +448,7 @@ export async function executeStoredScript(args: {
     cwd,
     timeoutMs: Math.min(args.timeoutMs, AUTOMATION_SCRIPT_TIMEOUT_MAX_MS),
     env: scriptEnv,
+    platform,
   });
   return { ...result, output: `${warning}${result.output}` };
 }

@@ -10,6 +10,10 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
+import {
+  queryWindowsProcess,
+  resolveWindowsSystemToolPath,
+} from "@bb/process-utils";
 import type { PluginCliRegistration } from "@get-bb/plugin-sdk";
 import { describe, expect, it } from "vitest";
 import {
@@ -37,10 +41,15 @@ import {
 } from "./schedule-helpers.js";
 import {
   bbBinaryCandidates,
+  commandWorks,
   executeStoredScript,
+  isExecutableFile,
   isWakeAgentSuppressed,
   mapScriptResultToRun,
+  probeExecOptions,
+  resolveProbeSpawnPlan,
   scriptPathEnv,
+  scriptSpawnOptions,
 } from "./script-runner.js";
 import { reconcileRunningAutomationRuns } from "./run.js";
 import { sweepDueAutomations } from "./sweep.js";
@@ -1712,6 +1721,120 @@ describe("Windows automation interpreters", () => {
   });
 });
 
+describe("Windows bb probe and script spawn", () => {
+  it("joins the bb directory with the Windows path delimiter", () => {
+    expect(scriptPathEnv("C:\\tools\\bb.cmd", "C:\\bin", "win32")).toBe(
+      "C:\\tools;C:\\bin",
+    );
+    expect(scriptPathEnv("C:\\tools\\bb.cmd", undefined, "win32")).toBe(
+      "C:\\tools",
+    );
+    expect(scriptPathEnv("bb.cmd", "C:\\bin", "win32")).toBe("C:\\bin");
+  });
+
+  it("reads a quoted Path entry under any casing of the key", () => {
+    expect(
+      bbBinaryCandidates({ path: '"C:\\Program Files\\bb"' }, "win32"),
+    ).toEqual(["C:\\Program Files\\bb\\bb.cmd", "C:\\Program Files\\bb\\bb"]);
+  });
+
+  it("decides win32 executability by extension, never by the execute bit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-auto-exec-"));
+    const env = { PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    try {
+      const withExtension = join(dir, "bb.cmd");
+      const withoutExtension = join(dir, "bb");
+      await writeFile(withExtension, "@echo off\r\n");
+      await writeFile(withoutExtension, "");
+      await expect(isExecutableFile(withExtension, "win32", env)).resolves.toBe(
+        true,
+      );
+      await expect(
+        isExecutableFile(withoutExtension, "win32", env),
+      ).resolves.toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("probes a node .cmd shim through this runtime and any other .cmd through cmd.exe", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bb-auto-shim-"));
+    const env = { SystemRoot: "C:\\Windows" };
+    try {
+      const shim = join(dir, "bb.cmd");
+      const plain = join(dir, "tool.cmd");
+      await writeFile(shim, '@node  "%~dp0bb" %*\r\n');
+      await writeFile(plain, "@echo off\r\necho tool 1.0\r\n");
+
+      await expect(
+        resolveProbeSpawnPlan(shim, ["--version"], "win32", env),
+      ).resolves.toEqual({
+        command: process.execPath,
+        args: [join(dir, "bb"), "--version"],
+        verbatim: false,
+      });
+      await expect(
+        resolveProbeSpawnPlan(plain, ["--version"], "win32", env),
+      ).resolves.toEqual({
+        command: resolveWindowsSystemToolPath("cmd.exe", env),
+        args: ["/d", "/s", "/c", `""${plain}" --version"`],
+        verbatim: true,
+      });
+      await expect(
+        resolveProbeSpawnPlan(plain, ["--version"], "darwin", env),
+      ).resolves.toEqual({
+        command: plain,
+        args: ["--version"],
+        verbatim: false,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("hides the console window only on win32", () => {
+    expect(probeExecOptions({ platform: "win32", verbatim: false })).toEqual({
+      timeout: 5_000,
+      windowsHide: true,
+    });
+    expect(probeExecOptions({ platform: "darwin", verbatim: false })).toEqual({
+      timeout: 5_000,
+    });
+    expect(probeExecOptions({ platform: "win32", verbatim: true })).toEqual({
+      timeout: 5_000,
+      windowsHide: true,
+      windowsVerbatimArguments: true,
+    });
+    expect(
+      scriptSpawnOptions({ cwd: "/tmp", env: {}, platform: "win32" })
+        .windowsHide,
+    ).toBe(true);
+    expect(
+      "windowsHide" in
+        scriptSpawnOptions({ cwd: "/tmp", env: {}, platform: "darwin" }),
+    ).toBe(false);
+  });
+
+  it.runIf(process.platform === "win32")(
+    "probes a .cmd whose directory holds shell metacharacters",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "bb-auto-probe-"));
+      const dir = join(root, "dir with space & paren(1)");
+      await mkdir(dir, { recursive: true });
+      const candidate = join(dir, "bb.cmd");
+      await writeFile(candidate, "@echo off\r\necho bb 1.0\r\n");
+      try {
+        await expect(
+          commandWorks(candidate, ["--version"], "win32"),
+        ).resolves.toBe(true);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+});
+
 async function isProcessRunning(pid: number): Promise<boolean> {
   try {
     process.kill(pid, 0);
@@ -1978,5 +2101,69 @@ describe("PowerShell automation scripts", () => {
         await rm(pluginDataDir, { recursive: true, force: true });
       }
     },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "leaves no descendant when a .ps1 script times out",
+    async () => {
+      const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-ps1-tree-"));
+      const scriptDir = automationScriptDir(pluginDataDir, "auto_ps1_tree");
+      await mkdir(scriptDir, { recursive: true });
+      const helperPath = join(scriptDir, "spawn-descendant.mjs");
+      const pidPath = join(scriptDir, "pids.txt");
+      await writeFile(
+        helperPath,
+        [
+          'import { spawn } from "node:child_process";',
+          'import { writeFileSync } from "node:fs";',
+          'const detached = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], {',
+          "  detached: true,",
+          '  stdio: "ignore",',
+          "});",
+          "detached.unref();",
+          "writeFileSync(process.argv[2], `${process.pid} ${detached.pid}`);",
+          "setTimeout(() => {}, 600000);",
+          "",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(scriptDir, "script.ps1"),
+        `& '${process.execPath}' '${helperPath}' '${pidPath}'\r\n`,
+      );
+      const descendants: number[] = [];
+
+      try {
+        const result = await executeStoredScript({
+          pluginDataDir,
+          automationId: "auto_ps1_tree",
+          runId: "run_ps1_tree",
+          projectId: "proj_test",
+          scriptFile: "script.ps1",
+          timeoutMs: 10_000,
+          serverUrl: "http://127.0.0.1:38886",
+        });
+
+        expect(result.timedOut).toBe(true);
+        for (const value of (await readFile(pidPath, "utf8")).split(" ")) {
+          descendants.push(Number.parseInt(value, 10));
+        }
+        expect(descendants).toHaveLength(2);
+        expect(descendants.every(Number.isSafeInteger)).toBe(true);
+        await expect(
+          queryWindowsProcess(descendants[0] ?? 0),
+        ).resolves.toBeNull();
+        await expect(
+          queryWindowsProcess(descendants[1] ?? 0),
+        ).resolves.toBeNull();
+      } finally {
+        for (const pid of descendants) {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {}
+        }
+        await rm(pluginDataDir, { recursive: true, force: true });
+      }
+    },
+    180_000,
   );
 });
