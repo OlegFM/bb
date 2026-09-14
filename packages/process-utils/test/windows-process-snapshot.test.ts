@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildWindowsProcessEnumRequest,
@@ -18,6 +20,22 @@ import {
 
 const CREATED_AT = "2026-09-14T09:00:00.0000000+00:00";
 const SWEEP_DIRECTORY = "C:\\work\\bb";
+const WINDOWS_SHORT_DIRECTORY = "C:\\PROGRA~1";
+
+function hasWindowsShortNames(): boolean {
+  if (process.platform !== "win32") {
+    return false;
+  }
+  try {
+    return (
+      realpathSync.native(WINDOWS_SHORT_DIRECTORY).toLowerCase() !==
+      WINDOWS_SHORT_DIRECTORY.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
+
 const WINDOWS_ENV: NodeJS.ProcessEnv = {
   Path: "C:\\nowhere",
   SystemRoot: "C:\\Windows",
@@ -272,9 +290,31 @@ describe("isWindowsPathUnderDirectory", () => {
     ["C:\\proyectos\\diseño\\app.exe", "C:\\proyectos\\diseño", true],
     ["C:\\work\\bb", "C:\\", true],
     ["D:\\other\\x.exe", "C:\\work", false],
+    ["C:\\x", "C:", true],
+    ["D:\\x", "C:", false],
+    ["C:", "C:\\", true],
   ])("compares %s against %s as %s", (candidate, directory, expected) => {
     expect(isWindowsPathUnderDirectory(candidate, directory)).toBe(expected);
   });
+
+  it.runIf(hasWindowsShortNames())(
+    "expands 8.3 short names on the candidate and on the directory",
+    () => {
+      const longDirectory = realpathSync.native(WINDOWS_SHORT_DIRECTORY);
+      expect(
+        isWindowsPathUnderDirectory(WINDOWS_SHORT_DIRECTORY, longDirectory),
+      ).toBe(true);
+      expect(
+        isWindowsPathUnderDirectory(
+          join(longDirectory, "bb-sweep-probe", "agent.exe"),
+          WINDOWS_SHORT_DIRECTORY,
+        ),
+      ).toBe(true);
+      expect(
+        isWindowsPathUnderDirectory(WINDOWS_SHORT_DIRECTORY, "C:\\Windows"),
+      ).toBe(false);
+    },
+  );
 });
 
 describe("matchWindowsProcessesUnderDirectory", () => {

@@ -310,6 +310,26 @@ describe("readNodeCmdShim", () => {
     });
   });
 
+  it("reads the direct dp0 node.exe shim", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "x.cmd");
+    await writeFile(
+      shim,
+      '"%dp0%\\node.exe" "%dp0%\\..\\pkg\\bin\\x.js" %*\r\n',
+    );
+    await expect(readNodeCmdShim(shim)).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "..", "pkg", "bin", "x.js")],
+    });
+  });
+
+  it("returns null for a node shim whose target is a binary", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "wrapper.cmd");
+    await writeFile(shim, '@node "%~dp0\\..\\tools\\helper.exe" %*\r\n');
+    await expect(readNodeCmdShim(shim)).resolves.toBeNull();
+  });
+
   it("returns null for a shim that does not run node and for a missing file", async () => {
     const root = await makeRoot();
     const shim = join(root, "helper.cmd");

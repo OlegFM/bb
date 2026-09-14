@@ -327,6 +327,9 @@ function canonicalizeWindowsPath(value: string): string {
     rest = rest.slice(2);
   }
   rest = rest.replace(/\\+/gu, "\\");
+  if (prefix === "" && /^[A-Za-z]:$/u.test(rest)) {
+    rest = `${rest}\\`;
+  }
   if (rest.length > 1 && rest.endsWith("\\") && !/^[A-Za-z]:\\$/u.test(rest)) {
     rest = rest.replace(/\\+$/u, "");
   }
@@ -353,8 +356,12 @@ export function isWindowsPathUnderDirectory(
   candidate: string,
   directory: string,
 ): boolean {
-  const canonicalCandidate = canonicalizeWindowsPath(candidate);
-  const canonicalDirectory = canonicalizeWindowsPath(directory);
+  const canonicalCandidate = canonicalizeWindowsPath(
+    expandWindowsShortPath(candidate),
+  );
+  const canonicalDirectory = canonicalizeWindowsPath(
+    expandWindowsShortPath(directory),
+  );
   if (canonicalCandidate === canonicalDirectory) {
     return true;
   }
