@@ -49,6 +49,7 @@ interface CliRun {
 describe("bb startup module graph", () => {
   let tempDir: string;
   let registerHooksPath: string;
+  let registerHooksUrl: string;
   let distEntry: string;
 
   beforeAll(async () => {
@@ -56,6 +57,7 @@ describe("bb startup module graph", () => {
     await mkdir(packageTmpDir, { recursive: true });
     tempDir = await mkdtemp(join(packageTmpDir, "startup-graph-"));
     registerHooksPath = join(tempDir, "register-hooks.mjs");
+    registerHooksUrl = pathToFileURL(registerHooksPath).href;
     distEntry = join(tempDir, "dist", "index.js");
     await writeFile(join(tempDir, "resolve-hooks.mjs"), RESOLVE_HOOKS_SOURCE);
     await writeFile(registerHooksPath, REGISTER_HOOKS_SOURCE);
@@ -90,10 +92,10 @@ describe("bb startup module graph", () => {
             "--import",
             "tsx",
             "--import",
-            registerHooksPath,
+            registerHooksUrl,
             "src/index.ts",
           ]
-        : ["--import", registerHooksPath, distEntry];
+        : ["--import", registerHooksUrl, distEntry];
     const { stdout } = await execFileAsync(
       process.execPath,
       [...entryArgs, ...args],
@@ -125,6 +127,7 @@ describe("bb startup module graph", () => {
       "/packages/config/",
       "/packages/domain/",
       "/packages/sdk/",
+      "/packages/process-utils/",
       "/packages/server-contract/",
       "/packages/templates/",
       "/apps/cli/src/commands/",
