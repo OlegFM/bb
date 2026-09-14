@@ -144,7 +144,10 @@ Not available on the phone (use the web app or desktop for these):
 - dev restart internals that are not part of the shipped product path
 - native Windows PowerShell, CMD, and host-daemon runtime flows; the in-progress
   native port and its measured state are tracked in
-  [platform-windows.md](platform-windows.md)
+  [platform-windows.md](platform-windows.md). Phase 2 (processes, environment,
+  Git, hooks, open targets) has landed on the `windows-native/phase-2` fork
+  branch; it has not merged to `main` and does not change the supported
+  product path above.
 
 ## Dependency Policy
 

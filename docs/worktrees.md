@@ -108,12 +108,16 @@ pnpm install
 Contract:
 
 - The script runs with `env bash`, working directory set to the new worktree.
+  On a native Windows host bb instead looks for `.bb-env-setup.ps1` and runs
+  it with `pwsh.exe` (or `powershell.exe`) `-NoLogo -NoProfile -NonInteractive
+-ExecutionPolicy Bypass -File`; a `.sh`-only script on Windows fails setup
+  naming the `.ps1` contract instead of running.
 - stdin is closed. stdout and stderr stream into the thread's provisioning
   transcript in the app.
 - A non-zero exit, a signal, or a timeout (15 minutes) fails provisioning and
   the thread doesn't start.
-- POSIX only — supported on macOS, Linux, and WSL2. Native Windows isn't
-  supported; bb reports that POSIX shell scripts are unsupported on Windows.
+- Supported on macOS, Linux, WSL2, and — for `.bb-env-setup.ps1` — native
+  Windows (in progress; see [platform-windows.md](platform-windows.md)).
 
 ## Cleanup
 
@@ -154,14 +158,15 @@ Contract:
 - bb runs the script before calling a provider to remove a path it owns,
   including cleanup after failed setup. Attached paths do not run it.
 - bb runs `env bash .bb-env-teardown.sh` from the worktree before it removes
-  the worktree, so the script can read tracked and generated files.
+  the worktree, so the script can read tracked and generated files. On native
+  Windows bb runs `.bb-env-teardown.ps1` the same way it runs the setup hook.
 - stdin is closed. bb records stdout and stderr in the server lifecycle logs.
 - The script gets a separate 15-minute timeout.
 - A non-zero exit, a signal, or a timeout reports a failure. It never stops bb
   from removing the worktree.
 - The script receives the same sanitized environment as the setup script.
-- POSIX only — supported on macOS, Linux, and WSL2. Native Windows isn't
-  supported; bb reports that POSIX shell scripts are unsupported on Windows.
+- Supported on macOS, Linux, WSL2, and — for `.bb-env-teardown.ps1` — native
+  Windows (in progress; see [platform-windows.md](platform-windows.md)).
 
 Hook operation IDs and their started/finished state are saved per launch attempt.
 After a server restart, bb reconciles the original daemon operation instead of
@@ -178,12 +183,17 @@ A few quick checks:
    in the app. Failures from `git worktree add` (dirty source checkout,
    invalid base branch, conflicting branch name) show up there with the exact
    git error.
-2. If `.bb-env-setup.sh` doesn't seem to run, make sure it's committed to
-   the branch you're working from. A file that exists only in the working
-   copy of your main checkout won't appear in the new worktree.
+2. If `.bb-env-setup.sh` (or `.bb-env-setup.ps1` on Windows) doesn't seem to
+   run, make sure it's committed to the branch you're working from. A file
+   that exists only in the working copy of your main checkout won't appear in
+   the new worktree.
 3. If your setup script hangs, remember stdin is closed. Anything that
    prompts for input will time out at 15 minutes.
 4. Run `bash .bb-env-setup.sh` manually in a clean clone to verify it works
    outside bb before debugging through the provisioning transcript.
 5. Run `bash .bb-env-teardown.sh` manually before you delete a test worktree.
    Confirm that repeated runs do not fail or remove shared resources.
+6. On Windows, run
+   `pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .bb-env-setup.ps1`
+   (or the equivalent for `.bb-env-teardown.ps1`) manually before debugging
+   through the provisioning transcript.

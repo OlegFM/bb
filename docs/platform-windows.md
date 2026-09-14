@@ -14,7 +14,7 @@ what has been measured on native Windows and what is known not to work.
 | -------------------------------------------------- | -------------------------------------------- |
 | 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/` |
 | 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/` |
-| 2 Processes, environment, Git, hooks, open targets | not started                                  |
+| 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/` |
 | 3 ConPTY, providers, watcher, native `bb-app`      | not started                                  |
 | 4 Windows Desktop                                  | not started                                  |
 | 5 Persistent host and GA hardening                 | not started                                  |
@@ -119,6 +119,176 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   `<data dir>\personal-workspaces`, the legacy roots, on every platform; that
   mismatch predates this branch and is not changed by it.
 
+## Processes, hooks, git and open targets (Phase 2)
+
+- **Environment hooks.** The Windows hook contract is `.bb-env-setup.ps1` and
+  `.bb-env-teardown.ps1` (`packages/domain/src/setup-script.ts`), run through
+  `pwsh.exe` when present, else `powershell.exe`, with
+  `-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <abs>`. cwd,
+  the sanitized environment (`BB_*` and `NODE_ENV` stripped, PATH resolved),
+  the 15-minute timeout, transcript streaming, and cancellation are the same as
+  POSIX; cancellation and timeout stop the hook's process tree through
+  `terminateProcessTree` instead of a signal. A workspace that has only the
+  `.sh` hook on Windows fails setup with a message naming the `.ps1` contract
+  (`.bb-env-setup.sh is a POSIX shell script; on Windows bb runs
+.bb-env-setup.ps1 instead (pwsh.exe or powershell.exe)`) rather than
+  skip-and-continue; a `.sh`-only teardown hook reports the same failure with
+  the teardown names (`.bb-env-teardown.sh is a POSIX shell script; on Windows
+bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)`) without
+  blocking worktree removal. There is no Git Bash fallback for hooks.
+- **PATH resolution.** `runtime-shell-env.ts` on win32 reads
+  `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\Path` and
+  `HKCU\Environment\Path` through `reg.exe query … /v Path` (REG_EXPAND_SZ
+  expanded against the daemon's own environment), joins machine then user,
+  then runs a PowerShell profile probe (`pwsh.exe` if found, else
+  `powershell.exe`) that prints `__BB_SHELL_ENV_START__`, base64
+  `Name=Value` pairs, `__BB_SHELL_ENV_END__`. Precedence: the probe's `Path`
+  wins when the last marker pair parses; otherwise the registry PATH;
+  otherwise the daemon's own inherited `Path`. The probe timeout is 8 seconds
+  (PowerShell cold start measured at about 2.6 s). An `SHELL` variable
+  pointing at an sh-like shell is ignored on win32 — bb's own probes never run
+  Git Bash.
+- **Stop sequence.** `terminateProcessTree` implements the identity rules from
+  spec §5 on win32: the leader is asked to exit through
+  `taskkill.exe /PID <leader> /T` (no `/F`), then force-killed only through
+  the `ChildProcess` handle bb still holds and only while
+  `exitCode === null && signalCode === null` — a PID cannot be recycled while
+  a handle to it is open. Descendants are re-snapshotted after the grace
+  period and each one is force-killed individually (`taskkill.exe /PID <pid>
+/F`) only when its `CreationDate` still matches the snapshot taken before
+  the leader was signalled; a mismatch is skipped and reported through
+  `onSkippedProcess({ pid, reason: "pid-reused", expectedCreationDate,
+observedCreationDate })`, which the daemon logs as `pid-reused`. No forced
+  kill ever targets a bare PID whose identity was not re-verified. On win32,
+  `killProcessGroup` stays `child.kill(signal)` and is leader-only there — it
+  does not walk descendants; callers that need the full tree use
+  `terminateProcessTree`. There is no Job Object in this phase: a descendant
+  bb never observed (never snapshotted, so it has no recorded `CreationDate`
+  to verify against) can still escape the tree and is not swept by the stop
+  sequence — this is the risk spec §9 records as open, closed only for the
+  recycled-PID case, not the escaped-descendant case; the trigger to add a
+  native Job Object helper is a repeated Phase 4 "zero orphans after Quit"
+  gate failure. `terminateProcessTree` never rejects on a Windows enumeration
+  failure — the leader stop still runs and the result carries an
+  `enumerationError` with empty descendant arrays — but the sweep below
+  propagates enumeration failure as an error instead of returning an empty
+  list, because a silent `[]` would read as "nothing to kill".
+- **Process sweep.** `killProcessesWithCwdUnder` (used to reap a managed
+  workspace before removing it) enumerates with `Get-CimInstance
+Win32_Process` (measured cost about 0.55 s here; cold PowerShell start about
+  2.6 s) instead of reading `cwd` from `/proc`, so every Windows match carries
+  `approximateCwd: true` and a `matchEvidence` of `"spawn-registry"` (bb
+  itself spawned the process with a known cwd), `"executable-path"` (the
+  process's own exe path is under the directory), `"command-line"` (the
+  directory string appears in the process's command line, reported by
+  `listProcessesWithCwdUnder` but never killed by the sweep — an editor or
+  terminal opened on the worktree carries the path in argv), or `"descendant"`
+  (a child of an already-matched process). Each kill candidate's
+  `CreationDate` is re-verified against a fresh snapshot immediately before
+  its own `taskkill /PID <pid> /F`; a mismatch is skipped and reported through
+  `onSkippedProcess` rather than killed blind — there is no graceful signal
+  step on this path, unlike POSIX's SIGTERM-then-SIGKILL. A 10-second
+  enumeration timeout is an error (`WindowsProcessEnumerationError`), never an
+  empty list — an empty list would look like "nothing to kill" and leave a
+  live tree behind. `killProcessesWithCwdUnder` matches with
+  `includeCommandLineEvidence: false`, so only `spawn-registry`,
+  `executable-path` and `descendant` evidence actually gets a process killed;
+  a `command-line`-only match surfaces through `listProcessesWithCwdUnder`
+  (and its `matchEvidence`) but is never itself a kill target. Because there
+  is no real cwd query, two mismatches are possible and are reproduced in
+  `qa/windows/phase-2/26-process-enumeration.md`: an **under-match**, a
+  process whose cwd is genuinely under the directory but whose command line
+  and executable path do not mention it (a real target the sweep misses,
+  regardless of evidence kind), and an **over-match** on the kill path, a
+  process whose own executable happens to live under the directory (for
+  example a locally built binary still running from a different cwd) and so
+  matches on `executable-path` evidence even though its cwd is elsewhere (a
+  false positive the sweep kills). A `command-line`-only false positive is a
+  reporting-only over-match: `listProcessesWithCwdUnder` shows it, but the
+  sweep does not kill it. Consequence: a process the user started themselves
+  with a cwd under a worktree is not stopped and worktree removal fails with
+  EBUSY.
+- **Secrets.** `@bb/secret-storage` on win32 creates a secret file empty with
+  `wx`, tightens it with `icacls.exe <file> /inheritance:r /grant:r *<SID>:F`
+  (the SID from `whoami.exe /user /fo csv`, cached per process), and reads the
+  ACL back: the output must be exactly one ACE line whose identity is the
+  current account name or SID and whose rights are `(F)`, or the write is
+  rejected. Only after that read-back succeeds are the secret bytes written (a
+  staged temp file, tightened and verified, then published onto the final path
+  with a hard link so concurrent creators agree on one value and the final
+  path is never observed empty). An existing file is tightened and verified
+  the same way on first read per process, and the verification is cached for
+  the process lifetime. A legacy empty file is repaired by moving it aside,
+  and `readSecretFile` still returns `""` for it, matching POSIX. Any failure
+  in this sequence removes the empty or staged file and throws an error
+  naming the path and the remedy: put the data directory on an NTFS volume.
+  Secret file names must be ASCII; with a non-ASCII Windows account name,
+  `icacls`/`whoami` output may show replacement characters. `plugins/account-pool`,
+  `plugins/secrets`, and the host daemon's own `auth-state.ts` and
+  `identity.ts` files are out of scope — see Known limitations.
+- **Junctions.** `path-mutations.ts` already refuses every reparse point
+  (`fs.lstat().isSymbolicLink()` is `true` for a Windows junction) for move
+  and remove, because `requireExistingWithin` resolves the target through
+  `fs.realpath` first — lifting that guard would mutate the junction's target
+  directory instead of the link itself. Phase 2 adds win32 tests for remove,
+  move, and a junction-substitution race, each asserting the target directory
+  is untouched; nothing in the refusal logic changed.
+- **Open targets and picker.** `local-open-targets` gains a `windows`
+  launch-adapter arm beside `macos`: Explorer (`explorer.exe /select,<path>`
+  for a file, `explorer.exe <dir>` for a directory; exit code 1 counts as
+  success only when the path exists — Explorer's own quirk), Windows Terminal
+  (`wt.exe -d <dir>`) with a visible `pwsh.exe`/`powershell.exe` console as
+  the fallback when `wt.exe` is not installed, VS Code family discovery
+  through `resolveExecutable` (a `Path` + `PATHEXT` walk, no `where.exe`), the
+  `HKLM`/`HKCU
+\Software\Microsoft\Windows\CurrentVersion\App Paths\<exe>` registry keys,
+  and `%LOCALAPPDATA%\Programs` / `%ProgramFiles%`, JetBrains Toolbox under
+  `%LOCALAPPDATA%\JetBrains\Toolbox`, the default app through
+  `explorer.exe <file>` (ShellExecute — not `cmd.exe /c start`), and `.cmd`
+  editor shims launched through `readNodeCmdShim` first, falling back to
+  `cmd.exe /d /c <shim>` for a shim that is not a recognized node wrapper.
+  Icons are the static per-adapter icon; nothing is extracted from the target
+  executable. The folder picker gains a win32 arm that runs a PowerShell
+  `System.Windows.Forms.FolderBrowserDialog` under `-STA`; the desktop app on
+  Windows uses this daemon picker the same way it already uses the daemon's
+  `osascript` picker on macOS, rather than an Electron dialog.
+- **The `bb` launcher.** `apps/cli/bin/bb` is unchanged: it is still the POSIX
+  `#!/bin/sh` script that `exec`s node on the built CLI entry. Windows is
+  served by a sibling `apps/cli/bin/bb.cmd`, a one-line
+  `@node "%~dp0..\dist\index.js" %*` shim, so `bb` works unmodified from
+  `cmd.exe` and PowerShell (both find `.cmd` through PATHEXT) while `bb.cmd`
+  is the name to call explicitly from a script that must not rely on PATHEXT.
+  `apps/cli/bin/title.cmd` is `@title %*`, using cmd's own built-in. The
+  daemon bundle and the `bb-app` host package ship a `bb.cmd` of their own
+  (`@node "%~dp0bb" %*`, pointing at the bundled entry beside it); automations
+  and other spawners that need bb's own path read `BB_CLI`, which on win32
+  points at the `bb.cmd` shim. Nothing in bb runs a `.cmd` through `cmd.exe`
+  or through a shell: a `.cmd` on `BB_CLI` is parsed with `readNodeCmdShim`
+  and started as `node <script>`, and a `.cmd` that is not a Node shim is
+  refused with `Windows launcher <path> is not a Node shim bb can start
+directly`.
+- **Automations interpreters.** `automationScriptInterpreterSchema` gains
+  `"powershell"`, mapped from a `.ps1` script file. On win32, `bbBinaryCandidates`
+  adds `bb.cmd` beside `bb` for `BB_CLI_DIR` and every PATH entry (the
+  Homebrew fallback paths are POSIX-only and are not tried); interpreter
+  commands (`node`, `python3` then `python`, `pwsh` then `powershell`) are
+  resolved through `resolveExecutable` instead of spawned by bare name.
+  `"powershell"` on POSIX resolves to `pwsh`. The extension mapping is not
+  Windows-only: on macOS and Linux a stored `.ps1` automation that previously
+  fell through to the default `bash` interpreter now runs under `pwsh` and
+  fails with a spawn error when PowerShell 7 is not installed. Set
+  `--interpreter bash` explicitly on such an automation, or rename the script.
+- **Skill scripts.** bb never spawns an agent skill's own script itself —
+  agents run their skill scripts through whatever shell the agent's own
+  session uses — so this is guidance for agents on Windows, not a code path
+  bb owns (see Known limitations). Per spec §6: a `.ps1` script runs through
+  PowerShell with the same flags as bb's own probes; `.cmd`/`.bat` run through
+  `cmd.exe /d /c <file> args…` with the file path as its own argv element;
+  `.js`/`.mjs`/`.cjs` run through node; `.sh` and extensionless shebang files
+  run through `sh.exe` from Git for Windows when it is present, otherwise the
+  agent should fail loudly naming the file and the remedy (install Git for
+  Windows, or provide a `.ps1`/`.cmd` equivalent).
+
 ## Known limitations after Phase 0
 
 - Project paths became drive-letter aware in Phase 1 (see "Host identity and
@@ -201,6 +371,38 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   root never matches its children, and `_`/`%` characters in a key are
   treated as wildcards (pre-existing behavior, now applied to path keys).
 
+## Known limitations after Phase 2
+
+- The Desktop runtime-identity design (`BB_DESKTOP_RUNTIME_ID`,
+  `BB_DESKTOP_PARENT_PID`, a parent-PID watchdog) that spec §5 describes for
+  verified process stop is deferred to Phase 4, where Desktop's owned-runtime
+  policy needs it; Phase 2's `verified-process-stop.ts` win32 arm verifies
+  through `queryWindowsProcess` instead.
+- `plugins/account-pool`, `plugins/secrets`, and the host daemon's own
+  `auth-state.ts` and `identity.ts` own their secret files directly and are
+  not ACL-hardened by this phase.
+- `pnpm dev:stop` still force-kills the pid recorded in a session's pid file
+  after checking only that the pid exists; verifying process identity before
+  a forced kill is developer tooling, not a product seam, and stays
+  unverified.
+- `apps/server/src/services/plugins/update-resolver.ts` calls
+  `git ls-remote <url>` with a Windows path as the URL when a plugin update
+  source is a local path; this is a pre-existing upstream finding, not fixed
+  in this phase.
+- `plugins/github/server.ts`'s `run()` helper spawns `gh` with an unsanitized
+  inherited environment; this is a pre-existing upstream finding, not fixed
+  in this phase.
+- `provider-maintenance-kit`'s `experimental_resolveExecutablePath` and its
+  PATHEXT-aware installer commands arrive in Phase 3 alongside provider
+  launch.
+- Terminal sweep-root registration (`registerSweepRootProcess` wired to
+  node-pty's reported pid) arrives in Phase 3 with ConPTY.
+- Open targets on Windows use static per-adapter icons; there is no icon
+  extraction from the target executable the way some platforms support.
+- JetBrains Toolbox version selection under
+  `%LOCALAPPDATA%\JetBrains\Toolbox\apps` picks lexicographically, not by
+  parsed version number.
+
 ## Evidence
 
 `qa/windows/phase-0/` holds host facts, install output, the native add-on
@@ -214,3 +416,15 @@ resolving to one project id plus a UNC 400 (`21-path-identity.md`), a managed
 worktree provisioned and removed (`22-managed-worktree.md`), the WSL POSIX
 test run (`40-posix-check.md`), and the `windows-x64` CI run
 (`41-ci-run.md`).
+
+`qa/windows/phase-2/` holds host facts (`00-host.md`), the build/typecheck log
+and per-package test results (`30-build-typecheck.txt`, `31-test-results.md`,
+`31-test-output-tail.txt`), a hook that streams, times out (or is cancelled)
+and leaves no descendants (`20-hook-stream-timeout-cancel.md`), a PID-reuse
+stress run (`21-pid-reuse-stress.md`), a secret file's ACL read-back
+(`22-secret-acl.md`), the junction test summary (`23-junctions.md`), open
+targets opened from Explorer, VS Code and Windows Terminal
+(`24-open-targets.md`), `bb` run from PowerShell including a directory with a
+space (`25-bb-from-powershell.md`), process enumeration over-match and
+under-match cases (`26-process-enumeration.md`), the WSL POSIX test run
+(`40-posix-check.md`), and the `windows-x64` CI run (`41-ci-run.md`).

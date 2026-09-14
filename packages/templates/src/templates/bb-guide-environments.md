@@ -30,7 +30,10 @@ Making your repo work with bb:
   present and will not run.
 
   BB runs the hook as `env bash .bb-env-setup.sh` with cwd set to the new
-  workspace. POSIX shell setup scripts are not supported on Windows. The hook
+  workspace. On native Windows BB instead looks for .bb-env-setup.ps1 and
+  runs it through pwsh.exe (or powershell.exe) with
+  -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File; a
+  .sh-only script on Windows fails setup naming the .ps1 contract. The hook
   inherits the host daemon's sanitized environment: NODE_ENV and every BB_*
   variable are removed, and bb does not inject BB_PROJECT_ID, BB_ENVIRONMENT_ID,
   or BB_SOURCE_PATH.
@@ -49,11 +52,12 @@ Making your repo work with bb:
   "Running .bb-env-setup.sh" and then ".bb-env-setup.sh finished",
   ".bb-env-setup.sh failed", or ".bb-env-setup.sh cancelled".
 
-  Commit a .bb-env-teardown.sh script at the repo root when setup creates
-  resources outside the managed worktree. BB runs the hook as
-  `env bash .bb-env-teardown.sh` from the worktree before it removes the
-  worktree. The hook receives the same sanitized environment as the setup
-  hook, and stdin is closed.
+  Commit a .bb-env-teardown.sh script (.bb-env-teardown.ps1 on native
+  Windows) at the repo root when setup creates resources outside the managed
+  worktree. BB runs the hook as `env bash .bb-env-teardown.sh` from the
+  worktree before it removes the worktree; on native Windows it runs
+  .bb-env-teardown.ps1 the same way it runs setup. The hook receives the same
+  sanitized environment as the setup hook, and stdin is closed.
 
   Teardown has a separate 15-minute timeout. A non-zero exit, timeout, or
   signal reports failure in the destroy transcript, but bb removes the

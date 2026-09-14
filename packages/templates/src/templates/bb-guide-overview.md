@@ -32,7 +32,8 @@ upgrade, failed to load, or missing); run `bb plugin list` for the detail.
 All commands support --json for machine-readable output.
 
 To make a repo work with bb worktrees, run `bb guide environments` for the
-repo-level `.bb-env-setup.sh` and `.bb-env-teardown.sh` hooks. Run `bb guide
+repo-level `.bb-env-setup.sh`/`.bb-env-setup.ps1` and
+`.bb-env-teardown.sh`/`.bb-env-teardown.ps1` hooks. Run `bb guide
 agent-configuration` for the data-dir and workspace files that customize agent
 behavior.
 

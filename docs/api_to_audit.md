@@ -1143,12 +1143,32 @@ unexpected-exit recovery without feature-specific core hooks.
 
 0a. **Process reap.** `experimental_killProcessesWithCwdUnder({ directory,
    graceMs? })` from `@get-bb/plugin-sdk/host` is the same helper bb's own
-daemon used to reap a managed workspace before removing it: SIGTERM to
-every process whose working directory is at or under the path, SIGKILL
+daemon used to reap a managed workspace before removing it. On POSIX: SIGTERM
+to every process whose working directory is at or under the path, SIGKILL
 after the grace, returning what it signalled. Published for the worktree
 and environment-personal-workspace plugins, which own their teardown and call it
 before deleting the directory. Confirm the platform coverage (Linux
 `/proc`, macOS `lsof`) and whether the grace should be per call.
+
+On win32 (Phase 2) there is no `/proc`, so the helper matches by
+`Get-CimInstance Win32_Process` evidence instead of a real cwd read, and the
+POSIX SIGTERM-then-SIGKILL sequence does not apply: each verified match is
+force-killed directly with `taskkill /PID <pid> /F` (`graceMs` is unused on
+this path), and every signalled process carries `approximateCwd: true` and a
+`matchEvidence` of `"spawn-registry"`, `"executable-path"`, or `"descendant"`
+(a `"command-line"` match is visible through `listProcessesWithCwdUnder` but
+is never itself killed). A process is force-killed only after its
+`CreationDate` is re-verified immediately before that per-PID `taskkill /F`;
+a mismatch is skipped and reported through an `onSkippedProcess` callback
+rather than killed blind. `ExperimentalProcessWithCwd` (`@get-bb/plugin-sdk/host`,
+re-exported from `@bb/process-utils`'s `ProcessWithCwd`) is the result type
+on every platform: `{ pid, cwd, approximateCwd?: true, matchEvidence? }`; the
+optional fields are present only on the win32 path. Confirm before
+stabilizing: whether plugin callers need `matchEvidence` and `approximateCwd`
+surfaced with the same shape and meaning as bb's own daemon, and whether the
+over-match/under-match cases documented in
+`qa/windows/phase-2/26-process-enumeration.md` are acceptable for a plugin
+teardown helper or need a stricter default.
 
 0. **Call timeout.** `ExperimentalHostCallOptions.timeoutMs` (default 30s,
    capped at 30 minutes) lets a plugin run a long host call — a setup
