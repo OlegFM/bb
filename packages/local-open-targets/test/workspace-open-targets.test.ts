@@ -3,7 +3,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { resolveExecutable } from "@bb/process-utils";
+import { spawn } from "node:child_process";
+import {
+  queryWindowsProcess,
+  resolveExecutable,
+  resolvePowerShellExecutable,
+  resolveWindowsSystemToolPath,
+  takeWindowsProcessSnapshot,
+  type WindowsProcessSnapshotEntry,
+} from "@bb/process-utils";
 import {
   createWorkspaceOpenTargetRuntime,
   listWorkspaceOpenTargets,
@@ -2888,20 +2896,152 @@ describe("workspace open targets", () => {
         );
 
         expect(calls).toHaveLength(1);
-        expect(windowsExecutableName(calls[0]?.file ?? "")).toMatch(
-          /^(?:pwsh|powershell)\.exe$/u,
+        expect(windowsExecutableName(calls[0]?.file ?? "")).toBe("cmd.exe");
+        expect(calls[0]?.args.slice(0, 3)).toEqual(["/d", "/s", "/c"]);
+        expect(calls[0]?.args[3]).toMatch(
+          /^"start "" \/D "[^"]+" "[^"]*(?:pwsh|powershell)\.exe" -NoLogo"$/u,
         );
-        expect(calls[0]?.args).toEqual(["-NoLogo"]);
+        expect(calls[0]?.args[3]).toContain(`/D "${workspacePath}"`);
         expect(calls[0]?.options).toEqual({
-          cwd: workspacePath,
           detached: true,
           env: {},
-          windowsHide: false,
+          windowsHide: true,
+          windowsVerbatimArguments: true,
         });
       } finally {
         await rm(workspacePath, { force: true, recursive: true });
       }
     });
+
+    it("starts the console fallback in a spaced directory through cmd start", async () => {
+      const workspaceRoot = await mkdtemp(path.join(tmpdir(), "bb-ws-"));
+      const workspacePath = path.join(workspaceRoot, "my project");
+      const calls: WindowsExecFileCall[] = [];
+
+      try {
+        await mkdir(workspacePath, { recursive: true });
+
+        await openPathInTargetWithRuntime(
+          {
+            context: { kind: "local" },
+            columnNumber: null,
+            lineNumber: null,
+            path: workspacePath,
+            targetId: "terminal",
+          },
+          createWindowsRuntime({ calls }),
+        );
+
+        const shellPath = resolvePowerShellExecutable({});
+        expect(workspacePath).toContain(" ");
+        expect(calls[0]?.file.endsWith("System32\\cmd.exe")).toBe(true);
+        expect(calls[0]?.args).toEqual([
+          "/d",
+          "/s",
+          "/c",
+          `"start "" /D "${workspacePath}" "${shellPath}" -NoLogo"`,
+        ]);
+        expect(calls[0]?.options?.windowsVerbatimArguments).toBe(true);
+        expect(calls[0]?.options?.windowsHide).toBe(true);
+        expect(calls[0]?.options?.detached).toBe(true);
+      } finally {
+        await rm(workspaceRoot, { force: true, recursive: true });
+      }
+    });
+
+    it.runIf(
+      process.platform === "win32" && process.env.BB_QA_REAL_LAUNCH === "1",
+    )(
+      "leaves a live interactive console behind for the terminal fallback",
+      async () => {
+        const workspaceRoot = await mkdtemp(path.join(tmpdir(), "bb-ws-"));
+        const workspacePath = path.join(workspaceRoot, "my project");
+        const runtimeEnv: NodeJS.ProcessEnv = {
+          SystemRoot: process.env.SystemRoot ?? "C:\\Windows",
+        };
+        const runtime: WorkspaceOpenTargetRuntime = {
+          ...createWorkspaceOpenTargetRuntime(),
+          env: runtimeEnv,
+        };
+        const shellPath = resolvePowerShellExecutable(runtimeEnv);
+
+        const isFallbackShell = (
+          entry: WindowsProcessSnapshotEntry,
+        ): boolean => {
+          const commandLine = entry.commandLine ?? "";
+          return (
+            (entry.executablePath ?? "").toLowerCase() ===
+              shellPath.toLowerCase() &&
+            commandLine.includes("-NoLogo") &&
+            !commandLine.includes("-NonInteractive")
+          );
+        };
+
+        const killFallbackShell = async (pid: number): Promise<void> => {
+          await new Promise((resolveKill) => {
+            const kill = spawn(
+              resolveWindowsSystemToolPath("taskkill.exe", process.env),
+              ["/PID", String(pid), "/F"],
+              { stdio: "ignore", windowsHide: true },
+            );
+            kill.once("error", () => resolveKill(undefined));
+            kill.once("exit", () => resolveKill(undefined));
+          });
+        };
+
+        let launched: WindowsProcessSnapshotEntry[] = [];
+        try {
+          await mkdir(workspacePath, { recursive: true });
+
+          const before = await takeWindowsProcessSnapshot();
+          const beforePids = new Set(before.map((entry) => entry.pid));
+
+          await openPathInTargetWithRuntime(
+            {
+              context: { kind: "local" },
+              columnNumber: null,
+              lineNumber: null,
+              path: workspacePath,
+              targetId: "terminal",
+            },
+            runtime,
+          );
+
+          await new Promise((resolveWait) => setTimeout(resolveWait, 2000));
+
+          launched = (await takeWindowsProcessSnapshot()).filter(
+            (entry) => !beforePids.has(entry.pid) && isFallbackShell(entry),
+          );
+          console.log(
+            `terminal fallback consoles: ${
+              launched
+                .map(
+                  (entry) => `pid=${entry.pid} started=${entry.creationDate}`,
+                )
+                .join(", ") || "(none)"
+            }`,
+          );
+
+          expect(launched.length).toBeGreaterThan(0);
+
+          for (const entry of launched) {
+            await killFallbackShell(entry.pid);
+          }
+          await new Promise((resolveWait) => setTimeout(resolveWait, 700));
+
+          for (const entry of launched) {
+            expect(await queryWindowsProcess(entry.pid)).toBeNull();
+          }
+        } finally {
+          for (const entry of launched) {
+            await killFallbackShell(entry.pid);
+          }
+          await rm(workspaceRoot, { force: true, recursive: true }).catch(
+            () => undefined,
+          );
+        }
+      },
+    );
 
     it("treats an Explorer exit code of 1 on an existing path as success", async () => {
       const workspacePath = await mkdtemp(path.join(tmpdir(), "bb-workspace-"));

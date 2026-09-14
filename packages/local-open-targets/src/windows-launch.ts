@@ -28,7 +28,7 @@ const WINDOWS_APP_PATHS_SUBKEY =
 const WINDOWS_APP_PATHS_HIVES = ["HKLM", "HKCU"] as const;
 const WINDOWS_REGISTRY_VALUE_PATTERN = /\sREG_(?:EXPAND_)?SZ\s+(.*)$/mu;
 const WINDOWS_CMD_SHIM_EXTENSIONS = new Set([".bat", ".cmd"]);
-const WINDOWS_LAUNCHER_EXTENSIONS = new Set([".bat", ".cmd", ".exe"]);
+const WINDOWS_LAUNCHER_EXTENSIONS = new Set([".bat", ".cmd", ".com", ".exe"]);
 const WINDOWS_DEFAULT_SYSTEM_ROOT = "C:\\Windows";
 const WINDOWS_INSTALL_ROOT_ENV_VARIABLES = [
   "ProgramFiles",
@@ -375,6 +375,13 @@ function buildWindowsCmdShimCommandLine(
   return `"${quoted}"`;
 }
 
+function buildWindowsStartConsoleCommandLine(
+  directory: string,
+  shellPath: string,
+): string {
+  return `"start "" /D "${directory}" "${shellPath}" -NoLogo"`;
+}
+
 async function buildWindowsExecutableInvocation(
   executablePath: string,
   args: string[],
@@ -669,12 +676,20 @@ async function resolveWindowsTerminalInvocation(
     };
   }
   return {
-    file: resolvePowerShellExecutable(runtime.env),
-    args: ["-NoLogo"],
-    cwd: directory,
+    file: resolveWindowsSystemToolPath("cmd.exe", runtime.env),
+    args: [
+      "/d",
+      "/s",
+      "/c",
+      buildWindowsStartConsoleCommandLine(
+        directory,
+        resolvePowerShellExecutable(runtime.env),
+      ),
+    ],
     detached: true,
     env: runtime.env,
-    windowsHide: false,
+    windowsHide: true,
+    windowsVerbatimArguments: true,
   };
 }
 
