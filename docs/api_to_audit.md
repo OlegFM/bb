@@ -1159,8 +1159,13 @@ this path), and every signalled process carries `approximateCwd: true` and a
 (a `"command-line"` match is visible through `listProcessesWithCwdUnder` but
 is never itself killed). A process is force-killed only after its
 `CreationDate` is re-verified immediately before that per-PID `taskkill /F`;
-a mismatch is skipped and reported through an `onSkippedProcess` callback
-rather than killed blind. `ExperimentalProcessWithCwd` (`@get-bb/plugin-sdk/host`,
+a mismatch is skipped rather than killed blind and offered to an optional
+`onSkippedProcess` callback. The skip is reported only where a caller wires
+that callback — today only the environment hook runner, which writes it to the
+provisioning transcript; the worktree and personal-workspace sweeps and the
+provider runtime stop do not wire it, so their skips are silent and the later
+`EBUSY` on the directory is the visible symptom.
+`ExperimentalProcessWithCwd` (`@get-bb/plugin-sdk/host`,
 re-exported from `@bb/process-utils`'s `ProcessWithCwd`) is the result type
 on every platform: `{ pid, cwd, approximateCwd?: true, matchEvidence? }`; the
 optional fields are present only on the win32 path. Confirm before

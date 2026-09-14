@@ -22,7 +22,9 @@ Design the script to print nothing when there is nothing to report: an exit-0 ru
 
 The interpreter comes from the script file extension unless `--interpreter`
 overrides it: `.sh`/`.bash` run under `bash`, `.js`/`.mjs` under `node`, `.py`
-under `python3`, `.ps1` under `powershell`. On a Windows server use `.ps1`:
+under `python3`. `.ps1` files select the `powershell` interpreter automatically
+on Windows; on macOS/Linux pass `--interpreter powershell` (or store it)
+explicitly. On a Windows server use `.ps1`:
 
 ```bash
 bb automation create --project <id> --name "Disk watch" --cron "0 * * * *" \

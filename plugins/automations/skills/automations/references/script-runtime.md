@@ -19,6 +19,9 @@ The create and update commands print the exact refresh command. The create,
 update, and show commands print the stored path on the `Script:` line. JSON
 output returns it as `execution.storedScriptPath`.
 
+`.ps1` files select the `powershell` interpreter automatically on Windows; on
+macOS/Linux pass `--interpreter powershell` (or store it) explicitly.
+
 ## Variables and CLI lookup
 
 The plugin injects these variables:

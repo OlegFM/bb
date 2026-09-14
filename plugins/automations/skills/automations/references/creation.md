@@ -36,3 +36,6 @@ Script mode flags:
 --timeout <ms>                 Timeout in milliseconds, default 120000, max 900000
 --env-json <json>              Script variables as a string-to-string JSON object
 ```
+
+`.ps1` files select the `powershell` interpreter automatically on Windows; on
+macOS/Linux pass `--interpreter powershell` (or store it) explicitly.

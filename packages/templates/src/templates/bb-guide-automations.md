@@ -37,6 +37,9 @@ Script execution:
   [--interpreter <bash|sh|node|python3|powershell>]
   [--timeout <milliseconds>] [--env-json '{"KEY":"value"}']
 
+`.ps1` files select the `powershell` interpreter automatically on Windows; on
+macOS/Linux pass `--interpreter powershell` (or store it) explicitly.
+
 `--script-file` reads the file relative to your current directory from the
 thread's environment host, or from the server host outside a thread. Pass
 `--host <name-or-id>` to read from another machine. The plugin stores a private

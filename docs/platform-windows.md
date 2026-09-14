@@ -178,9 +178,14 @@ bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)`) without
   a handle to it is open. Descendants are re-snapshotted after the grace
   period and each one is force-killed individually (`taskkill.exe /PID <pid>
 /F`) only when its `CreationDate` still matches the snapshot taken before
-  the leader was signalled; a mismatch is skipped and reported through
+  the leader was signalled; a mismatch is skipped and offered to an optional
   `onSkippedProcess({ pid, reason: "pid-reused", expectedCreationDate,
-observedCreationDate })`, which the daemon logs as `pid-reused`. No forced
+observedCreationDate })` callback. The skip is reported only where a caller
+  wires that callback — today only the environment hook runner
+  (`apps/host-daemon/src/environment-lifecycle-script.ts`), which writes it to
+  the provisioning transcript. The worktree and personal-workspace sweeps and
+  the provider runtime stop do not wire it, so their skips are silent and the
+  later `EBUSY` on the directory is the visible symptom. No forced
   kill ever targets a bare PID whose identity was not re-verified. On win32,
   `killProcessGroup` stays `child.kill(signal)` and is leader-only there — it
   does not walk descendants; callers that need the full tree use
@@ -207,9 +212,11 @@ Win32_Process` (measured cost about 0.55 s here; cold PowerShell start about
   terminal opened on the worktree carries the path in argv), or `"descendant"`
   (a child of an already-matched process). Each kill candidate's
   `CreationDate` is re-verified against a fresh snapshot immediately before
-  its own `taskkill /PID <pid> /F`; a mismatch is skipped and reported through
-  `onSkippedProcess` rather than killed blind — there is no graceful signal
-  step on this path, unlike POSIX's SIGTERM-then-SIGKILL. A 10-second
+  its own `taskkill /PID <pid> /F`; a mismatch is skipped rather than killed
+  blind and offered to the same optional `onSkippedProcess` callback, which no
+  sweep caller wires today, so a recycled-PID skip on this path is silent and
+  the later `EBUSY` is the visible symptom. There is no graceful signal step
+  on this path, unlike POSIX's SIGTERM-then-SIGKILL. A 10-second
   enumeration timeout is an error (`WindowsProcessEnumerationError`), never an
   empty list — an empty list would look like "nothing to kill" and leave a
   live tree behind. `killProcessesWithCwdUnder` matches with
@@ -301,11 +308,13 @@ directly`.
   `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`), and
   `resolveExecutable` (a `Path` + `PATHEXT` walk) for `bash`, `sh`, and
   `python3` (falling back to `python`). `"powershell"` on POSIX resolves to
-  `pwsh`. The extension mapping is not
-  Windows-only: on macOS and Linux a stored `.ps1` automation that previously
-  fell through to the default `bash` interpreter now runs under `pwsh` and
-  fails with a spawn error when PowerShell 7 is not installed. Set
-  `--interpreter bash` explicitly on such an automation, or rename the script.
+  `pwsh`. `.ps1` files select the `powershell` interpreter automatically on
+  Windows; on macOS/Linux pass `--interpreter powershell` (or store it)
+  explicitly. The extension mapping is gated on `platform === "win32"` in both
+  `plugins/automations/src/script-files.ts` and
+  `plugins/automations/src/cli.ts`, so a stored macOS or Linux automation
+  whose script file ends in `.ps1` and whose `interpreter` column is empty
+  keeps falling through to `bash` exactly as it did before Phase 2.
 - **Skill scripts.** bb never spawns an agent skill's own script itself —
   agents run their skill scripts through whatever shell the agent's own
   session uses — so this is guidance for agents on Windows, not a code path
@@ -320,8 +329,9 @@ directly`.
 ## Known limitations after Phase 0
 
 - Project paths became drive-letter aware in Phase 1 (see "Host identity and
-  paths" above); terminals, hooks and provider launch on native Windows still
-  arrive in Phases 2 and 3.
+  paths" above); hooks arrived in Phase 2 — see "Processes, hooks, git and
+  open targets (Phase 2)" above — and terminals and provider launch on native
+  Windows arrive in Phase 3.
 - `packages/bb-app` and `apps/desktop` now list `win32` in their `os` fields
   (spec §7), so `npx bb-app` installs on native Windows but its runtime does
   not work until Phases 1 to 3 land; the supported product path stays WSL2
@@ -344,9 +354,10 @@ directly`.
   the session survived closing the PowerShell window that started it.
 - `pnpm dev:stop` force-kills the pid recorded in a session's pid file after
   checking only that the pid exists (`taskkill /T /F` on Windows, `SIGTERM`
-  then `SIGKILL` on POSIX); verifying the process identity (start time) before
-  a forced kill arrives with Phase 2's process primitives (spec §5), so delete
-  a stale pid file by hand after a crash or reboot before running `dev:stop`.
+  then `SIGKILL` on POSIX). Phase 2 shipped the identity-verified process
+  primitives (spec §5) but deliberately left `dev:stop` on the unverified
+  path — see "Known limitations after Phase 2" below — so delete a stale pid
+  file by hand after a crash or reboot before running `dev:stop`.
 - A cold `pnpm dev:desktop` exceeds the launcher's 120 s desktop wait: the
   launcher exits 1 with "Timed out ... waiting for desktop app" while the
   detached build keeps running, and the Electron window opened about
@@ -388,8 +399,9 @@ directly`.
 - The host directory browser cannot switch drives.
 - The native folder picker was macOS-only after Phase 1; Phase 2 adds the
   Windows picker — see "Open targets and picker" above.
-- The workspace plugin `host.test.ts` suites still shell out to `mkdir -p`/
-  `sleep` and fail on Windows (Phase 2).
+- The `environment-project-checkout` and `environment-personal-workspace`
+  `host.test.ts` suites still shell out to `mkdir -p`/`sleep` and fail on
+  Windows; `environment-git-worktree`'s suite no longer does (Phase 2).
 - `resolveInheritedDevSkillsRootPaths` is measured only on the reference
   desktop.
 - Provider environment creation makes two canonicalization calls per create
@@ -431,6 +443,16 @@ directly`.
 - JetBrains Toolbox version selection under
   `%LOCALAPPDATA%\JetBrains\Toolbox\apps` picks lexicographically, not by
   parsed version number.
+- A `pid-reused` skip is reported only where a caller wires the
+  `onSkippedProcess` callback, which today is the environment hook runner
+  alone. Wiring the worktree and personal-workspace sweep's skip callback to
+  the daemon logger is a Phase 3 follow-up; until then those skips are silent
+  and the later `EBUSY` is the only signal.
+- `providerProcessEnvFromShellEnv` in `apps/host-daemon/src/runtime-manager.ts`
+  still overlays a bare `PATH` for provider processes instead of going through
+  `assignPathEnv`, so on Windows a provider child can still receive both `Path`
+  and `PATH`. It is the remaining pre-`assignPathEnv` PATH site; Phase 3
+  converts it alongside provider launch.
 
 ## Evidence
 
