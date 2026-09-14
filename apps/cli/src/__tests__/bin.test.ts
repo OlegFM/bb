@@ -13,6 +13,10 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  resolvePowerShellExecutable,
+  resolveWindowsSystemToolPath,
+} from "@bb/process-utils";
 
 const execFileAsync = promisify(execFile);
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -22,7 +26,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/gu, "'\\''")}'`;
 }
 
-describe("bb bin wrapper", () => {
+describe.skipIf(process.platform === "win32")("bb bin wrapper", () => {
   let tempRoot: string;
 
   beforeEach(async () => {
@@ -129,5 +133,57 @@ exit 42
     await expect(readFile(pnpmCalledPath, "utf8")).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+});
+
+describe.runIf(process.platform === "win32")("bb cmd shim", () => {
+  let tempRoot: string;
+
+  beforeEach(async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "bb-cli-cmd-"));
+  });
+
+  afterEach(async () => {
+    await rm(tempRoot, { recursive: true, force: true });
+  });
+
+  async function createLauncher(installName: string): Promise<string> {
+    const installRoot = join(tempRoot, installName);
+    const binDir = join(installRoot, "bin");
+    const distDir = join(installRoot, "dist");
+    await mkdir(binDir, { recursive: true });
+    await mkdir(distDir, { recursive: true });
+    await copyFile(
+      join(repoRoot, "apps", "cli", "bin", "bb.cmd"),
+      join(binDir, "bb.cmd"),
+    );
+    await writeFile(
+      join(distDir, "index.js"),
+      "process.stdout.write(`bb-launcher-ok ${process.argv.slice(2).join(' ')}`);\n",
+    );
+    return join(binDir, "bb.cmd");
+  }
+
+  it("runs from cmd.exe", async () => {
+    const launcher = await createLauncher("bb-launcher");
+    const { stdout } = await execFileAsync(
+      resolveWindowsSystemToolPath("cmd.exe"),
+      ["/d", "/c", launcher, "--version"],
+    );
+    expect(stdout).toBe("bb-launcher-ok --version");
+  });
+
+  it("runs from PowerShell when the install path has a space", async () => {
+    const launcher = await createLauncher("bb launcher dir");
+    const { stdout } = await execFileAsync(resolvePowerShellExecutable(), [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `& '${launcher}' --version`,
+    ]);
+    expect(stdout.trim()).toBe("bb-launcher-ok --version");
   });
 });

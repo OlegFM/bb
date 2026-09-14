@@ -48,6 +48,7 @@
     "dist",
     "!dist/*.map",
     "host-daemon/dist/bb",
+    "host-daemon/dist/bb.cmd",
     "host-daemon/dist/bb-chunks",
     "host-daemon/dist/bb-parcel-watcher-child.mjs",
     "host-daemon/dist/bb-plugin-host-worker.mjs",
@@ -82,6 +83,7 @@
   },
   "devDependencies": {
     "@bb/config": "workspace:*",
+    "@bb/process-utils": "workspace:*",
     "@bb/sdk": "workspace:*",
     "@bb/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",

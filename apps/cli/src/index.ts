@@ -10,7 +10,7 @@ import {
 import { resolveBbCliVersion } from "./version.js";
 import type { CliRuntimeContext } from "./context-env.js";
 
-maybeReexecViaBbCli();
+await maybeReexecViaBbCli();
 
 const program = new Command();
 

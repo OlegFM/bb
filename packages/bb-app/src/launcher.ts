@@ -13,7 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
@@ -59,6 +59,7 @@ import { validateLogLevel } from "@bb/config/log-level";
 import { validateOptionalUrl } from "@bb/config/public-url";
 import { parseServerBindHost, type ServerBindHost } from "@bb/config/server";
 import { toOptionalString } from "@bb/config/strings";
+import { readNodeCmdShim } from "@bb/process-utils";
 import {
   BB_PROD_HOST_DAEMON_PORT,
   BB_LOOPBACK_HOST,
@@ -470,6 +471,7 @@ interface CreateSharedEnvArgs {
 interface CreateServerEnvArgs {
   context: BbAppStartContext;
   env: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
 }
 
 interface CreateServerBaseEnvArgs {
@@ -601,6 +603,7 @@ interface RunBundledCliCommandArgs {
   args: string[];
   context: BbAppStartContext;
   env: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
 }
 
 interface ResolveHostDaemonCommandResult {
@@ -2083,7 +2086,50 @@ async function runClientCommand(args: RunClientCommandArgs): Promise<void> {
   );
 }
 
-function requiredHostArtifactPaths(context: BbAppStartContext): ArtifactPath[] {
+export function resolveBundledBbCliFileName(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "bb.cmd" : "bb";
+}
+
+export function resolveBundledBbCliPath(
+  daemonBundleDir: string,
+  platform: NodeJS.Platform,
+): string {
+  return join(daemonBundleDir, resolveBundledBbCliFileName(platform));
+}
+
+const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".cmd", ".bat"]);
+
+export async function resolveBundledCliSpawnPlan(
+  cliPath: string,
+  platform: NodeJS.Platform,
+): Promise<{ command: string; argsPrefix: string[] }> {
+  const extension = extname(cliPath).toLowerCase();
+  if (platform !== "win32" || !WINDOWS_SHIM_EXTENSIONS.has(extension)) {
+    return { command: cliPath, argsPrefix: [] };
+  }
+  const shim = await readNodeCmdShim(cliPath);
+  if (shim === null) {
+    throw new Error(
+      `Windows launcher ${cliPath} is not a Node shim bb can start directly`,
+    );
+  }
+  return { command: shim.command, argsPrefix: shim.args };
+}
+
+function requiredHostArtifactPaths(
+  context: BbAppStartContext,
+  platform: NodeJS.Platform = process.platform,
+): ArtifactPath[] {
+  const windowsLauncher: ArtifactPath[] =
+    platform === "win32"
+      ? [
+          {
+            kind: "file",
+            label: "bundled bb CLI launcher",
+            path: resolveBundledBbCliPath(context.daemonBundleDir, platform),
+          },
+        ]
+      : [];
   return [
     { kind: "file", label: "host daemon entry", path: context.daemonEntry },
     {
@@ -2091,6 +2137,7 @@ function requiredHostArtifactPaths(context: BbAppStartContext): ArtifactPath[] {
       label: "bundled bb CLI",
       path: join(context.daemonBundleDir, "bb"),
     },
+    ...windowsLauncher,
     {
       kind: "chunk-dir",
       label: "bundled bb CLI chunks",
@@ -2116,9 +2163,10 @@ function requiredHostArtifactPaths(context: BbAppStartContext): ArtifactPath[] {
 
 function requiredFullStackArtifactPaths(
   context: BbAppStartContext,
+  platform: NodeJS.Platform = process.platform,
 ): ArtifactPath[] {
   return [
-    ...requiredHostArtifactPaths(context),
+    ...requiredHostArtifactPaths(context, platform),
     { kind: "file", label: "server entry", path: context.serverEntry },
     {
       kind: "file",
@@ -2148,10 +2196,14 @@ function artifactPresent(artifact: ArtifactPath): boolean {
   }
 }
 
-export function assertBbAppArtifacts(context: BbAppStartContext): void {
-  const missingArtifact = requiredFullStackArtifactPaths(context).find(
-    (artifact) => !artifactPresent(artifact),
-  );
+export function assertBbAppArtifacts(
+  context: BbAppStartContext,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  const missingArtifact = requiredFullStackArtifactPaths(
+    context,
+    platform,
+  ).find((artifact) => !artifactPresent(artifact));
   if (missingArtifact) {
     throw new Error(
       `Missing ${missingArtifact.label} at ${missingArtifact.path}. Rebuild bb-app before running this package.`,
@@ -2159,8 +2211,11 @@ export function assertBbAppArtifacts(context: BbAppStartContext): void {
   }
 }
 
-export function assertBbHostArtifacts(context: BbAppStartContext): void {
-  const missingArtifact = requiredHostArtifactPaths(context).find(
+export function assertBbHostArtifacts(
+  context: BbAppStartContext,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  const missingArtifact = requiredHostArtifactPaths(context, platform).find(
     (artifact) => !artifactPresent(artifact),
   );
   if (missingArtifact) {
@@ -2558,7 +2613,10 @@ export function createServerEnv(args: CreateServerEnvArgs): NodeJS.ProcessEnv {
     ...args.env,
     BB_APP_VERSION: args.context.appVersion,
     [APP_SURFACE_ENV_NAME]: resolveServerAppSurface(args.env),
-    BB_CLI: join(args.context.daemonBundleDir, "bb"),
+    BB_CLI: resolveBundledBbCliPath(
+      args.context.daemonBundleDir,
+      args.platform ?? process.platform,
+    ),
     BB_CLI_DIR: args.context.daemonBundleDir,
     BB_DATA_DIR: args.context.dataDir,
     BB_HOST_DAEMON_PORT: String(args.context.daemonPort),
@@ -2705,9 +2763,13 @@ export async function createHostDaemonJoinEnv(
 export async function runBundledCliCommand(
   args: RunBundledCliCommandArgs,
 ): Promise<number> {
+  const platform = args.platform ?? process.platform;
   const bbCliOverride = toOptionalString(args.env.BB_CLI);
-  const cliPath = bbCliOverride ?? join(args.context.daemonBundleDir, "bb");
-  const childProcess = spawn(cliPath, args.args, {
+  const cliPath =
+    bbCliOverride ??
+    resolveBundledBbCliPath(args.context.daemonBundleDir, platform);
+  const plan = await resolveBundledCliSpawnPlan(cliPath, platform);
+  const childProcess = spawn(plan.command, [...plan.argsPrefix, ...args.args], {
     cwd: process.cwd(),
     env: createCliEnv({ context: args.context, env: args.env }),
     stdio: "inherit",

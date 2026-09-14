@@ -3,7 +3,11 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BB_CLI_REEXEC_ENV, maybeReexecViaBbCli } from "../bb-cli-reexec.js";
+import {
+  BB_CLI_REEXEC_ENV,
+  maybeReexecViaBbCli,
+  resolveNodeLauncherSpawnPlan,
+} from "../bb-cli-reexec.js";
 
 describe("maybeReexecViaBbCli", () => {
   let tempRoot: string;
@@ -87,5 +91,62 @@ describe("maybeReexecViaBbCli", () => {
       reexec,
     });
     expect(reexec).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveNodeLauncherSpawnPlan", () => {
+  let planRoot: string;
+
+  beforeEach(async () => {
+    planRoot = await mkdtemp(join(tmpdir(), "bb-cli-plan-"));
+  });
+
+  afterEach(async () => {
+    await rm(planRoot, { recursive: true, force: true });
+  });
+
+  it("spawns a POSIX launcher directly", async () => {
+    await expect(
+      resolveNodeLauncherSpawnPlan("/opt/bb/bin/bb", "darwin"),
+    ).resolves.toEqual({ command: "/opt/bb/bin/bb", argsPrefix: [] });
+    await expect(
+      resolveNodeLauncherSpawnPlan("/opt/bb/bin/bb.cmd", "darwin"),
+    ).resolves.toEqual({ command: "/opt/bb/bin/bb.cmd", argsPrefix: [] });
+  });
+
+  it("reads the node shim of a Windows .cmd launcher", async () => {
+    const script = join(planRoot, "bb");
+    await writeFile(script, "");
+    await writeFile(join(planRoot, "bb.cmd"), '@node "%~dp0bb" %*\r\n');
+    await writeFile(join(planRoot, "bb.CMD"), '@node "%~dp0bb" %*\r\n');
+
+    await expect(
+      resolveNodeLauncherSpawnPlan(join(planRoot, "bb.cmd"), "win32"),
+    ).resolves.toEqual({ command: process.execPath, argsPrefix: [script] });
+    await expect(
+      resolveNodeLauncherSpawnPlan(join(planRoot, "bb.CMD"), "win32"),
+    ).resolves.toEqual({ command: process.execPath, argsPrefix: [script] });
+  });
+
+  it("refuses a Windows .cmd launcher that is not a node shim", async () => {
+    const shimPath = join(planRoot, "bb.cmd");
+    await writeFile(shimPath, "@echo off\r\nstart notepad.exe\r\n");
+    await expect(
+      resolveNodeLauncherSpawnPlan(shimPath, "win32"),
+    ).rejects.toThrow(
+      `Windows launcher ${shimPath} is not a Node shim bb can start directly`,
+    );
+    const missingPath = join(planRoot, "absent.cmd");
+    await expect(
+      resolveNodeLauncherSpawnPlan(missingPath, "win32"),
+    ).rejects.toThrow(
+      `Windows launcher ${missingPath} is not a Node shim bb can start directly`,
+    );
+  });
+
+  it("spawns a non-shim Windows target directly", async () => {
+    await expect(
+      resolveNodeLauncherSpawnPlan("C:\\tools\\bb.exe", "win32"),
+    ).resolves.toEqual({ command: "C:\\tools\\bb.exe", argsPrefix: [] });
   });
 });

@@ -34,6 +34,9 @@ import {
   resolveDataDir,
   resolveBbAppStartContext,
   resolveBbAppCommand,
+  resolveBundledBbCliFileName,
+  resolveBundledBbCliPath,
+  resolveBundledCliSpawnPlan,
   resolveServerListenerUrl,
   resolveWorktreeRuntimePolicy,
   runBbApp,
@@ -2150,6 +2153,7 @@ describe("bb-app launcher", () => {
       "host-daemon/dist/bb-plugin-host-worker.mjs",
     );
     expect(metadata.files).toContain("host-daemon/dist/bb");
+    expect(metadata.files).toContain("host-daemon/dist/bb.cmd");
     expect(metadata.files).toContain("host-daemon/dist/bb-chunks");
     expect(metadata.os).toEqual(["darwin", "linux", "win32"]);
   });
@@ -2177,19 +2181,23 @@ describe("bb-app launcher", () => {
 
       const missingChunks =
         /^Missing bundled bb CLI chunks at .*\/host-daemon\/dist\/bb-chunks\. Rebuild bb-app/;
-      expect(() => assertBbAppArtifacts(context)).toThrow(missingChunks);
+      expect(() => assertBbAppArtifacts(context, "linux")).toThrow(
+        missingChunks,
+      );
 
       const chunkDir = join(context.daemonBundleDir, "bb-chunks");
       mkdirSync(chunkDir);
-      expect(() => assertBbAppArtifacts(context)).toThrow(missingChunks);
+      expect(() => assertBbAppArtifacts(context, "linux")).toThrow(
+        missingChunks,
+      );
 
       writeFileSync(join(chunkDir, "chunk-AAAAAAAA.js"), "");
-      expect(() => assertBbAppArtifacts(context)).not.toThrow();
+      expect(() => assertBbAppArtifacts(context, "linux")).not.toThrow();
 
       rmSync(context.serverEntry);
       rmSync(join(context.appDistDir, "index.html"));
-      expect(() => assertBbHostArtifacts(context)).not.toThrow();
-      expect(() => assertBbAppArtifacts(context)).toThrow(
+      expect(() => assertBbHostArtifacts(context, "linux")).not.toThrow();
+      expect(() => assertBbAppArtifacts(context, "linux")).toThrow(
         /^Missing server entry/u,
       );
     } finally {
@@ -2246,5 +2254,78 @@ describe("bb-app launcher", () => {
     expect(desktopServerEnv.BB_APP_SURFACE).toBe("desktop");
     expect(webServerEnv.BB_APP_SURFACE).toBe("web");
     expect(invalidSurfaceServerEnv.BB_APP_SURFACE).toBe("web");
+  });
+
+  it("names and spawns the bundled bb launcher per platform", async () => {
+    expect(resolveBundledBbCliFileName("darwin")).toBe("bb");
+    expect(resolveBundledBbCliFileName("win32")).toBe("bb.cmd");
+    expect(resolveBundledBbCliPath("/tmp/bundle", "linux")).toBe(
+      join("/tmp/bundle", "bb"),
+    );
+
+    const bundleDir = mkdtempSync(join(tmpdir(), "bb-app-cli-plan-"));
+    try {
+      const cmdPath = join(bundleDir, "bb.cmd");
+      writeFileSync(cmdPath, "@echo off\r\n");
+      await expect(
+        resolveBundledCliSpawnPlan(cmdPath, "win32"),
+      ).rejects.toThrow(
+        `Windows launcher ${cmdPath} is not a Node shim bb can start directly`,
+      );
+      writeFileSync(join(bundleDir, "bb"), "");
+      writeFileSync(cmdPath, '@node "%~dp0bb" %*\r\n');
+      await expect(
+        resolveBundledCliSpawnPlan(cmdPath, "win32"),
+      ).resolves.toEqual({
+        command: process.execPath,
+        argsPrefix: [join(bundleDir, "bb")],
+      });
+      await expect(
+        resolveBundledCliSpawnPlan(join(bundleDir, "bb"), "darwin"),
+      ).resolves.toEqual({ command: join(bundleDir, "bb"), argsPrefix: [] });
+    } finally {
+      rmSync(bundleDir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires both bb launcher files and points BB_CLI at bb.cmd on win32", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "bb-app-win-artifacts-"));
+    try {
+      const context = resolveBbAppStartContext({
+        entrypointUrl: pathToFileURL(join(packageRoot, "dist", "bb.js")).href,
+        env: {},
+        homeDir: join(packageRoot, "home"),
+      });
+      for (const artifact of [
+        context.daemonEntry,
+        join(context.daemonBundleDir, "bb"),
+        join(context.daemonBundleDir, "bb-provider-bridge-worker.mjs"),
+        join(context.daemonBundleDir, "bb-parcel-watcher-child.mjs"),
+        join(context.daemonBundleDir, "bb-plugin-host-worker.mjs"),
+      ]) {
+        mkdirSync(dirname(artifact), { recursive: true });
+        writeFileSync(artifact, "");
+      }
+      const chunkDir = join(context.daemonBundleDir, "bb-chunks");
+      mkdirSync(chunkDir, { recursive: true });
+      writeFileSync(join(chunkDir, "chunk-AAAAAAAA.js"), "");
+
+      expect(() => assertBbHostArtifacts(context, "linux")).not.toThrow();
+      expect(() => assertBbHostArtifacts(context, "win32")).toThrow(
+        /Missing bundled bb CLI launcher/u,
+      );
+
+      writeFileSync(join(context.daemonBundleDir, "bb.cmd"), "");
+      expect(() => assertBbHostArtifacts(context, "win32")).not.toThrow();
+
+      expect(
+        createServerEnv({ context, env: {}, platform: "win32" }).BB_CLI,
+      ).toBe(join(context.daemonBundleDir, "bb.cmd"));
+      expect(
+        createServerEnv({ context, env: {}, platform: "linux" }).BB_CLI,
+      ).toBe(join(context.daemonBundleDir, "bb"));
+    } finally {
+      rmSync(packageRoot, { recursive: true, force: true });
+    }
   });
 });

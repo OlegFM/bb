@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { chmod, copyFile, mkdir, rm, stat } from "node:fs/promises";
+import { chmod, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -78,16 +78,18 @@ async function main() {
     console.log(`${target.label}: ${bundleStats.size} bytes`);
   }
 
-  const titleCommandPath = resolve(
-    workspaceRoot,
-    "apps",
-    "cli",
-    "bin",
-    "title",
-  );
+  const cliBinDir = resolve(workspaceRoot, "apps", "cli", "bin");
+  const titleCommandPath = resolve(cliBinDir, "title");
   const outputTitleCommandPath = resolve(packageRoot, "dist", "title");
   await copyFile(titleCommandPath, outputTitleCommandPath);
   await chmod(outputTitleCommandPath, 0o755);
+  const bundleShims = [
+    ["bb.cmd", '@node "%~dp0bb" %*'],
+    ["title.cmd", "@title %*"],
+  ];
+  for (const [shimName, body] of bundleShims) {
+    await writeFile(resolve(packageRoot, "dist", shimName), `${body}\r\n`);
+  }
 }
 
 void main().catch((error) => {

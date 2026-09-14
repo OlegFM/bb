@@ -456,6 +456,9 @@ importers:
       '@bb/plugin-build':
         specifier: workspace:*
         version: link:../../packages/plugin-build
+      '@bb/process-utils':
+        specifier: workspace:*
+        version: link:../../packages/process-utils
       '@bb/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1487,6 +1490,9 @@ importers:
       '@bb/config':
         specifier: workspace:*
         version: link:../config
+      '@bb/process-utils':
+        specifier: workspace:*
+        version: link:../process-utils
       '@bb/sdk':
         specifier: workspace:*
         version: link:../sdk

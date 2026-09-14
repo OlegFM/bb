@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
+import { readNodeCmdShim } from "@bb/process-utils";
 
 export const BB_CLI_REEXEC_ENV = "BB_CLI_REEXEC";
 
@@ -23,9 +24,33 @@ function tryRealpath(path: string): string | null {
   }
 }
 
-export function maybeReexecViaBbCli(
+const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".cmd", ".bat"]);
+
+export interface NodeLauncherSpawnPlan {
+  command: string;
+  argsPrefix: string[];
+}
+
+export async function resolveNodeLauncherSpawnPlan(
+  cliPath: string,
+  platform: NodeJS.Platform,
+): Promise<NodeLauncherSpawnPlan> {
+  const extension = extname(cliPath).toLowerCase();
+  if (platform !== "win32" || !WINDOWS_SHIM_EXTENSIONS.has(extension)) {
+    return { command: cliPath, argsPrefix: [] };
+  }
+  const shim = await readNodeCmdShim(cliPath);
+  if (shim === null) {
+    throw new Error(
+      `Windows launcher ${cliPath} is not a Node shim bb can start directly`,
+    );
+  }
+  return { command: shim.command, argsPrefix: shim.args };
+}
+
+export async function maybeReexecViaBbCli(
   options: MaybeReexecViaBbCliArgs = {},
-): void {
+): Promise<void> {
   const env = options.env ?? process.env;
   if (env[BB_CLI_REEXEC_ENV] === "1") {
     return;
@@ -58,7 +83,20 @@ export function maybeReexecViaBbCli(
     return;
   }
 
-  const result = spawnSync(target, argv, {
+  let plan: NodeLauncherSpawnPlan;
+  try {
+    plan = await resolveNodeLauncherSpawnPlan(target, process.platform);
+  } catch (error) {
+    process.stderr.write(
+      `bb: failed to re-exec BB_CLI=${target}: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = spawnSync(plan.command, [...plan.argsPrefix, ...argv], {
     env: childEnv,
     stdio: "inherit",
   });
