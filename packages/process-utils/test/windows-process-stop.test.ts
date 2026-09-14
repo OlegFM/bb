@@ -162,6 +162,64 @@ describe("terminateProcessTree on win32", () => {
     expect(result.descendantsSkipped).toEqual([]);
   });
 
+  it("never kills the children of a descendant candidate that predates the leader", async () => {
+    const leader = createFakeChild(1000);
+    const tree = [
+      cimProcess(1000, 1),
+      cimProcess(2000, 1000, { CreationDate: PREDATES_LEADER_AT }),
+      cimProcess(2001, 2000, { CreationDate: REUSED_AT }),
+      cimProcess(1001, 1000, { CreationDate: REUSED_AT }),
+    ];
+    const { requests, runner } = createFakeRunner([tree, tree]);
+
+    const result = await terminateProcessTree({
+      child: leader.child,
+      graceMs: 30,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+    });
+
+    expect(taskkillArgs(requests)).toEqual([
+      ["/PID", "1000", "/T"],
+      ["/PID", "1001", "/F"],
+    ]);
+    expect(result.descendantsKilled).toEqual([1001]);
+    expect(result.descendantsSkipped).toEqual([]);
+  });
+
+  it("keeps the leader kill when only the second snapshot fails", async () => {
+    const leader = createFakeChild(1000);
+    const requests: WindowsCommandRequest[] = [];
+    const tree = [cimProcess(1000, 1), cimProcess(1001, 1000)];
+    let enumerations = 0;
+    const runner: WindowsCommandRunner = async (request) => {
+      requests.push(request);
+      if (isTaskkill(request)) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      enumerations += 1;
+      return enumerations === 1
+        ? { stdout: JSON.stringify(tree), stderr: "", exitCode: 0 }
+        : { stdout: "", stderr: "denied", exitCode: 1 };
+    };
+
+    const result = await terminateProcessTree({
+      child: leader.child,
+      graceMs: 30,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+    });
+
+    expect(taskkillArgs(requests)).toEqual([["/PID", "1000", "/T"]]);
+    expect(leader.signals).toEqual(["SIGKILL"]);
+    expect(result.leaderExited).toBe(true);
+    expect(result.descendantsKilled).toEqual([]);
+    expect(result.descendantsSkipped).toEqual([]);
+    expect(result.enumerationError?.reason).toBe("exit");
+  });
+
   it("reports no kill when taskkill cannot find the descendant", async () => {
     const leader = createFakeChild(1000);
     const skipped: SkippedProcessEvent[] = [];

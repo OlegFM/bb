@@ -128,11 +128,33 @@ function dropDescendantsPredatingLeader(args: {
   if (leaderCreatedAt === null) {
     return args.descendants;
   }
+  const childrenByParent = new Map<number, number[]>();
+  for (const entry of args.snapshot) {
+    if (!args.descendants.has(entry.pid)) {
+      continue;
+    }
+    const siblings = childrenByParent.get(entry.parentPid) ?? [];
+    siblings.push(entry.pid);
+    childrenByParent.set(entry.parentPid, siblings);
+  }
   const retained = new Map<number, string | null>();
-  for (const [pid, creationDate] of args.descendants) {
-    const createdAt = parseCreationDate(creationDate);
-    if (createdAt === null || createdAt >= leaderCreatedAt) {
-      retained.set(pid, creationDate);
+  const queue = [args.leaderPid];
+  while (queue.length > 0) {
+    const pid = queue.pop();
+    if (pid === undefined) {
+      continue;
+    }
+    for (const childPid of childrenByParent.get(pid) ?? []) {
+      if (childPid === args.leaderPid || retained.has(childPid)) {
+        continue;
+      }
+      const creationDate = args.descendants.get(childPid) ?? null;
+      const createdAt = parseCreationDate(creationDate);
+      if (createdAt !== null && createdAt < leaderCreatedAt) {
+        continue;
+      }
+      retained.set(childPid, creationDate);
+      queue.push(childPid);
     }
   }
   return retained;
