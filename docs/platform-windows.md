@@ -136,6 +136,25 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   the teardown names (`.bb-env-teardown.sh is a POSIX shell script; on Windows
 bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)`) without
   blocking worktree removal. There is no Git Bash fallback for hooks.
+- **Git layer.** `detectSquashMerge` (`packages/host-workspace/src/workspace.ts`)
+  pipes `git diff`/`git log -p` into `git patch-id` through
+  `runGitOutputPipeline` on win32 instead of `runShellPipeline`'s POSIX
+  `sh -c 'a | b'`: the win32 path spawns both git processes directly (no
+  shell) and treats either one failing as a pipeline failure, so a failing
+  `git diff` correctly makes `detectSquashMerge` return `false`. On POSIX,
+  `sh -c` reports only the last command's exit status, so the same failing
+  `git diff` piped into a succeeding, empty-output `git patch-id` reads as
+  "squash-merged" (`true`) instead. A `maxBuffer` overflow on the win32
+  pipeline is reported as `shell_pipeline_failed`, matching the POSIX error
+  code for the equivalent failure. `findWorktreeForBranch`
+  (`packages/environment-provider-host/src/git.ts`) needs no Windows-specific
+  parsing: `git worktree list --porcelain` already emits `/`-separated,
+  `C:/`-shaped paths on Windows, so the porcelain parse is unchanged; it is
+  `detectLinkedWorktree`'s `isLinkedWorktreeGitDir`
+  (`packages/host-workspace/src/git.ts`) that normalizes `\` to `/` in
+  `git rev-parse --git-dir` output before checking for `/worktrees/`, since
+  that command's output is not guaranteed forward-slash-only the way
+  `worktree list --porcelain` is.
 - **PATH resolution.** `runtime-shell-env.ts` on win32 reads
   `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment\Path` and
   `HKCU\Environment\Path` through `reg.exe query … /v Path` (REG_EXPAND_SZ
@@ -144,7 +163,10 @@ bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)`) without
   `powershell.exe`) that prints `__BB_SHELL_ENV_START__`, base64
   `Name=Value` pairs, `__BB_SHELL_ENV_END__`. Precedence: the probe's `Path`
   wins when the last marker pair parses; otherwise the registry PATH;
-  otherwise the daemon's own inherited `Path`. The probe timeout is 8 seconds
+  otherwise the previously resolved `Path` cached by the daemon's shell-path
+  resolver (`createUserShellPathResolver`'s `previousPath`, seeded from an
+  earlier successful resolution); otherwise the daemon's own inherited
+  `Path`. The probe timeout is 8 seconds
   (PowerShell cold start measured at about 2.6 s). An `SHELL` variable
   pointing at an sh-like shell is ignored on win32 — bb's own probes never run
   Git Bash.
@@ -246,7 +268,7 @@ Win32_Process` (measured cost about 0.55 s here; cold PowerShell start about
   `%LOCALAPPDATA%\JetBrains\Toolbox`, the default app through
   `explorer.exe <file>` (ShellExecute — not `cmd.exe /c start`), and `.cmd`
   editor shims launched through `readNodeCmdShim` first, falling back to
-  `cmd.exe /d /c <shim>` for a shim that is not a recognized node wrapper.
+  `cmd.exe /d /s /c <shim>` for a shim that is not a recognized node wrapper.
   Icons are the static per-adapter icon; nothing is extracted from the target
   executable. The folder picker gains a win32 arm that runs a PowerShell
   `System.Windows.Forms.FolderBrowserDialog` under `-STA`; the desktop app on
@@ -270,10 +292,16 @@ directly`.
 - **Automations interpreters.** `automationScriptInterpreterSchema` gains
   `"powershell"`, mapped from a `.ps1` script file. On win32, `bbBinaryCandidates`
   adds `bb.cmd` beside `bb` for `BB_CLI_DIR` and every PATH entry (the
-  Homebrew fallback paths are POSIX-only and are not tried); interpreter
-  commands (`node`, `python3` then `python`, `pwsh` then `powershell`) are
-  resolved through `resolveExecutable` instead of spawned by bare name.
-  `"powershell"` on POSIX resolves to `pwsh`. The extension mapping is not
+  Homebrew fallback paths are POSIX-only and are not tried); each interpreter
+  resolves through its own mechanism instead of a bare spawned name:
+  `resolveWindowsInterpreterCommand` in `plugins/automations/src/script-files.ts`
+  uses the daemon's own `process.execPath` for `node` (no PATH walk),
+  `resolvePowerShellExecutable` for `powershell` (a `pwsh.exe` PATH scan,
+  then `%ProgramFiles%\PowerShell\7\pwsh.exe`, then Windows PowerShell 5.1 at
+  `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`), and
+  `resolveExecutable` (a `Path` + `PATHEXT` walk) for `bash`, `sh`, and
+  `python3` (falling back to `python`). `"powershell"` on POSIX resolves to
+  `pwsh`. The extension mapping is not
   Windows-only: on macOS and Linux a stored `.ps1` automation that previously
   fell through to the default `bash` interpreter now runs under `pwsh` and
   fails with a spawn error when PowerShell 7 is not installed. Set
@@ -358,7 +386,8 @@ directly`.
   `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`, `rightPanelFileVisuals.ts`)
   show the full Windows path until Phase 3.
 - The host directory browser cannot switch drives.
-- The native folder picker stays macOS-only until Phase 2.
+- The native folder picker was macOS-only after Phase 1; Phase 2 adds the
+  Windows picker — see "Open targets and picker" above.
 - The workspace plugin `host.test.ts` suites still shell out to `mkdir -p`/
   `sleep` and fail on Windows (Phase 2).
 - `resolveInheritedDevSkillsRootPaths` is measured only on the reference

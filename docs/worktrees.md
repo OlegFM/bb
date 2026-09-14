@@ -140,6 +140,16 @@ to it survives the worktree. If you want to keep uncommitted work, commit and
 push (or open a PR) from inside the worktree before letting the thread go, and
 move your own shells out of the worktree first if you want to keep them.
 
+On native Windows the sweep works differently: it force-kills matching
+processes directly (`taskkill /F`, no `SIGTERM`/grace step), and it only
+targets processes bb itself spawned with a working directory in the
+worktree, processes whose own executable lives under the worktree, and their
+descendants — not every process whose cwd happens to be there. A process you
+started yourself inside the worktree (a shell, an editor terminal) is not
+matched and is not stopped, so worktree removal fails with `EBUSY` until you
+close it yourself; see [platform-windows.md](platform-windows.md)'s Process
+sweep notes for the matching details.
+
 ## Run teardown with `.bb-env-teardown.sh`
 
 Commit a file named `.bb-env-teardown.sh` at the project root when setup
