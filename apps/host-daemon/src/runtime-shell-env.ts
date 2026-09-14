@@ -5,10 +5,17 @@ import { basename, delimiter, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentRuntimeOptions } from "@bb/agent-runtime";
 import { assignIfDefined } from "@bb/config/objects";
+import {
+  readWindowsEnvValue,
+  resolvePowerShellExecutable,
+  resolveWindowsSystemToolPath,
+  spawnPortableOutputProcess,
+} from "@bb/process-utils";
 
 interface ResolveLocalBbExecutablePathOptions {
   cliExecutablePath?: string;
   cliRuntimePath?: string;
+  platform?: NodeJS.Platform;
 }
 
 interface PrepareRuntimeShellEnvOptions {
@@ -17,11 +24,13 @@ interface PrepareRuntimeShellEnvOptions {
   hostDaemonPort?: number;
   serverUrl: string;
   inheritedPath?: string;
+  platform?: NodeJS.Platform;
 }
 
 interface ResolveUserShellPathOptions {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  runCommand?: SpawnUserShellEnv;
   spawnUserShellEnv?: SpawnUserShellEnv;
   timeoutMs?: number;
 }
@@ -54,9 +63,23 @@ const SHELL_ENV_COMMAND = [
 ].join("; ");
 const USER_SHELL_ENV_TIMEOUT_MS = 3_000;
 const USER_SHELL_ENV_FORCE_KILL_AFTER_MS = 1_000;
+const POWERSHELL_SHELL_ENV_COMMAND = [
+  `Write-Output '${SHELL_ENV_START_MARKER}'`,
+  "Get-ChildItem Env: | ForEach-Object { Write-Output ($_.Name + '=' + [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($_.Value))) }",
+  `Write-Output '${SHELL_ENV_END_MARKER}'`,
+].join("; ");
+const BASE64_VALUE_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/u;
+const REGISTRY_PATH_ROW_PATTERN = /^\s+Path\s+REG_(?:EXPAND_)?SZ\s+(.*)$/iu;
+const WINDOWS_MACHINE_ENVIRONMENT_KEY =
+  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
+const WINDOWS_USER_ENVIRONMENT_KEY = "HKCU\\Environment";
+const WINDOWS_REGISTRY_QUERY_TIMEOUT_MS = 5_000;
+const WINDOWS_USER_SHELL_ENV_TIMEOUT_MS = 8_000;
 
-function getDefaultCliExecutablePath(): string {
-  return fileURLToPath(new URL("../../cli/bin/bb", import.meta.url));
+function getDefaultCliExecutablePath(platform: NodeJS.Platform): string {
+  return fileURLToPath(
+    new URL(`../../cli/bin/${bbExecutableFileName(platform)}`, import.meta.url),
+  );
 }
 
 function getDefaultCliRuntimePath(): string {
@@ -75,7 +98,10 @@ function getErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
-async function resolveCliEntryPath(cliExecutablePath: string): Promise<string> {
+async function resolveCliEntryPath(
+  cliExecutablePath: string,
+  platform: NodeJS.Platform,
+): Promise<string> {
   const cliEntryPath = resolve(cliExecutablePath);
 
   try {
@@ -83,7 +109,7 @@ async function resolveCliEntryPath(cliExecutablePath: string): Promise<string> {
     if (!stats.isFile()) {
       throw new Error(`Resolved bb CLI entry is not a file: ${cliEntryPath}`);
     }
-    if (process.platform !== "win32") {
+    if (platform !== "win32") {
       try {
         await fs.access(cliEntryPath, fsConstants.X_OK);
       } catch (error) {
@@ -319,6 +345,215 @@ function parsePathFromUserShellEnv(stdout: string): string | null {
   return null;
 }
 
+function defaultSpawnWindowsCommand(
+  args: SpawnUserShellEnvArgs,
+): Promise<UserShellEnvSpawnResult> {
+  return new Promise<UserShellEnvSpawnResult>((resolveSpawn) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    function settle(result: UserShellEnvSpawnResult): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = undefined;
+      }
+      resolveSpawn(result);
+    }
+
+    let child: ReturnType<typeof spawnPortableOutputProcess>;
+    try {
+      child = spawnPortableOutputProcess({
+        command: args.command,
+        args: args.args,
+        env: args.env,
+        platform: "win32",
+      });
+    } catch (error) {
+      settle({
+        error: error instanceof Error ? error : new Error(String(error)),
+        signal: null,
+        status: null,
+        stderr,
+        stdout,
+      });
+      return;
+    }
+
+    timeout = setTimeout(() => {
+      child.kill();
+      settle({
+        error: new Error(`Shell env probe timed out after ${args.timeoutMs}ms`),
+        signal: null,
+        status: null,
+        stderr,
+        stdout,
+      });
+    }, args.timeoutMs);
+    timeout.unref();
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      settle({ error, signal: null, status: null, stderr, stdout });
+    });
+    child.on("close", (status, signal) => {
+      settle({ signal, status, stderr, stdout });
+    });
+  });
+}
+
+function expandWindowsEnvReferences(
+  value: string,
+  env: NodeJS.ProcessEnv,
+): string {
+  return value.replace(/%([^%]+)%/gu, (match, name: string) => {
+    return readWindowsEnvValue(env, name) ?? match;
+  });
+}
+
+function parseRegistryPathRow(stdout: string): string | null {
+  for (const line of stdout.split(/\r?\n/u)) {
+    const match = line.match(REGISTRY_PATH_ROW_PATTERN);
+    if (match === null) {
+      continue;
+    }
+    const value = match[1]?.trim() ?? "";
+    return value.length > 0 ? value : null;
+  }
+  return null;
+}
+
+export async function readWindowsRegistryPath(args: {
+  env: NodeJS.ProcessEnv;
+  runCommand?: SpawnUserShellEnv;
+}): Promise<string | null> {
+  const runCommand = args.runCommand ?? defaultSpawnWindowsCommand;
+  const regExecutablePath = resolveWindowsSystemToolPath("reg.exe", args.env);
+  const values: string[] = [];
+  for (const key of [
+    WINDOWS_MACHINE_ENVIRONMENT_KEY,
+    WINDOWS_USER_ENVIRONMENT_KEY,
+  ]) {
+    const result = await runCommand({
+      command: regExecutablePath,
+      args: ["query", key, "/v", "Path"],
+      env: args.env,
+      timeoutMs: WINDOWS_REGISTRY_QUERY_TIMEOUT_MS,
+    });
+    if (
+      result.error !== undefined ||
+      result.signal !== null ||
+      result.status !== 0
+    ) {
+      continue;
+    }
+    const rawValue = parseRegistryPathRow(result.stdout);
+    if (rawValue === null) {
+      continue;
+    }
+    values.push(expandWindowsEnvReferences(rawValue, args.env));
+  }
+
+  const joined = values
+    .flatMap((value) => value.split(";"))
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .join(";");
+  return joined.length > 0 ? joined : null;
+}
+
+function findLastMarkerIndex(lines: string[], marker: string): number {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index]?.trim() === marker) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function parseWindowsPathFromUserShellEnv(stdout: string): string | null {
+  const lines = stdout.split(/\r?\n/u);
+  const startIndex = findLastMarkerIndex(lines, SHELL_ENV_START_MARKER);
+  if (startIndex === -1) {
+    return null;
+  }
+  const endIndex = lines.findIndex(
+    (line, index) => index > startIndex && line.trim() === SHELL_ENV_END_MARKER,
+  );
+  if (endIndex === -1) {
+    return null;
+  }
+
+  for (const line of lines.slice(startIndex + 1, endIndex)) {
+    const separator = line.indexOf("=");
+    if (separator === -1) {
+      continue;
+    }
+    if (line.slice(0, separator).toLowerCase() !== "path") {
+      continue;
+    }
+    const encoded = line.slice(separator + 1).trim();
+    if (!BASE64_VALUE_PATTERN.test(encoded)) {
+      continue;
+    }
+    const pathValue = Buffer.from(encoded, "base64").toString("utf8").trim();
+    if (pathValue.length > 0) {
+      return pathValue;
+    }
+  }
+  return null;
+}
+
+async function resolveWindowsUserShellPath(
+  options: ResolveUserShellPathOptions,
+  env: NodeJS.ProcessEnv,
+): Promise<string | null> {
+  const registryPath = await readWindowsRegistryPath({
+    env,
+    ...(options.runCommand === undefined
+      ? {}
+      : { runCommand: options.runCommand }),
+  });
+
+  const spawnUserShellEnv =
+    options.spawnUserShellEnv ?? defaultSpawnWindowsCommand;
+  const probeResult = await spawnUserShellEnv({
+    command: resolvePowerShellExecutable(env),
+    args: ["-NoLogo", "-Command", POWERSHELL_SHELL_ENV_COMMAND],
+    env,
+    timeoutMs: options.timeoutMs ?? WINDOWS_USER_SHELL_ENV_TIMEOUT_MS,
+  });
+  const probedPath =
+    probeResult.error === undefined &&
+    probeResult.signal === null &&
+    probeResult.status === 0
+      ? parseWindowsPathFromUserShellEnv(probeResult.stdout)
+      : null;
+  if (probedPath !== null) {
+    return probedPath;
+  }
+  if (registryPath !== null) {
+    return registryPath;
+  }
+
+  const inheritedPath = readWindowsEnvValue(env, "Path")?.trim();
+  return inheritedPath !== undefined && inheritedPath.length > 0
+    ? inheritedPath
+    : null;
+}
+
 export async function resolveUserShellPath(
   options: ResolveUserShellPathOptions = {},
 ): Promise<string | null> {
@@ -330,6 +565,9 @@ async function resolveUserShellPathWithPrevious(
   previousPath: string | null,
 ): Promise<string | null> {
   const env = options.env ?? process.env;
+  if ((options.platform ?? process.platform) === "win32") {
+    return resolveWindowsUserShellPath(options, env);
+  }
   const shell = resolveUserShellCommand(
     env,
     options.platform ?? process.platform,
@@ -384,9 +622,13 @@ export function createUserShellPathResolver(
 export async function resolveLocalBbExecutablePath(
   options: ResolveLocalBbExecutablePathOptions = {},
 ): Promise<string> {
+  const platform = options.platform ?? process.platform;
   const resolvedCliExecutablePath =
-    options.cliExecutablePath ?? getDefaultCliExecutablePath();
-  const cliEntryPath = await resolveCliEntryPath(resolvedCliExecutablePath);
+    options.cliExecutablePath ?? getDefaultCliExecutablePath(platform);
+  const cliEntryPath = await resolveCliEntryPath(
+    resolvedCliExecutablePath,
+    platform,
+  );
   const cliRuntimePath =
     options.cliRuntimePath ??
     (options.cliExecutablePath === undefined
@@ -398,14 +640,15 @@ export async function resolveLocalBbExecutablePath(
   return cliEntryPath;
 }
 
-function bbExecutableFileName(): string {
-  return "bb";
+function bbExecutableFileName(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "bb.cmd" : "bb";
 }
 
 export function resolveBbExecutablePathInDirectory(
   bbExecutableDirectory: string,
+  platform: NodeJS.Platform = process.platform,
 ): string {
-  return resolve(bbExecutableDirectory, bbExecutableFileName());
+  return resolve(bbExecutableDirectory, bbExecutableFileName(platform));
 }
 
 export function prepareRuntimeShellEnv(
@@ -413,7 +656,10 @@ export function prepareRuntimeShellEnv(
 ): NonNullable<AgentRuntimeOptions["shellEnv"]> {
   const bbExecutablePath =
     options.bbExecutablePath ??
-    resolveBbExecutablePathInDirectory(options.bbExecutableDirectory);
+    resolveBbExecutablePathInDirectory(
+      options.bbExecutableDirectory,
+      options.platform ?? process.platform,
+    );
   const shellEnv: NonNullable<AgentRuntimeOptions["shellEnv"]> = {
     PATH: prependPath(
       options.bbExecutableDirectory,

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createUserShellPathResolver,
   prepareRuntimeShellEnv,
+  readWindowsRegistryPath,
+  resolveBbExecutablePathInDirectory,
   resolveLocalBbExecutablePath,
   resolveUserShellPath,
   type SpawnUserShellEnv,
@@ -123,6 +125,49 @@ function createMarkedShellEnvOutput(pathValue: string): string {
     "__BB_SHELL_ENV_END__",
     "shell shutdown noise",
   ].join("\n");
+}
+
+const WINDOWS_MACHINE_KEY =
+  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
+const WINDOWS_USER_KEY = "HKCU\\Environment";
+
+const windowsProbeEnv: NodeJS.ProcessEnv = {
+  Path: "C:\\Windows\\System32;C:\\Windows",
+  ProgramFiles: "C:\\Program Files",
+  SystemRoot: "C:\\Windows",
+  USERPROFILE: "C:\\Users\\me",
+};
+
+function createRegistryQueryOutput(
+  key: string,
+  type: "REG_SZ" | "REG_EXPAND_SZ",
+  value: string,
+): string {
+  return ["", key, `    Path    ${type}    ${value}`, "", ""].join("\r\n");
+}
+
+function createWindowsProbeBlock(entries: [string, string][]): string[] {
+  return [
+    "__BB_SHELL_ENV_START__",
+    ...entries.map(
+      ([name, value]) =>
+        `${name}=${Buffer.from(value, "utf8").toString("base64")}`,
+    ),
+    "__BB_SHELL_ENV_END__",
+  ];
+}
+
+function createFakeRegistryCommand(
+  respond: (args: SpawnUserShellEnvArgs) => UserShellEnvSpawnResult,
+): FakeShellEnvSpawn {
+  const calls: SpawnUserShellEnvArgs[] = [];
+  return {
+    calls,
+    async spawn(spawnArgs) {
+      calls.push(spawnArgs);
+      return respond(spawnArgs);
+    },
+  };
 }
 
 function createFakeShellEnvSpawn(
@@ -385,26 +430,6 @@ describe("resolveUserShellPath", () => {
     expect(fakeSpawn.calls[0]?.command).toBe("/bin/zsh");
     expect(fakeSpawn.calls[0]?.args[0]).toBe("-ilc");
   });
-
-  it("skips shell probing on Windows", async () => {
-    const fakeSpawn = createFakeShellEnvSpawn({
-      results: [
-        createShellEnvSpawnResult({
-          stdout: createMarkedShellEnvOutput("C:\\Windows"),
-        }),
-      ],
-    });
-
-    await expect(
-      resolveUserShellPath({
-        env: { SHELL: "/bin/bash", PATH: "C:\\Windows" },
-        platform: "win32",
-        spawnUserShellEnv: fakeSpawn.spawn,
-      }),
-    ).resolves.toBeNull();
-
-    expect(fakeSpawn.calls).toEqual([]);
-  });
 });
 
 describe("prepareRuntimeShellEnv", () => {
@@ -427,6 +452,7 @@ describe("prepareRuntimeShellEnv", () => {
         bbExecutableDirectory: "/tmp/bb-bin",
         hostDaemonPort: 3002,
         inheritedPath: "/usr/bin",
+        platform: "linux",
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
@@ -458,6 +484,7 @@ describe("prepareRuntimeShellEnv", () => {
       prepareRuntimeShellEnv({
         bbExecutableDirectory: "/tmp/bb-bin",
         hostDaemonPort: 3002,
+        platform: "linux",
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
@@ -473,6 +500,7 @@ describe("prepareRuntimeShellEnv", () => {
       prepareRuntimeShellEnv({
         bbExecutableDirectory: "/tmp/bb-bin",
         inheritedPath: "/usr/bin",
+        platform: "linux",
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
@@ -480,5 +508,266 @@ describe("prepareRuntimeShellEnv", () => {
       BB_CLI: path.resolve("/tmp/bb-bin", "bb"),
       BB_SERVER_URL: "http://127.0.0.1:3334",
     });
+  });
+});
+
+describe("readWindowsRegistryPath", () => {
+  it("joins the machine and user values and expands %VAR% references", async () => {
+    const registry = createFakeRegistryCommand((args) =>
+      createShellEnvSpawnResult({
+        stdout:
+          args.args[1] === WINDOWS_USER_KEY
+            ? createRegistryQueryOutput(
+                WINDOWS_USER_KEY,
+                "REG_EXPAND_SZ",
+                "%USERPROFILE%\\bin;;%NOT_SET%\\x",
+              )
+            : createRegistryQueryOutput(
+                WINDOWS_MACHINE_KEY,
+                "REG_SZ",
+                "C:\\Windows\\System32;C:\\Windows",
+              ),
+      }),
+    );
+
+    await expect(
+      readWindowsRegistryPath({
+        env: windowsProbeEnv,
+        runCommand: registry.spawn,
+      }),
+    ).resolves.toBe(
+      "C:\\Windows\\System32;C:\\Windows;C:\\Users\\me\\bin;%NOT_SET%\\x",
+    );
+    expect(registry.calls.map((call) => call.args)).toEqual([
+      ["query", WINDOWS_MACHINE_KEY, "/v", "Path"],
+      ["query", WINDOWS_USER_KEY, "/v", "Path"],
+    ]);
+    expect(registry.calls[0]?.command).toBe("C:\\Windows\\System32\\reg.exe");
+  });
+
+  it("keeps the machine value when the user value is missing", async () => {
+    const registry = createFakeRegistryCommand((args) =>
+      args.args[1] === WINDOWS_USER_KEY
+        ? createShellEnvSpawnResult({
+            status: 1,
+            stderr:
+              "ERROR: The system was unable to find the specified registry key or value.",
+          })
+        : createShellEnvSpawnResult({
+            stdout: createRegistryQueryOutput(
+              WINDOWS_MACHINE_KEY,
+              "REG_SZ",
+              "C:\\Windows\\System32",
+            ),
+          }),
+    );
+
+    await expect(
+      readWindowsRegistryPath({
+        env: windowsProbeEnv,
+        runCommand: registry.spawn,
+      }),
+    ).resolves.toBe("C:\\Windows\\System32");
+  });
+
+  it("returns null when neither key yields a Path row", async () => {
+    const registry = createFakeRegistryCommand(() =>
+      createShellEnvSpawnResult({
+        stdout: [
+          "",
+          WINDOWS_USER_KEY,
+          "    TEMP    REG_SZ    C:\\Temp",
+          "",
+        ].join("\r\n"),
+      }),
+    );
+
+    await expect(
+      readWindowsRegistryPath({
+        env: windowsProbeEnv,
+        runCommand: registry.spawn,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it.runIf(process.platform === "win32")(
+    "reads the real machine and user PATH from the registry",
+    async () => {
+      const registryPath = await readWindowsRegistryPath({ env: process.env });
+      expect(registryPath).not.toBeNull();
+      expect(registryPath?.toLowerCase()).toContain("system32");
+    },
+  );
+});
+
+describe("resolveUserShellPath on Windows", () => {
+  function registryAlways(value: string): FakeShellEnvSpawn {
+    return createFakeRegistryCommand((args) =>
+      args.args[1] === WINDOWS_USER_KEY
+        ? createShellEnvSpawnResult({ status: 1 })
+        : createShellEnvSpawnResult({
+            stdout: createRegistryQueryOutput(
+              WINDOWS_MACHINE_KEY,
+              "REG_SZ",
+              value,
+            ),
+          }),
+    );
+  }
+
+  it("prefers the PowerShell profile probe over the registry", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [
+        createShellEnvSpawnResult({
+          stdout: createWindowsProbeBlock([
+            ["USERNAME", "me"],
+            ["Path", "C:\\profile\\bin;C:\\Windows"],
+          ]).join("\r\n"),
+        }),
+      ],
+    });
+    const registry = registryAlways("C:\\registry\\bin");
+
+    await expect(
+      resolveUserShellPath({
+        env: windowsProbeEnv,
+        platform: "win32",
+        runCommand: registry.spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\profile\\bin;C:\\Windows");
+
+    expect(probe.calls).toHaveLength(1);
+    expect(probe.calls[0]?.command.toLowerCase()).toMatch(
+      /(pwsh|powershell)\.exe$/u,
+    );
+    expect(probe.calls[0]?.args[0]).toBe("-NoLogo");
+    expect(probe.calls[0]?.args[1]).toBe("-Command");
+    expect(probe.calls[0]?.args[2]).toContain("Get-ChildItem Env:");
+    expect(probe.calls[0]?.timeoutMs).toBe(8_000);
+  });
+
+  it("ignores a hostile profile that prints a fake marker pair first", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [
+        createShellEnvSpawnResult({
+          stdout: [
+            ...createWindowsProbeBlock([["Path", "C:\\evil"]]),
+            "profile noise",
+            ...createWindowsProbeBlock([["Path", "C:\\real\\bin"]]),
+          ].join("\r\n"),
+        }),
+      ],
+    });
+
+    await expect(
+      resolveUserShellPath({
+        env: windowsProbeEnv,
+        platform: "win32",
+        runCommand: registryAlways("C:\\registry\\bin").spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\real\\bin");
+  });
+
+  it("skips a corrupt base64 Path line and keeps scanning", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [
+        createShellEnvSpawnResult({
+          stdout: [
+            "__BB_SHELL_ENV_START__",
+            "Path=**not base64**",
+            `PATH=${Buffer.from("C:\\second\\bin", "utf8").toString("base64")}`,
+            "__BB_SHELL_ENV_END__",
+          ].join("\r\n"),
+        }),
+      ],
+    });
+
+    await expect(
+      resolveUserShellPath({
+        env: windowsProbeEnv,
+        platform: "win32",
+        runCommand: registryAlways("C:\\registry\\bin").spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\second\\bin");
+  });
+
+  it("falls back to the registry when the probe fails", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [
+        createShellEnvSpawnResult({ status: 1, stderr: "profile exploded" }),
+      ],
+    });
+
+    await expect(
+      resolveUserShellPath({
+        env: windowsProbeEnv,
+        platform: "win32",
+        runCommand: registryAlways("C:\\registry\\bin").spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\registry\\bin");
+  });
+
+  it("falls back to the inherited Path when the probe and the registry fail", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [createShellEnvSpawnResult({ status: 1 })],
+    });
+    const registry = createFakeRegistryCommand(() =>
+      createShellEnvSpawnResult({ status: 1 }),
+    );
+
+    await expect(
+      resolveUserShellPath({
+        env: windowsProbeEnv,
+        platform: "win32",
+        runCommand: registry.spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\Windows\\System32;C:\\Windows");
+  });
+
+  it("ignores SHELL on Windows", async () => {
+    const probe = createFakeShellEnvSpawn({
+      results: [
+        createShellEnvSpawnResult({
+          stdout: createWindowsProbeBlock([["Path", "C:\\profile\\bin"]]).join(
+            "\r\n",
+          ),
+        }),
+      ],
+    });
+
+    await expect(
+      resolveUserShellPath({
+        env: {
+          ...windowsProbeEnv,
+          SHELL: "C:\\Program Files\\Git\\bin\\bash.exe",
+        },
+        platform: "win32",
+        runCommand: registryAlways("C:\\registry\\bin").spawn,
+        spawnUserShellEnv: probe.spawn,
+      }),
+    ).resolves.toBe("C:\\profile\\bin");
+    expect(probe.calls[0]?.args[0]).toBe("-NoLogo");
+  });
+
+  it("points BB_CLI at bb.cmd on win32", () => {
+    expect(resolveBbExecutablePathInDirectory("/tmp/bb-bin", "win32")).toBe(
+      path.resolve("/tmp/bb-bin", "bb.cmd"),
+    );
+    expect(resolveBbExecutablePathInDirectory("/tmp/bb-bin", "linux")).toBe(
+      path.resolve("/tmp/bb-bin", "bb"),
+    );
+    expect(
+      prepareRuntimeShellEnv({
+        bbExecutableDirectory: "/tmp/bb-bin",
+        inheritedPath: "C:\\Windows",
+        platform: "win32",
+        serverUrl: "http://127.0.0.1:3334",
+      }).BB_CLI,
+    ).toBe(path.resolve("/tmp/bb-bin", "bb.cmd"));
   });
 });
