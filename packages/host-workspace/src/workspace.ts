@@ -40,6 +40,7 @@ import {
   type NameStatusSourceEntry,
   type NumstatEntry,
   type RunGitOptions,
+  runGitOutputPipeline,
   runShellPipeline,
   summarizeNumstat,
   WorkspaceError,
@@ -519,13 +520,20 @@ function createUncommittedDiffRunner(
   };
 }
 
+export interface WorkspaceOptions extends GitProcessOptions {
+  platform?: NodeJS.Platform;
+}
+
 export class Workspace {
   readonly path: string;
   private readonly gitProcessOptions: GitProcessOptions;
+  private readonly platform: NodeJS.Platform;
 
-  constructor(path: string, gitProcessOptions: GitProcessOptions = {}) {
+  constructor(path: string, options: WorkspaceOptions = {}) {
+    const { platform = process.platform, ...gitProcessOptions } = options;
     this.path = path;
-    this.gitProcessOptions = { ...gitProcessOptions };
+    this.gitProcessOptions = gitProcessOptions;
+    this.platform = platform;
   }
 
   static withMutations<T>(
@@ -576,6 +584,17 @@ export class Workspace {
     options: Parameters<typeof runShellPipeline>[2],
   ): Promise<GitCommandResult> {
     return runShellPipeline(script, positionalArgs, {
+      ...options,
+      ...this.gitProcessOptions,
+    });
+  }
+
+  private runGitOutputPipeline(
+    producerArgs: string[],
+    consumerArgs: string[],
+    options: Parameters<typeof runGitOutputPipeline>[2],
+  ): Promise<GitCommandResult> {
+    return runGitOutputPipeline(producerArgs, consumerArgs, {
       ...options,
       ...this.gitProcessOptions,
     });
@@ -1219,11 +1238,18 @@ export class Workspace {
     mergeBaseBranch: string,
     timeoutMs?: number,
   ): Promise<boolean> {
-    const branchPatchIdResult = await this.runShellPipeline(
-      'git diff "$1".."$2" | git patch-id --stable',
-      [mergeBaseRef, "HEAD"],
-      { cwd: this.path, allowFailure: true, timeoutMs },
-    );
+    const branchPatchIdResult =
+      this.platform === "win32"
+        ? await this.runGitOutputPipeline(
+            ["diff", `${mergeBaseRef}..HEAD`],
+            ["patch-id", "--stable"],
+            { cwd: this.path, allowFailure: true, timeoutMs },
+          )
+        : await this.runShellPipeline(
+            'git diff "$1".."$2" | git patch-id --stable',
+            [mergeBaseRef, "HEAD"],
+            { cwd: this.path, allowFailure: true, timeoutMs },
+          );
     if (branchPatchIdResult.exitCode !== 0) {
       return false;
     }
@@ -1237,11 +1263,25 @@ export class Workspace {
       return false;
     }
 
-    const basePatchIdsResult = await this.runShellPipeline(
-      'git log -p -n 1000 --format="commit %H" "$1".."$2" | git patch-id --stable',
-      [mergeBaseRef, mergeBaseBranch],
-      { cwd: this.path, allowFailure: true, timeoutMs },
-    );
+    const basePatchIdsResult =
+      this.platform === "win32"
+        ? await this.runGitOutputPipeline(
+            [
+              "log",
+              "-p",
+              "-n",
+              "1000",
+              "--format=commit %H",
+              `${mergeBaseRef}..${mergeBaseBranch}`,
+            ],
+            ["patch-id", "--stable"],
+            { cwd: this.path, allowFailure: true, timeoutMs },
+          )
+        : await this.runShellPipeline(
+            'git log -p -n 1000 --format="commit %H" "$1".."$2" | git patch-id --stable',
+            [mergeBaseRef, mergeBaseBranch],
+            { cwd: this.path, allowFailure: true, timeoutMs },
+          );
     if (basePatchIdsResult.exitCode !== 0) {
       return false;
     }

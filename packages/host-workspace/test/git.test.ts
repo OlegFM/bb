@@ -9,13 +9,16 @@ import {
   fetchRemoteBranches,
   getCheckoutRef,
   getWorkspaceGitOperation,
+  isLinkedWorktreeGitDir,
   parseNameStatusEntries,
   parseNumstatEntriesZ,
+  parsePatchId,
   parsePorcelainEntries,
   readDefaultBranchRefs,
   readGitBlob,
   readGitRepositoryState,
   runGit,
+  runGitOutputPipeline,
   runGitWithNullRecordLimit,
   runShellPipeline,
   summarizeNumstat,
@@ -122,6 +125,21 @@ async function initBareWorktreeLayout() {
   return { root, worktreePath: path.join(root, "feature-a") };
 }
 
+async function initPatchIdRepo() {
+  const repoPath = await fs.mkdtemp(path.join(os.tmpdir(), "bb-patch-id-"));
+  tempDirs.push(repoPath);
+  await runGit(["init", "-b", "main"], { cwd: repoPath });
+  await runGit(["config", "user.name", "BB Tests"], { cwd: repoPath });
+  await runGit(["config", "user.email", "bb@example.com"], { cwd: repoPath });
+  await fs.writeFile(path.join(repoPath, "README.md"), "base\n", "utf8");
+  await runGit(["add", "."], { cwd: repoPath });
+  await runGit(["commit", "-m", "Initial commit"], { cwd: repoPath });
+  await fs.writeFile(path.join(repoPath, "README.md"), "changed\n", "utf8");
+  await runGit(["add", "."], { cwd: repoPath });
+  await runGit(["commit", "-m", "Second commit"], { cwd: repoPath });
+  return repoPath;
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(
@@ -145,6 +163,117 @@ describe("runShellPipeline", () => {
     );
 
     expect(result.stdout).toBe("missing|missing|external-secret");
+  });
+});
+
+describe("runGitOutputPipeline", () => {
+  it("pipes producer stdout into the consumer without a shell", async () => {
+    const repoPath = await initEmptyRepo();
+
+    const result = await runGitOutputPipeline(
+      ["--version"],
+      ["hash-object", "--stdin"],
+      { cwd: repoPath },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toMatch(/^[0-9a-f]{40}$/u);
+  });
+
+  it("computes a stable patch id for a real diff", async () => {
+    const repoPath = await initPatchIdRepo();
+
+    const result = await runGitOutputPipeline(
+      ["diff", "HEAD~1..HEAD"],
+      ["patch-id", "--stable"],
+      { cwd: repoPath },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(parsePatchId(result.stdout.split("\n")[0])).toMatch(
+      /^[0-9a-f]{40}$/u,
+    );
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "returns the same patch id as the POSIX shell pipeline",
+    async () => {
+      const repoPath = await initPatchIdRepo();
+
+      const piped = await runGitOutputPipeline(
+        ["diff", "HEAD~1..HEAD"],
+        ["patch-id", "--stable"],
+        { cwd: repoPath },
+      );
+      const shelled = await runShellPipeline(
+        'git diff "$1".."$2" | git patch-id --stable',
+        ["HEAD~1", "HEAD"],
+        { cwd: repoPath },
+      );
+
+      expect(parsePatchId(piped.stdout.split("\n")[0])).toBe(
+        parsePatchId(shelled.stdout.split("\n")[0]),
+      );
+    },
+  );
+
+  it("reports a producer failure as a non-zero exit when allowFailure is set", async () => {
+    const repoPath = await initEmptyRepo();
+
+    const result = await runGitOutputPipeline(
+      ["rev-parse", "--verify", "refs/heads/does-not-exist"],
+      ["patch-id", "--stable"],
+      { cwd: repoPath, allowFailure: true },
+    );
+
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it("raises a shell pipeline failure when the producer fails", async () => {
+    const repoPath = await initEmptyRepo();
+
+    await expect(
+      runGitOutputPipeline(
+        ["rev-parse", "--verify", "refs/heads/does-not-exist"],
+        ["patch-id", "--stable"],
+        { cwd: repoPath },
+      ),
+    ).rejects.toMatchObject({
+      code: "shell_pipeline_failed",
+      name: "WorkspaceError",
+    });
+  });
+
+  it("classifies pipeline timeouts as hard failures when allowFailure is true", async () => {
+    const repoPath = await initEmptyRepo();
+
+    await expect(
+      runGitOutputPipeline(
+        ["hash-object", "--stdin"],
+        ["patch-id", "--stable"],
+        { cwd: repoPath, allowFailure: true, timeoutMs: 50 },
+      ),
+    ).rejects.toMatchObject({
+      code: "shell_pipeline_timeout",
+      name: "WorkspaceError",
+    });
+  });
+
+  it("classifies aborted pipelines as cancellations", async () => {
+    const repoPath = await initEmptyRepo();
+    const controller = new AbortController();
+
+    const pending = runGitOutputPipeline(
+      ["hash-object", "--stdin"],
+      ["patch-id", "--stable"],
+      { cwd: repoPath, signal: controller.signal },
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({
+      code: "provision_cancelled",
+      name: "WorkspaceError",
+    });
   });
 });
 
@@ -255,6 +384,34 @@ describe("detectGitRepoKind", () => {
     await expect(detectLinkedWorktree(worktreePath)).resolves.toBe(true);
     await expect(detectLinkedWorktree(ordinaryCheckout)).resolves.toBe(false);
     await expect(detectLinkedWorktree(plainDir)).resolves.toBe(false);
+  });
+
+  it("reads a backslash-separated git dir as a linked worktree only on win32", () => {
+    const windowsGitDir = "C:\\Users\\me\\repo\\.bare\\worktrees\\feature-a";
+
+    expect(isLinkedWorktreeGitDir(windowsGitDir, "win32")).toBe(true);
+    expect(isLinkedWorktreeGitDir(windowsGitDir, "darwin")).toBe(false);
+    expect(
+      isLinkedWorktreeGitDir("/srv/repo/.bare/worktrees/feature-a", "win32"),
+    ).toBe(true);
+    expect(
+      isLinkedWorktreeGitDir("/srv/repo/.bare/worktrees/feature-a", "darwin"),
+    ).toBe(true);
+    expect(isLinkedWorktreeGitDir("C:\\Users\\me\\repo\\.git", "win32")).toBe(
+      false,
+    );
+  });
+
+  it("keeps a real linked worktree detected under the win32 arm", async () => {
+    const { worktreePath } = await initBareWorktreeLayout();
+    const ordinaryCheckout = await initReadGitBlobRepo();
+
+    await expect(
+      detectLinkedWorktree(worktreePath, { platform: "win32" }),
+    ).resolves.toBe(true);
+    await expect(
+      detectLinkedWorktree(ordinaryCheckout, { platform: "win32" }),
+    ).resolves.toBe(false);
   });
 
   it("keeps detectGitRepo scoped to work trees so bare roots get no checkout UI", async () => {

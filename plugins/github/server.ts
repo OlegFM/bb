@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
@@ -377,6 +378,30 @@ function run(
   });
 }
 
+export function ghCandidatePaths(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  if (platform !== "win32") {
+    return ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"];
+  }
+  const candidates = [
+    "gh",
+    path.win32.join(
+      env.ProgramFiles ?? "C:\\Program Files",
+      "GitHub CLI",
+      "gh.exe",
+    ),
+  ];
+  const localAppData = env.LOCALAPPDATA?.trim();
+  if (localAppData !== undefined && localAppData.length > 0) {
+    candidates.push(
+      path.win32.join(localAppData, "Programs", "GitHub CLI", "gh.exe"),
+    );
+  }
+  return candidates;
+}
+
 export function parsePaginatedGhApi(raw: string): Record<string, unknown>[] {
   const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
@@ -566,7 +591,7 @@ export default async function plugin(bb: BbPluginApi) {
 
   async function resolveGh(): Promise<string> {
     if (ghPath !== null) return ghPath;
-    const candidates = ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"];
+    const candidates = ghCandidatePaths();
     for (const candidate of candidates) {
       try {
         await run(candidate, ["--version"], 5_000);

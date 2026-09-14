@@ -4,6 +4,7 @@ import type { PluginRpcClient, PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import {
   fetchRepoItems,
+  ghCandidatePaths,
   githubRpcContract,
   parseExtraRepos,
   parsePaginatedGhApi,
@@ -201,5 +202,34 @@ describe("GitHub RPC contract", () => {
     await expect(
       harness.callRpc("startWork", { repo: "get-bb/bb", number: 694 }),
     ).rejects.toMatchObject({ code: "invalid_output" });
+  });
+});
+
+describe("gh discovery", () => {
+  it("keeps the POSIX candidates and adds the Windows install locations", () => {
+    expect(ghCandidatePaths("darwin", {})).toEqual([
+      "gh",
+      "/opt/homebrew/bin/gh",
+      "/usr/local/bin/gh",
+    ]);
+    expect(ghCandidatePaths("linux", {})).toEqual([
+      "gh",
+      "/opt/homebrew/bin/gh",
+      "/usr/local/bin/gh",
+    ]);
+    expect(
+      ghCandidatePaths("win32", {
+        ProgramFiles: "C:\\Program Files",
+        LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local",
+      }),
+    ).toEqual([
+      "gh",
+      "C:\\Program Files\\GitHub CLI\\gh.exe",
+      "C:\\Users\\me\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
+    ]);
+    expect(ghCandidatePaths("win32", {})).toEqual([
+      "gh",
+      "C:\\Program Files\\GitHub CLI\\gh.exe",
+    ]);
   });
 });

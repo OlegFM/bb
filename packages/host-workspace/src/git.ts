@@ -11,7 +11,9 @@ import type {
 import {
   killProcessGroup,
   sanitizeInheritedChildProcessEnv,
+  spawnPortablePipedProcess,
   supportsProcessGroups,
+  type PortableChildProcess,
 } from "@bb/process-utils";
 
 const execFileAsync = promisify(execFile);
@@ -513,6 +515,24 @@ export async function getGitCommonDir(
   return path.resolve(cwd, commonDir);
 }
 
+interface PipelineChildOutcome {
+  exitCode: number | null;
+  error?: Error;
+}
+
+function waitForPipelineChildClose(
+  child: PortableChildProcess,
+): Promise<PipelineChildOutcome> {
+  return new Promise((resolvePipelineChild) => {
+    child.once("error", (error: Error) => {
+      resolvePipelineChild({ exitCode: null, error });
+    });
+    child.once("close", (exitCode: number | null) => {
+      resolvePipelineChild({ exitCode });
+    });
+  });
+}
+
 export async function runShellPipeline(
   script: string,
   positionalArgs: string[],
@@ -561,6 +581,106 @@ export async function runShellPipeline(
       `shell pipeline failed${detail}`,
       { cause: error },
     );
+  }
+}
+
+export async function runGitOutputPipeline(
+  producerArgs: string[],
+  consumerArgs: string[],
+  options: RunShellPipelineOptions,
+): Promise<GitCommandResult> {
+  if (options.signal?.aborted) {
+    throw createShellPipelineCancelledError(options.signal.reason);
+  }
+  const env = resolveGitProcessEnv({
+    env: undefined,
+    shellPath: options.shellPath,
+  });
+  const producer = spawnPortablePipedProcess({
+    command: "git",
+    args: producerArgs,
+    cwd: options.cwd,
+    env,
+  });
+  const consumer = spawnPortablePipedProcess({
+    command: "git",
+    args: consumerArgs,
+    cwd: options.cwd,
+    env,
+  });
+  producer.stdout.pipe(consumer.stdin);
+  producer.stdout.on("error", () => {});
+  consumer.stdin.on("error", () => {});
+
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  producer.stderr.on("data", (chunk: Buffer) => {
+    stderrChunks.push(Buffer.from(chunk));
+  });
+  consumer.stdout.on("data", (chunk: Buffer) => {
+    stdoutChunks.push(Buffer.from(chunk));
+  });
+  consumer.stderr.on("data", (chunk: Buffer) => {
+    stderrChunks.push(Buffer.from(chunk));
+  });
+
+  let timedOut = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const killBoth = (): void => {
+    producer.kill();
+    consumer.kill();
+  };
+  options.signal?.addEventListener("abort", killBoth, { once: true });
+  if (options.timeoutMs !== undefined) {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      killBoth();
+    }, options.timeoutMs);
+  }
+
+  try {
+    const [producerOutcome, consumerOutcome] = await Promise.all([
+      waitForPipelineChildClose(producer),
+      waitForPipelineChildClose(consumer),
+    ]);
+    const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+    const stderr = Buffer.concat(stderrChunks).toString("utf8");
+    if (options.signal?.aborted) {
+      throw createShellPipelineCancelledError(options.signal.reason);
+    }
+    if (timedOut && options.timeoutMs !== undefined) {
+      throw createShellPipelineTimedOutError(options.timeoutMs);
+    }
+    const producerFailed =
+      producerOutcome.error !== undefined ||
+      (producerOutcome.exitCode ?? 1) !== 0;
+    const consumerFailed =
+      consumerOutcome.error !== undefined ||
+      (consumerOutcome.exitCode ?? 1) !== 0;
+    if (producerFailed || consumerFailed) {
+      if (options.allowFailure) {
+        return {
+          stdout,
+          stderr,
+          exitCode: producerFailed
+            ? (producerOutcome.exitCode ?? 1)
+            : (consumerOutcome.exitCode ?? 1),
+        };
+      }
+      const trimmed = trimOutput(stderr);
+      const detail = trimmed ? `: ${trimmed}` : "";
+      throw new WorkspaceError(
+        "shell_pipeline_failed",
+        `shell pipeline failed${detail}`,
+        { cause: producerOutcome.error ?? consumerOutcome.error },
+      );
+    }
+    return { stdout, stderr, exitCode: consumerOutcome.exitCode ?? 0 };
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+    options.signal?.removeEventListener("abort", killBoth);
   }
 }
 
@@ -625,19 +745,34 @@ export async function detectGitRepo(
   return (await detectGitRepoKind(cwd, options)) === "work-tree";
 }
 
+export interface DetectLinkedWorktreeOptions extends GitTimeoutOptions {
+  platform?: NodeJS.Platform;
+}
+
+export function isLinkedWorktreeGitDir(
+  gitDir: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (platform === "win32") {
+    return gitDir.replace(/\\/gu, "/").includes("/worktrees/");
+  }
+  return gitDir.includes("/worktrees/");
+}
+
 export async function detectLinkedWorktree(
   cwd: string,
-  options: GitTimeoutOptions = {},
+  options: DetectLinkedWorktreeOptions = {},
 ): Promise<boolean> {
+  const { platform = process.platform, ...gitOptions } = options;
   const gitDirResult = await runGit(["rev-parse", "--git-dir"], {
     cwd,
-    ...options,
+    ...gitOptions,
     allowFailure: true,
   });
   if (gitDirResult.exitCode !== 0) {
     return false;
   }
-  return gitDirResult.stdout.trim().includes("/worktrees/");
+  return isLinkedWorktreeGitDir(gitDirResult.stdout.trim(), platform);
 }
 
 export async function detectGitSource(

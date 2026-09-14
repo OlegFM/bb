@@ -43,7 +43,8 @@ async function createSourceRepository(): Promise<{
   temporaryRoots.push(root);
   const sourcePath = join(root, "repo");
   const dataDir = join(root, "plugin-data");
-  await execFileAsync("mkdir", ["-p", sourcePath, dataDir]);
+  await mkdir(sourcePath, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
   await git(sourcePath, "init", "--initial-branch=main");
   await writeFile(join(sourcePath, "README.md"), "hello\n");
   await git(sourcePath, "add", ".");
@@ -61,7 +62,8 @@ async function createDetachedSingleBranchRepository(): Promise<{
   const originPath = join(root, "origin");
   const sourcePath = join(root, "repo");
   const dataDir = join(root, "plugin-data");
-  await execFileAsync("mkdir", ["-p", originPath, dataDir]);
+  await mkdir(originPath, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
   await git(originPath, "init", "--initial-branch=main");
   await writeFile(join(originPath, "README.md"), "hello\n");
   await git(originPath, "add", ".");
@@ -337,11 +339,15 @@ describe("worktree host entry", () => {
       }),
     );
     if (created.status !== "created") throw new Error(created.message);
-    const lingering = spawn("sleep", ["300"], {
-      cwd: created.path,
-      detached: true,
-      stdio: "ignore",
-    });
+    const lingering = spawn(
+      process.execPath,
+      ["-e", "setTimeout(() => {}, 300000)"],
+      {
+        cwd: created.path,
+        detached: true,
+        stdio: "ignore",
+      },
+    );
     lingering.unref();
     const removed = await harness.experimental_call("remove", {
       operationId: "remove",
