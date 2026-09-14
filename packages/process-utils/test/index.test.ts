@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
+  assignPathEnv,
   installSafeProcessDiagnostics,
   resolveContainedPath,
   sanitizeInheritedChildProcessEnv,
@@ -254,26 +255,53 @@ describe("process utils", () => {
     expect(Buffer.concat(stdoutChunks).toString("utf8")).toBe("closed");
   });
 
-  it("resolves paths that stay within the configured root", () => {
-    expect(
-      resolveContainedPath({
-        rootPath: "/tmp/root",
-        candidatePath: "/tmp/root/child/file.txt",
-      }),
-    ).toBe("/tmp/root/child/file.txt");
+  it.skipIf(process.platform === "win32")(
+    "resolves paths that stay within the configured root",
+    () => {
+      expect(
+        resolveContainedPath({
+          rootPath: "/tmp/root",
+          candidatePath: "/tmp/root/child/file.txt",
+        }),
+      ).toBe("/tmp/root/child/file.txt");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects root and escaped paths",
+    () => {
+      expect(
+        resolveContainedPath({
+          rootPath: "/tmp/root",
+          candidatePath: "/tmp/root",
+        }),
+      ).toBeNull();
+      expect(
+        resolveContainedPath({
+          rootPath: "/tmp/root",
+          candidatePath: "/tmp/root/../escape",
+        }),
+      ).toBeNull();
+    },
+  );
+
+  it("resolves host paths that stay within the configured root", () => {
+    const rootPath = join(tmpdir(), "bb-contained-root");
+    const candidatePath = join(rootPath, "child", "file.txt");
+    expect(resolveContainedPath({ rootPath, candidatePath })).toBe(
+      candidatePath,
+    );
   });
 
-  it("rejects root and escaped paths", () => {
+  it("rejects the host root and escaped host paths", () => {
+    const rootPath = join(tmpdir(), "bb-contained-root");
     expect(
-      resolveContainedPath({
-        rootPath: "/tmp/root",
-        candidatePath: "/tmp/root",
-      }),
+      resolveContainedPath({ rootPath, candidatePath: rootPath }),
     ).toBeNull();
     expect(
       resolveContainedPath({
-        rootPath: "/tmp/root",
-        candidatePath: "/tmp/root/../escape",
+        rootPath,
+        candidatePath: join(rootPath, "..", "escape"),
       }),
     ).toBeNull();
   });
@@ -296,6 +324,61 @@ describe("process utils", () => {
       PATH: "/bin",
     });
     expect("SKIP_ME" in sanitizedEnv).toBe(false);
+  });
+
+  it("collapses every PATH casing into one Path key on win32", () => {
+    const env: NodeJS.ProcessEnv = {
+      Path: "C:\\a",
+      PATH: "C:\\b",
+      path: "C:\\c",
+      USERPROFILE: "C:\\Users\\me",
+    };
+
+    const sanitizedEnv = sanitizeInheritedChildProcessEnv({
+      env,
+      shellPath: "C:\\shell",
+      platform: "win32",
+    });
+
+    expect(
+      Object.keys(sanitizedEnv).filter((key) => /^path$/iu.test(key)),
+    ).toEqual(["Path"]);
+    expect(sanitizedEnv).toEqual({
+      Path: "C:\\shell",
+      USERPROFILE: "C:\\Users\\me",
+    });
+    expect(env).toEqual({
+      Path: "C:\\a",
+      PATH: "C:\\b",
+      path: "C:\\c",
+      USERPROFILE: "C:\\Users\\me",
+    });
+  });
+
+  it("leaves win32 PATH casings alone without a shell path", () => {
+    expect(
+      sanitizeInheritedChildProcessEnv({
+        env: { Path: "C:\\a", PATH: "C:\\b" },
+        platform: "win32",
+      }),
+    ).toEqual({ Path: "C:\\a", PATH: "C:\\b" });
+  });
+
+  it("assigns the child PATH per platform", () => {
+    expect(
+      assignPathEnv({
+        env: { HOME: "/home/me", PATH: "/bin" },
+        path: "/opt/bin:/bin",
+        platform: "linux",
+      }),
+    ).toEqual({ HOME: "/home/me", PATH: "/opt/bin:/bin" });
+    expect(
+      assignPathEnv({
+        env: { Path: "C:\\a", PATH: "C:\\b", USERPROFILE: "C:\\Users\\me" },
+        path: "C:\\new",
+        platform: "win32",
+      }),
+    ).toEqual({ Path: "C:\\new", USERPROFILE: "C:\\Users\\me" });
   });
 
   it("does not mutate the inherited env", () => {

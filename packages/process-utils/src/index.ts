@@ -1,4 +1,6 @@
 export * from "./plugin-process-paths.js";
+export * from "./resolve-executable.js";
+export * from "./windows-system-tools.js";
 import type { ChildProcess, StdioOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -21,6 +23,7 @@ interface PortableSpawnRequest {
   cwd?: string;
   detached?: boolean;
   env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
   stdio?: StdioOptions;
   windowsHide?: boolean;
 }
@@ -33,6 +36,7 @@ interface PortablePipedSpawnRequest {
   cwd?: string;
   detached?: boolean;
   env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
 }
 
 interface PortablePipedChildProcess extends PortableChildProcess {
@@ -52,6 +56,7 @@ interface KillProcessGroupArgs {
     pid?: number | undefined;
     kill: (signal: NodeJS.Signals) => unknown;
   };
+  platform?: NodeJS.Platform;
   signal: NodeJS.Signals;
 }
 
@@ -82,7 +87,14 @@ interface ResolveContainedPathArgs {
 
 export interface SanitizeInheritedChildProcessEnvArgs {
   env: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
   shellPath?: string;
+}
+
+export interface AssignPathEnvArgs {
+  env: NodeJS.ProcessEnv;
+  path: string;
+  platform?: NodeJS.Platform;
 }
 
 type SafeProcessDiagnosticKind = "startupFailure" | "uncaughtException";
@@ -136,12 +148,16 @@ type UncaughtExceptionMonitorHandler = (
 export function spawnPortableProcess(
   request: PortableSpawnRequest,
 ): PortableChildProcess {
+  const platform = request.platform ?? process.platform;
   return crossSpawn(request.command, request.args, {
     cwd: request.cwd,
     detached: request.detached,
     env: request.env,
     stdio: request.stdio,
-    windowsHide: request.windowsHide,
+    windowsHide:
+      platform === "win32"
+        ? (request.windowsHide ?? true)
+        : request.windowsHide,
   });
 }
 
@@ -183,12 +199,17 @@ export function spawnPortableOutputProcess(
   return child;
 }
 
-export function supportsProcessGroups(): boolean {
-  return process.platform !== "win32";
+export function supportsProcessGroups(
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform !== "win32";
 }
 
 export function killProcessGroup(args: KillProcessGroupArgs): void {
-  if (supportsProcessGroups() && args.child.pid !== undefined) {
+  if (
+    supportsProcessGroups(args.platform ?? process.platform) &&
+    args.child.pid !== undefined
+  ) {
     try {
       process.kill(-args.child.pid, args.signal);
       return;
@@ -197,10 +218,13 @@ export function killProcessGroup(args: KillProcessGroupArgs): void {
   args.child.kill(args.signal);
 }
 
-export function isProcessGroupAlive(child: {
-  pid?: number | undefined;
-}): boolean {
-  if (!supportsProcessGroups() || child.pid === undefined) {
+export function isProcessGroupAlive(
+  child: {
+    pid?: number | undefined;
+  },
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (!supportsProcessGroups(platform) || child.pid === undefined) {
     return false;
   }
   try {
@@ -448,9 +472,13 @@ export function resolveContainedPath(
   return resolvedCandidatePath;
 }
 
+const WINDOWS_PATH_ENV_KEY_PATTERN = /^path$/iu;
+
 export function sanitizeInheritedChildProcessEnv(
   args: SanitizeInheritedChildProcessEnvArgs,
 ): NodeJS.ProcessEnv {
+  const platform = args.platform ?? process.platform;
+  const dropPathVariants = platform === "win32" && args.shellPath !== undefined;
   const sanitizedEnv: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(args.env)) {
     if (value === undefined) {
@@ -459,12 +487,35 @@ export function sanitizeInheritedChildProcessEnv(
     if (key === "NODE_ENV" || key.startsWith("BB_")) {
       continue;
     }
+    if (dropPathVariants && WINDOWS_PATH_ENV_KEY_PATTERN.test(key)) {
+      continue;
+    }
     sanitizedEnv[key] = value;
   }
   if (args.shellPath !== undefined) {
+    if (platform === "win32") {
+      sanitizedEnv.Path = args.shellPath;
+      return sanitizedEnv;
+    }
     sanitizedEnv.PATH = args.shellPath;
   }
   return sanitizedEnv;
+}
+
+export function assignPathEnv(args: AssignPathEnvArgs): NodeJS.ProcessEnv {
+  const platform = args.platform ?? process.platform;
+  if (platform !== "win32") {
+    return { ...args.env, PATH: args.path };
+  }
+  const childEnv: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(args.env)) {
+    if (value === undefined || WINDOWS_PATH_ENV_KEY_PATTERN.test(key)) {
+      continue;
+    }
+    childEnv[key] = value;
+  }
+  childEnv.Path = args.path;
+  return childEnv;
 }
 
 const NPM_SCRIPT_POLICY_ENV_KEYS: ReadonlySet<string> = new Set([
