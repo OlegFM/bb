@@ -47,6 +47,7 @@ import {
 import {
   buildHostPathKey,
   detectHostPathFlavor,
+  isBareDriveHostPath,
   jsonValueSchema,
   type Environment,
   type EnvironmentMachineSelection,
@@ -167,6 +168,7 @@ const windowsClaimPathSchema = z
   .string()
   .min(1)
   .refine((path) => detectHostPathFlavor(path) === "windows")
+  .refine((path) => !isBareDriveHostPath(path))
   .refine((path) => !path.includes("\0"));
 const environmentOperations = new WeakMap<
   object,

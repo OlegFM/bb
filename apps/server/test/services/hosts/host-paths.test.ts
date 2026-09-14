@@ -62,6 +62,31 @@ describe("canonicalizeHostPath", () => {
       expect(responder.requests).toEqual([]);
     }));
 
+  it("never asks a wsl host to canonicalize", async () =>
+    withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-canon-wsl",
+        platform: "wsl",
+      });
+      const responder = registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => {
+          throw new Error(`unexpected ${request.command.type}`);
+        },
+      });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "/srv/link/repo/",
+        }),
+      ).resolves.toEqual({
+        path: "/srv/link/repo",
+        pathKey: "/srv/link/repo",
+      });
+      expect(responder.requests).toEqual([]);
+    }));
+
   it("surfaces daemon path rejections as 400 invalid_path", async () =>
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {

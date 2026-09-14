@@ -761,6 +761,26 @@ describe("core environment orchestration", () => {
       });
     }));
 
+  it("binds a relative produced path as typed on a POSIX host", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async () => ({
+          status: "created",
+          path: "ws-relative//",
+          ownsPath: true,
+        }),
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        path: "ws-relative",
+        pathKey: "ws-relative",
+        claimPath: "ws-relative",
+        status: "provisioning",
+        teardownStatus: null,
+      });
+    }));
+
   it("refuses a produced path the provider never claimed", async () =>
     withTestHarness(async (harness) => {
       const fixture = setup(harness, {
@@ -793,6 +813,28 @@ describe("core environment orchestration", () => {
           return {
             status: "created",
             path: "/tmp/ws-relative",
+            ownsPath: false,
+          };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        status: "error",
+        statusMessage: expect.stringContaining(
+          JSON.stringify('Invalid string: must start with "/"').slice(1, -1),
+        ),
+      });
+    }));
+
+  it("refuses a bare-drive claimed path", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          await context.experimental_claimPath("C:");
+          return {
+            status: "created",
+            path: "/tmp/ws-bare-drive",
             ownsPath: false,
           };
         },
