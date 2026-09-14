@@ -63,8 +63,9 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   counts as a root — with
   HTTP 400 `invalid_request` before any daemon call; for paths that do reach
   it (the environment directory tool and the shape check the server runs
-  itself), UNC, device, relative and bare-drive input and a POSIX-shaped path
-  on Windows are refused as HTTP 400 `invalid_path`. A provider-produced path
+  itself), the local check refuses UNC, device, relative and bare-drive input
+  as HTTP 400 `invalid_path` on any host, and the win32 daemon additionally
+  refuses a POSIX-shaped path on Windows. A provider-produced path
   the daemon refuses by shape is not a 400: the server binds it as typed with
   trailing separators removed, the value the pre-port server stored.
 - The host daemon owns canonical paths: `host.canonicalize_path` returns
