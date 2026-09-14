@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   getPluginSettingsValues,
@@ -12,7 +12,11 @@ import type {
 } from "@get-bb/plugin-sdk";
 import type { PluginSettingDescriptor as PublicPluginSettingDescriptor } from "@bb/server-contract";
 import { validateSettingsUpdate } from "@get-bb/plugin-sdk/internal/host-policy";
-import { deleteSecretFile, writeSecretFile } from "@bb/secret-storage";
+import {
+  deleteSecretFile,
+  readSecretFile,
+  writeSecretFile,
+} from "@bb/secret-storage";
 
 export { validateSettingsUpdate as validatePluginSettingsUpdate };
 
@@ -44,14 +48,7 @@ async function readSecret(
   pluginId: string,
   key: string,
 ): Promise<string | undefined> {
-  try {
-    return await readFile(secretFilePath(dataDir, pluginId, key), "utf8");
-  } catch (error) {
-    const code =
-      error instanceof Error && "code" in error ? error.code : undefined;
-    if (code === "ENOENT") return undefined;
-    throw error;
-  }
+  return readSecretFile(secretFilePath(dataDir, pluginId, key));
 }
 
 interface PluginSettingsStoreArgs {

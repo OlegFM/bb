@@ -21,6 +21,11 @@ import {
   type DbConnection,
 } from "@bb/db";
 import type { Logger } from "@bb/logger";
+import {
+  assertSecretFileAclIsPrivate,
+  readSecretFileAcl,
+  resolveCurrentWindowsUser,
+} from "@bb/secret-storage";
 import { registerPluginRoutes } from "../../../src/routes/plugins.js";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
 import {
@@ -167,7 +172,7 @@ describe("plugin settings + storage", () => {
       });
     });
 
-    it("round-trips secrets through 0600 files and fires onChange with next/prev", async () => {
+    it("round-trips secrets through private files and fires onChange with next/prev", async () => {
       await installConfigurable();
       const view = await service.updateSettings("configurable", {
         apiKey: "sk-secret-123",
@@ -184,7 +189,6 @@ describe("plugin settings + storage", () => {
         "apiKey",
       );
       expect(await readFile(secretPath, "utf8")).toBe("sk-secret-123");
-      expect((await stat(secretPath)).mode & 0o777).toBe(0o600);
 
       expect(view?.values.apiKey).toEqual({ set: true });
       expect(JSON.stringify(view)).not.toContain("sk-secret-123");
@@ -219,6 +223,49 @@ describe("plugin settings + storage", () => {
       expect((await state().settings.get()).apiKey).toBeUndefined();
       expect(state().changes).toHaveLength(2);
     });
+
+    it.skipIf(process.platform === "win32")(
+      "stores plugin secrets with 0600 mode",
+      async () => {
+        await installConfigurable();
+        await service.updateSettings("configurable", {
+          apiKey: "sk-secret-123",
+        });
+
+        const secretPath = join(
+          dataDir,
+          "plugins",
+          "configurable",
+          "secrets",
+          "apiKey",
+        );
+        expect((await stat(secretPath)).mode & 0o777).toBe(0o600);
+      },
+    );
+
+    it.runIf(process.platform === "win32")(
+      "stores plugin secrets with an ACL that names only the current user",
+      async () => {
+        await installConfigurable();
+        await service.updateSettings("configurable", {
+          apiKey: "sk-secret-123",
+        });
+
+        const secretPath = join(
+          dataDir,
+          "plugins",
+          "configurable",
+          "secrets",
+          "apiKey",
+        );
+        const user = await resolveCurrentWindowsUser();
+        const aces = await readSecretFileAcl(secretPath);
+        expect(aces).toHaveLength(1);
+        expect(() =>
+          assertSecretFileAclIsPrivate(secretPath, aces, user),
+        ).not.toThrow();
+      },
+    );
 
     it("broadcasts plugins-changed when a save changes effective values, not on a no-op", async () => {
       await installConfigurable();

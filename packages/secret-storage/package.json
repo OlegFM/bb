@@ -16,6 +16,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@bb/process-utils": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -2587,6 +2587,9 @@ importers:
 
   packages/secret-storage:
     dependencies:
+      '@bb/process-utils':
+        specifier: workspace:*
+        version: link:../process-utils
       zod:
         specifier: 4.3.6
         version: 4.3.6

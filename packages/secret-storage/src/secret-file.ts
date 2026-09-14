@@ -1,12 +1,48 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import {
+  ensureSecretFileIsPrivate,
+  type WindowsAclDeps,
+} from "./windows-acl.js";
 
-interface ReadOrCreateSecretFileArgs {
+export interface SecretFileOptions {
+  platform?: NodeJS.Platform;
+  deps?: WindowsAclDeps;
+}
+
+interface ReadOrCreateSecretFileArgs extends SecretFileOptions {
   bytes: number;
   dataDir: string;
   encoding: BufferEncoding;
   fileName: string;
+}
+
+const verifiedSecretPaths = new Set<string>();
+
+async function ensureSecretFileIsPrivateOnce(
+  path: string,
+  options: SecretFileOptions,
+): Promise<void> {
+  const key = path.toLowerCase();
+  if (verifiedSecretPaths.has(key)) return;
+  await ensureSecretFileIsPrivate(path, options.deps ?? {});
+  verifiedSecretPaths.add(key);
+}
+
+async function createPrivateSecretFile(
+  path: string,
+  options: SecretFileOptions,
+): Promise<void> {
+  const handle = await open(path, "wx");
+  await handle.close();
+  await ensureSecretFileIsPrivate(path, options.deps ?? {});
+  verifiedSecretPaths.add(path.toLowerCase());
+}
+
+function errorCodeOf(error: unknown): unknown {
+  return error instanceof Error && "code" in error ? error.code : undefined;
 }
 
 export async function readOrCreateSecretFile(
@@ -14,10 +50,14 @@ export async function readOrCreateSecretFile(
 ): Promise<string> {
   await mkdir(args.dataDir, { recursive: true });
   const secretPath = join(args.dataDir, args.fileName);
+  const platform = args.platform ?? process.platform;
 
   try {
     const existing = (await readFile(secretPath, "utf8")).trim();
     if (existing.length > 0) {
+      if (platform === "win32") {
+        await ensureSecretFileIsPrivateOnce(secretPath, { deps: args.deps });
+      }
       return existing;
     }
   } catch (error) {
@@ -29,6 +69,31 @@ export async function readOrCreateSecretFile(
   }
 
   const generatedSecret = randomBytes(args.bytes).toString(args.encoding);
+
+  if (platform === "win32") {
+    try {
+      await createPrivateSecretFile(secretPath, { deps: args.deps });
+    } catch (error) {
+      if (errorCodeOf(error) !== "EEXIST") {
+        await rm(secretPath, { force: true });
+        throw error;
+      }
+      const racedSecret = (await readFile(secretPath, "utf8")).trim();
+      if (racedSecret.length === 0) {
+        throw new Error(`Failed to initialize secret at ${secretPath}`);
+      }
+      await ensureSecretFileIsPrivateOnce(secretPath, { deps: args.deps });
+      return racedSecret;
+    }
+    try {
+      await writeFile(secretPath, `${generatedSecret}\n`, { encoding: "utf8" });
+    } catch (error) {
+      await rm(secretPath, { force: true });
+      throw error;
+    }
+    return generatedSecret;
+  }
+
   try {
     await writeFile(secretPath, `${generatedSecret}\n`, {
       encoding: "utf8",
@@ -54,15 +119,58 @@ export async function readOrCreateSecretFile(
 export async function writeSecretFile(
   path: string,
   value: string,
+  options: SecretFileOptions = {},
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tempPath = `${path}.${randomBytes(6).toString("hex")}.tmp`;
+
+  if ((options.platform ?? process.platform) === "win32") {
+    try {
+      await createPrivateSecretFile(tempPath, options);
+      await writeFile(tempPath, value, { encoding: "utf8" });
+      await rename(tempPath, path);
+    } catch (error) {
+      await rm(tempPath, { force: true });
+      throw error;
+    }
+    verifiedSecretPaths.add(path.toLowerCase());
+    return;
+  }
+
   try {
     await writeFile(tempPath, value, { encoding: "utf8", mode: 0o600 });
     await rename(tempPath, path);
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
+  }
+}
+
+export async function readSecretFile(
+  path: string,
+  options: SecretFileOptions = {},
+): Promise<string | undefined> {
+  if ((options.platform ?? process.platform) !== "win32") {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (errorCodeOf(error) === "ENOENT") return undefined;
+      throw error;
+    }
+  }
+
+  let handle: FileHandle;
+  try {
+    handle = await open(path, "r");
+  } catch (error) {
+    if (errorCodeOf(error) === "ENOENT") return undefined;
+    throw error;
+  }
+  try {
+    await ensureSecretFileIsPrivateOnce(path, options);
+    return await handle.readFile("utf8");
+  } finally {
+    await handle.close();
   }
 }
 
