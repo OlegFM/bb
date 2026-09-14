@@ -53,9 +53,20 @@ export async function canonicalizeHostPath(
       command: { type: "host.canonicalize_path", path: args.path },
     });
   } catch (error) {
-    if (error instanceof ApiError && error.body.code === "invalid_path") {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+    if (error.body.code === "invalid_path") {
       throw invalidHostPath(error.body.message);
     }
+    deps.logger.warn(
+      {
+        hostId: args.hostId,
+        code: error.body.code,
+        message: error.body.message,
+      },
+      "Host path canonicalization failed; storing the normalized spelling",
+    );
     return shapeCanonicalHostPath(args.path);
   }
 }
