@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   dispatchCommand,
   dispatchOnlineRpcCommand,
+  providerCliEnvFromShellEnv,
 } from "./command-dispatch.js";
 import {
   DISPATCH_TEST_BRIDGE_LAUNCH,
@@ -2446,5 +2447,25 @@ describe("dispatchCommand", () => {
       providerId: "pi",
       bridgeLaunch: dispatchTestRuntimeBridgeLaunch(options.dataDir),
     });
+  });
+});
+
+describe("providerCliEnvFromShellEnv", () => {
+  it("keeps the inherited env when the shell env has no PATH", () => {
+    expect(providerCliEnvFromShellEnv({}, "linux")).toBe(process.env);
+  });
+
+  it("sets PATH on posix and exactly one Path key on win32", () => {
+    expect(
+      providerCliEnvFromShellEnv({ PATH: "/opt/bin:/bin" }, "linux").PATH,
+    ).toBe("/opt/bin:/bin");
+    const windowsEnv = providerCliEnvFromShellEnv(
+      { PATH: "C:\\tools;C:\\Windows\\System32" },
+      "win32",
+    );
+    expect(
+      Object.keys(windowsEnv).filter((key) => /^path$/iu.test(key)),
+    ).toEqual(["Path"]);
+    expect(windowsEnv.Path).toBe("C:\\tools;C:\\Windows\\System32");
   });
 });

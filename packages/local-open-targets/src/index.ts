@@ -10,7 +10,10 @@ import {
   type WorkspaceOpenTargetIcon,
   type WorkspaceOpenTargetId,
 } from "@bb/host-daemon-contract";
-import { sanitizeInheritedChildProcessEnv } from "@bb/process-utils";
+import {
+  assignPathEnv,
+  sanitizeInheritedChildProcessEnv,
+} from "@bb/process-utils";
 import {
   BASIC_FILE_OPEN_CAPABILITIES,
   FILE_MANAGER_OPEN_CAPABILITIES,
@@ -64,6 +67,7 @@ export type {
 } from "./types.js";
 
 export interface WorkspaceOpenTargetRuntimeOptions {
+  platform?: NodeJS.Platform;
   shellPath?: string;
 }
 
@@ -510,10 +514,15 @@ export function createWorkspaceOpenTargetRuntime(
   options: WorkspaceOpenTargetRuntimeOptions = {},
 ): WorkspaceOpenTargetRuntime {
   const homeDirectory = os.homedir();
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...(options.shellPath !== undefined ? { PATH: options.shellPath } : {}),
-  };
+  const shellPath = options.shellPath;
+  const env: NodeJS.ProcessEnv =
+    shellPath === undefined
+      ? { ...process.env }
+      : assignPathEnv({
+          env: process.env,
+          path: shellPath,
+          platform: options.platform ?? process.platform,
+        });
   return {
     applicationDirectories: [
       "/Applications",

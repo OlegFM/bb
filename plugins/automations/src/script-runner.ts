@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { access, mkdir, stat } from "node:fs/promises";
+import { assignPathEnv } from "@bb/process-utils";
 import {
   AUTOMATION_SCRIPT_TIMEOUT_MAX_MS,
   type AutomationScriptInterpreter,
@@ -271,6 +272,7 @@ export async function executeStoredScript(args: {
   interpreter?: AutomationScriptInterpreter;
   timeoutMs: number;
   env?: Record<string, string>;
+  platform?: NodeJS.Platform;
   serverUrl: string;
 }): Promise<ScriptRunResult> {
   const scriptPath = await resolveAutomationScriptPath({
@@ -283,15 +285,15 @@ export async function executeStoredScript(args: {
   const command = resolveInterpreterCommand(interpreter);
   const bbPath = await resolveBbBinary();
   const warning = bbPath === null ? `${BB_NOT_INJECTED_WARNING}\n` : "";
-  const scriptEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...(args.env ?? {}),
-    PATH: scriptPathEnv(bbPath, process.env.PATH),
-    BB_SERVER_URL: args.serverUrl,
-    BB_PROJECT_ID: args.projectId,
-    BB_AUTOMATION_ID: args.automationId,
-    BB_AUTOMATION_RUN_ID: args.runId,
-  };
+  const scriptEnv: NodeJS.ProcessEnv = assignPathEnv({
+    env: { ...process.env, ...(args.env ?? {}) },
+    path: scriptPathEnv(bbPath, process.env.PATH),
+    platform: args.platform ?? process.platform,
+  });
+  scriptEnv.BB_SERVER_URL = args.serverUrl;
+  scriptEnv.BB_PROJECT_ID = args.projectId;
+  scriptEnv.BB_AUTOMATION_ID = args.automationId;
+  scriptEnv.BB_AUTOMATION_RUN_ID = args.runId;
   if (bbPath !== null) {
     scriptEnv.BB_CLI = bbPath;
   }

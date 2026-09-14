@@ -1682,6 +1682,36 @@ describe("script process containment", () => {
       await rm(pluginDataDir, { recursive: true, force: true });
     }
   });
+
+  it.runIf(process.platform === "win32")(
+    "gives the script exactly one Path key on Windows",
+    async () => {
+      const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-path-env-"));
+      const scriptDir = automationScriptDir(pluginDataDir, "auto_path");
+      await mkdir(scriptDir, { recursive: true });
+      await writeFile(
+        join(scriptDir, "script.mjs"),
+        "process.stdout.write(JSON.stringify(Object.keys(process.env).filter((key) => /^path$/iu.test(key))));\n",
+      );
+
+      try {
+        const result = await executeStoredScript({
+          pluginDataDir,
+          automationId: "auto_path",
+          runId: "run_path",
+          projectId: "proj_test",
+          scriptFile: "script.mjs",
+          interpreter: "node",
+          timeoutMs: 10_000,
+          serverUrl: "http://127.0.0.1:38886",
+          platform: "win32",
+        });
+        expect(result.output.trim().endsWith('["Path"]')).toBe(true);
+      } finally {
+        await rm(pluginDataDir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("script wake gate", () => {

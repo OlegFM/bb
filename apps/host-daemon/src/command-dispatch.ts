@@ -71,6 +71,7 @@ import {
   submitTurn,
 } from "./command-handlers/thread.js";
 import { WorkspaceError } from "@bb/host-workspace";
+import { assignPathEnv } from "@bb/process-utils";
 import {
   cloneProject,
   inspectProjectPath,
@@ -112,10 +113,13 @@ function throwExpectedWorkspacePathNotFoundOrRethrow(error: unknown): never {
   throw error;
 }
 
-function providerCliEnvFromShellEnv(
+export function providerCliEnvFromShellEnv(
   shellEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
 ): NodeJS.ProcessEnv {
-  return shellEnv.PATH ? { ...process.env, PATH: shellEnv.PATH } : process.env;
+  return shellEnv.PATH
+    ? assignPathEnv({ env: process.env, path: shellEnv.PATH, platform })
+    : process.env;
 }
 
 function handleProviderCliInstallEventLine(

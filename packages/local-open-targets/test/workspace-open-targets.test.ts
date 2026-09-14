@@ -14,6 +14,7 @@ describe("default workspace open-target runtime", () => {
   it("exposes the resolved shell PATH without changing system-tool launches", async () => {
     const runtime = createWorkspaceOpenTargetRuntime({
       shellPath: "/Users/test/.local/bin:/usr/bin",
+      platform: "linux",
     });
 
     expect(runtime.env?.PATH).toBe("/Users/test/.local/bin:/usr/bin");
@@ -29,6 +30,20 @@ describe("default workspace open-target runtime", () => {
       { env: runtime.env },
     );
     expect(userExecutableResult.stdout).toBe("/Users/test/.local/bin:/usr/bin");
+  });
+
+  it("builds a single Path key for the shell PATH on Windows", () => {
+    const runtime = createWorkspaceOpenTargetRuntime({
+      shellPath: "C:\\Users\\test\\bin;C:\\Windows\\System32",
+      platform: "win32",
+    });
+
+    expect(
+      Object.keys(runtime.env ?? {}).filter((key) => /^path$/iu.test(key)),
+    ).toEqual(["Path"]);
+    expect(runtime.env?.Path).toBe(
+      "C:\\Users\\test\\bin;C:\\Windows\\System32",
+    );
   });
 });
 

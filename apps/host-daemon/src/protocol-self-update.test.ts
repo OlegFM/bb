@@ -28,6 +28,7 @@ async function createFixture(
     protocolVersion?: number;
     installFailure?: Error;
     now?: () => number;
+    platform?: NodeJS.Platform;
     serverUrl?: string;
     useDefaultInstaller?: boolean;
   } = {},
@@ -37,7 +38,13 @@ async function createFixture(
   const installTarball = vi.fn(async () => {
     if (args.installFailure) throw args.installFailure;
   });
-  const runProcess = vi.fn(async () => undefined);
+  const runProcess = vi.fn(
+    async (
+      _command: string,
+      _args: string[],
+      _options: { env: NodeJS.ProcessEnv },
+    ) => undefined,
+  );
   const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith("/install/version")) {
@@ -60,6 +67,7 @@ async function createFixture(
     ...(args.useDefaultInstaller ? { runProcess } : { installTarball }),
     logger: testLogger,
     now: args.now,
+    ...(args.platform !== undefined ? { platform: args.platform } : {}),
     serverUrl: args.serverUrl ?? "https://server.example.test",
   });
   return {
@@ -170,7 +178,10 @@ describe("protocol self-update", () => {
 
   it("finds npm beside the running Node executable when the service PATH omits it", async () => {
     vi.stubEnv("PATH", "/usr/bin:/bin");
-    const test = await createFixture({ useDefaultInstaller: true });
+    const test = await createFixture({
+      useDefaultInstaller: true,
+      platform: "linux",
+    });
 
     await expect(test.updater.handleProtocolMismatch()).resolves.toBe(
       "updated",
@@ -190,6 +201,27 @@ describe("protocol self-update", () => {
           PATH: `${dirname(process.execPath)}${delimiter}/usr/bin:/bin`,
         }),
       },
+    );
+  });
+
+  it("hands the installer exactly one Path key on Windows", async () => {
+    vi.stubEnv("PATH", "C:\\tools");
+    const test = await createFixture({
+      useDefaultInstaller: true,
+      platform: "win32",
+    });
+
+    await expect(test.updater.handleProtocolMismatch()).resolves.toBe(
+      "updated",
+    );
+
+    const options = test.runProcess.mock.calls[0]?.[2];
+    const keys = Object.keys(options?.env ?? {}).filter((key) =>
+      /^path$/iu.test(key),
+    );
+    expect(keys).toEqual(["Path"]);
+    expect(options?.env.Path).toBe(
+      `${dirname(process.execPath)}${delimiter}C:\\tools`,
     );
   });
 

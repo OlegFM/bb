@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { HOST_DAEMON_PROTOCOL_VERSION } from "@bb/host-daemon-contract";
+import { assignPathEnv } from "@bb/process-utils";
 import type { HostDaemonLogger } from "./logger.js";
 import type { FetchFn } from "./server-client.js";
 import { usesSecureInternalFetchTransport } from "./server-client.js";
@@ -54,6 +55,7 @@ interface CreateProtocolSelfUpdaterOptions {
   serverUrl: string;
   fetchFn?: FetchFn;
   installTarball?: ProtocolSelfUpdateInstaller;
+  platform?: NodeJS.Platform;
   runProcess?: SelfUpdateProcessRunner;
   now?: () => number;
 }
@@ -162,6 +164,7 @@ const BB_APP_ALLOW_SCRIPTS_ARG =
 async function defaultInstallTarball(
   tarballPath: string,
   runProcess: SelfUpdateProcessRunner,
+  platform: NodeJS.Platform,
 ): Promise<void> {
   const executableDirectory = dirname(process.execPath);
   const inheritedPath = process.env.PATH;
@@ -180,7 +183,7 @@ async function defaultInstallTarball(
     "npm",
     ["install", "-g", BB_APP_ALLOW_SCRIPTS_ARG, ...prefixArgs, tarballPath],
     {
-      env: { ...process.env, PATH: path },
+      env: assignPathEnv({ env: process.env, path, platform }),
     },
   );
 }
@@ -195,6 +198,7 @@ export function createProtocolSelfUpdater(
       defaultInstallTarball(
         tarballPath,
         options.runProcess ?? defaultRunProcess,
+        options.platform ?? process.platform,
       ));
   const now = options.now ?? Date.now;
   const attemptPath = join(options.dataDir, ATTEMPT_FILE_NAME);

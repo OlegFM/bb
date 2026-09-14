@@ -2524,6 +2524,14 @@ Core runs `.bb-env-setup.sh` after an owned-path create and
 `.bb-env-teardown.sh` before removal; providers must not run those hooks.
 The unused public process-group kill and platform-check exports were removed.
 
+On `win32` with a `shellPath`, `experimental_sanitizeInheritedChildProcessEnv`
+drops every case variant of the `PATH` key and returns exactly one `Path` entry,
+because a Windows environment block carrying both `Path` and `PATH` hands the
+child the stale value; POSIX output is unchanged and still uses `PATH`. The
+optional `platform` argument on
+`ExperimentalSanitizeInheritedChildProcessEnvArgs` exists for tests and defaults
+to `process.platform`.
+
 Before stabilization, audit command cancellation, inherited environment filtering,
 and portable output handling for host-local plugin commands on every supported OS.
 

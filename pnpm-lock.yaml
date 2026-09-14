@@ -3006,6 +3006,9 @@ importers:
       '@bb/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@bb/process-utils':
+        specifier: workspace:*
+        version: link:../../packages/process-utils
       '@bb/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui
