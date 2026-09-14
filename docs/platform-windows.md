@@ -62,10 +62,11 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   refuses UNC, device, relative and root paths — a bare drive letter (`C:`)
   counts as a root — with
   HTTP 400 `invalid_request` before any daemon call; for paths that do reach
-  it (provider-produced paths, the environment directory tool, and the
-  offline fallback's shape check), `host.canonicalize_path` refuses UNC,
-  device, relative and bare-drive input and a POSIX-shaped path on Windows, as
-  HTTP 400 `invalid_path`.
+  it (the environment directory tool and the shape check the server runs
+  itself), UNC, device, relative and bare-drive input and a POSIX-shaped path
+  on Windows are refused as HTTP 400 `invalid_path`. A provider-produced path
+  the daemon refuses by shape is not a 400: the server binds it as typed with
+  trailing separators removed, the value the pre-port server stored.
 - The host daemon owns canonical paths: `host.canonicalize_path` returns
   `{ path, pathKey }`. On Windows it resolves the on-disk casing and links
   with `fs.realpath.native` and strips any `\\?\` prefix; when the path does
@@ -78,21 +79,30 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
   unchanged on POSIX). `C:/Work/bb`, `C:\Work\bb` and `c:\work\BB` resolve to
   one project and one live environment (partial unique index
   `environments_live_path_key_idx`).
-- When the host is connected, the daemon's canonical form is stored; when it
-  is offline, the server stores the shape-normalized path and its
-  shape-derived key (the same rule the migration backfill applies), so
-  projects can still be registered for a disconnected machine. The offline
-  fallback enforces the same shape checks as the daemon — UNC, device,
-  relative and bare-drive input is refused — even though no real filesystem
-  lookup runs. Because the server does not know the offline host's flavor, its
+- Only a host whose daemon reports `win32` is asked to canonicalize. A POSIX
+  host never receives `host.canonicalize_path`: the server computes the shape
+  result itself, which is what that daemon would have returned and what the
+  pre-port server stored. An offline host of any flavor takes the same local
+  path, so its stored spelling and its shape-derived key follow the rule the
+  migration backfill applies and projects can still be registered for a
+  disconnected machine. On a `win32` host the daemon's canonical form is
+  stored; an `invalid_path` refusal is surfaced as HTTP 400, while a transport
+  failure or timeout degrades to the local shape result instead of failing the
+  request. The local shape check enforces the same shapes as the daemon — UNC,
+  device, relative and bare-drive input is refused — even though no filesystem
+  lookup runs. Because the server does not know an offline host's flavor, its
   UNC refusal names an absolute path of either flavor, while a `win32` daemon
   names a drive-letter path.
+- Messages for POSIX-shaped input are the pre-port messages, including the
+  `experimental_claimPath` refusal a provider sees for a relative claim
+  (`Invalid string: must start with "/"`); a drive-absolute claim is accepted
+  in addition.
 - Creating a project on a connected host looks its source up by shape key
-  first; on a miss, it canonicalizes the path through the daemon. Re-adding an
-  existing project whose directory was later removed still returns the
-  existing project, and a directory that does not exist yet is registered
-  under its normalized spelling; only a shape the daemon refuses returns 400
-  `invalid_path`.
+  first; on a miss, it canonicalizes the path — through the daemon on a
+  `win32` host, locally everywhere else. Re-adding an existing project whose
+  directory was later removed still returns the existing project, and a
+  directory that does not exist yet is registered under its normalized
+  spelling; only a refused shape returns 400 `invalid_path`.
 - `deriveRepoDirName` in the workspace plugins and `deriveProjectNameFromPath`
   accept drive-letter paths with either separator; UNC sources are refused
   (`invalid_source_path` in the plugins).
