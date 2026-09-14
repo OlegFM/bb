@@ -6147,7 +6147,7 @@ The plugin resolves `bb` from `BB_CLI`, `BB_CLI_DIR`, and `PATH`, plus the
 common macOS install paths on macOS and Linux. On Windows it looks for `bb.cmd`
 before `bb` in the same places and skips the macOS paths. It adds the selected
 directory to `PATH`.
-````
+```
 
 - [ ] **Step 8: Run the tests, typechecks and formatter**
 
