@@ -320,37 +320,82 @@ describe("windows environment scripts", () => {
   );
 
   it.runIf(process.platform === "win32")(
+    "reports the exit code of a failing PowerShell hook",
+    async () => {
+      const workspacePath = await powerShellWorkspace(
+        "setup",
+        ['Write-Output "before"', "exit 3", ""].join("\r\n"),
+      );
+
+      await expect(
+        runSetupScript({ workspacePath, timeoutMs: 60_000 }),
+      ).rejects.toThrow("Setup script failed with exit code 3");
+    },
+    60_000,
+  );
+
+  it.runIf(process.platform === "win32")(
     "cancels a PowerShell hook and leaves no descendant",
     async () => {
       const workspacePath = await powerShellWorkspace(
         "setup",
         [
-          `$child = Start-Process -FilePath '${process.execPath}' -ArgumentList '-e','setTimeout(() => {}, 60000)' -PassThru -WindowStyle Hidden`,
-          'Write-Output ("child=" + $child.Id)',
-          "Start-Sleep -Seconds 30",
+          `& '${process.execPath}' (Join-Path $PSScriptRoot 'spawn-descendant.mjs') (Join-Path $PSScriptRoot 'pids.txt')`,
           "",
         ].join("\r\n"),
       );
+      await writeFile(
+        join(workspacePath, "spawn-descendant.mjs"),
+        [
+          'import { spawn } from "node:child_process";',
+          'import { writeFileSync, writeSync } from "node:fs";',
+          'const detached = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], {',
+          "  detached: true,",
+          '  stdio: "ignore",',
+          "});",
+          "detached.unref();",
+          "writeFileSync(process.argv[2], `${process.pid} ${detached.pid}`);",
+          'writeSync(1, "descendants-ready\\n");',
+          "setTimeout(() => {}, 600000);",
+          "",
+        ].join("\n"),
+      );
+      const pidPath = join(workspacePath, "pids.txt");
       const controller = new AbortController();
-      const childPids: number[] = [];
+      const descendants: number[] = [];
 
-      await expect(
-        runSetupScript({
-          workspacePath,
-          timeoutMs: 60_000,
-          signal: controller.signal,
-          onProgress: (entry) => {
-            const match = entry.text.match(/^child=(\d+)$/u);
-            if (match?.[1] !== undefined) {
-              childPids.push(Number(match[1]));
-              controller.abort();
-            }
-          },
-        }),
-      ).rejects.toThrow("cancelled");
+      try {
+        await expect(
+          runSetupScript({
+            workspacePath,
+            timeoutMs: 30_000,
+            signal: controller.signal,
+            onProgress: (entry) => {
+              if (entry.text === "descendants-ready") {
+                controller.abort();
+              }
+            },
+          }),
+        ).rejects.toThrow("cancelled");
 
-      expect(childPids).toHaveLength(1);
-      await expect(queryWindowsProcess(childPids[0] ?? 0)).resolves.toBeNull();
+        for (const value of (await readFile(pidPath, "utf8")).split(" ")) {
+          descendants.push(Number.parseInt(value, 10));
+        }
+        expect(descendants).toHaveLength(2);
+        expect(descendants.every(Number.isSafeInteger)).toBe(true);
+        await expect(
+          queryWindowsProcess(descendants[0] ?? 0),
+        ).resolves.toBeNull();
+        await expect(
+          queryWindowsProcess(descendants[1] ?? 0),
+        ).resolves.toBeNull();
+      } finally {
+        for (const pid of descendants) {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {}
+        }
+      }
     },
     120_000,
   );

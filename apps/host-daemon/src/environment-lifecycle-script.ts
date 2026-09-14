@@ -11,6 +11,7 @@ import {
   spawnPortableOutputProcess,
   supportsProcessGroups,
   terminateProcessTree,
+  type TerminateProcessTreeResult,
 } from "@bb/process-utils";
 import fs from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
@@ -267,7 +268,33 @@ async function runLifecycleScript(
   child.stdout.on("data", handleChunk);
   child.stderr.on("data", handleChunk);
 
-  let terminationPromise: Promise<unknown> | null = null;
+  let terminationPromise: Promise<TerminateProcessTreeResult> | null = null;
+
+  const reportIncompleteTermination = (
+    result: TerminateProcessTreeResult,
+  ): void => {
+    const reasons: string[] = [];
+    if (result.enumerationError !== null) {
+      reasons.push(
+        `could not enumerate processes (${result.enumerationError.reason}): ${result.enumerationError.message}`,
+      );
+    }
+    if (result.descendantsSkipped.length > 0) {
+      reasons.push(
+        `left pid${result.descendantsSkipped.length === 1 ? "" : "s"} ${result.descendantsSkipped
+          .map((event) => String(event.pid))
+          .join(", ")} alone because their process ids were reused`,
+      );
+    }
+    if (reasons.length === 0) {
+      return;
+    }
+    emitOutput(
+      args.onProgress,
+      `${args.kind}-cleanup-incomplete`,
+      `Cleanup may have left ${scriptName} processes running: ${reasons.join("; ")}`,
+    );
+  };
 
   const terminateLifecycleScript = (): void => {
     if (platform !== "win32") {
@@ -288,7 +315,7 @@ async function runLifecycleScript(
           `Left pid ${String(event.pid)} alone during cleanup: its process id was reused (recorded ${event.expectedCreationDate ?? "unknown"}, found ${event.observedCreationDate ?? "unknown"})`,
         );
       },
-    }).catch(() => undefined);
+    });
   };
 
   const timeout = setTimeout(() => {
@@ -319,7 +346,9 @@ async function runLifecycleScript(
     });
 
     if (abortRequested || timedOut) {
-      if (terminationPromise !== null) await terminationPromise;
+      if (terminationPromise !== null) {
+        reportIncompleteTermination(await terminationPromise);
+      }
       while (isProcessGroupAlive(child, platform)) await delay(25);
     }
 
