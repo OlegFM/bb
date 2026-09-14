@@ -1,11 +1,12 @@
 import { realpathSync } from "node:fs";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BB_CLI_REEXEC_ENV,
   maybeReexecViaBbCli,
+  nodeLauncherPlanTargetsScript,
   resolveNodeLauncherSpawnPlan,
 } from "../bb-cli-reexec.js";
 
@@ -128,6 +129,16 @@ describe("resolveNodeLauncherSpawnPlan", () => {
     ).resolves.toEqual({ command: process.execPath, argsPrefix: [script] });
   });
 
+  it("reads the node shim of a Windows .bat launcher", async () => {
+    const script = join(planRoot, "bb");
+    await writeFile(script, "");
+    await writeFile(join(planRoot, "bb.bat"), '@node "%~dp0bb" %*\r\n');
+
+    await expect(
+      resolveNodeLauncherSpawnPlan(join(planRoot, "bb.bat"), "win32"),
+    ).resolves.toEqual({ command: process.execPath, argsPrefix: [script] });
+  });
+
   it("refuses a Windows .cmd launcher that is not a node shim", async () => {
     const shimPath = join(planRoot, "bb.cmd");
     await writeFile(shimPath, "@echo off\r\nstart notepad.exe\r\n");
@@ -150,3 +161,145 @@ describe("resolveNodeLauncherSpawnPlan", () => {
     ).resolves.toEqual({ command: "C:\\tools\\bb.exe", argsPrefix: [] });
   });
 });
+
+describe("nodeLauncherPlanTargetsScript", () => {
+  it("matches a shim target that is the running script, ignoring case", () => {
+    expect(
+      nodeLauncherPlanTargetsScript(
+        { command: process.execPath, argsPrefix: ["C:\\bb\\dist\\bb"] },
+        "c:\\BB\\dist\\bb",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a different target or a plan without a script", () => {
+    expect(
+      nodeLauncherPlanTargetsScript(
+        { command: process.execPath, argsPrefix: ["C:\\bb\\dist\\bb"] },
+        "C:\\bb\\dist\\other",
+      ),
+    ).toBe(false);
+    expect(
+      nodeLauncherPlanTargetsScript(
+        { command: "C:\\tools\\bb.exe", argsPrefix: [] },
+        "C:\\tools\\bb.exe",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe.runIf(process.platform === "win32")(
+  "maybeReexecViaBbCli on Windows",
+  () => {
+    let shimRoot: string;
+
+    beforeEach(async () => {
+      shimRoot = await mkdtemp(join(tmpdir(), "bb-cli-win-reexec-"));
+    });
+
+    afterEach(async () => {
+      await rm(shimRoot, { recursive: true, force: true });
+    });
+
+    async function writeChildLauncher(): Promise<{
+      cmdPath: string;
+      scriptPath: string;
+      logPath: string;
+    }> {
+      const scriptPath = join(shimRoot, "bb");
+      const cmdPath = join(shimRoot, "bb.cmd");
+      const logPath = join(shimRoot, "child.log");
+      await writeFile(
+        scriptPath,
+        [
+          'import("node:fs").then((fs) => {',
+          "  const line = `bb-reexec-child ${process.argv.slice(2).join(' ')}`;",
+          "  process.stdout.write(line);",
+          "  fs.writeFileSync(process.env.BB_TEST_CHILD_LOG, line);",
+          "  process.exit(7);",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      await writeFile(cmdPath, '@node "%~dp0bb" %*\r\n');
+      return { cmdPath, scriptPath, logPath };
+    }
+
+    function childEnvFor(cmdPath: string, logPath: string): NodeJS.ProcessEnv {
+      const childEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        BB_CLI: cmdPath,
+        BB_TEST_CHILD_LOG: logPath,
+      };
+      delete childEnv[BB_CLI_REEXEC_ENV];
+      return childEnv;
+    }
+
+    it("does not re-exec when the .cmd shim targets the running script", async () => {
+      const { cmdPath, scriptPath, logPath } = await writeChildLauncher();
+      const exit = vi.fn();
+
+      await maybeReexecViaBbCli({
+        env: childEnvFor(cmdPath, logPath),
+        currentExecutablePath: scriptPath,
+        argv: ["status", "--json"],
+        exit,
+      });
+
+      expect(exit).not.toHaveBeenCalled();
+      await expect(readFile(logPath, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    });
+
+    it("re-execs through the shim's node target and propagates the exit code", async () => {
+      const { cmdPath, logPath } = await writeChildLauncher();
+      const currentPath = join(shimRoot, "other-bb");
+      await writeFile(currentPath, "");
+      const exit = vi.fn();
+
+      await maybeReexecViaBbCli({
+        env: childEnvFor(cmdPath, logPath),
+        currentExecutablePath: currentPath,
+        argv: ["status", "--json"],
+        exit,
+      });
+
+      await expect(readFile(logPath, "utf8")).resolves.toBe(
+        "bb-reexec-child status --json",
+      );
+      expect(exit).toHaveBeenCalledWith(7);
+    });
+
+    it("exits non-zero when BB_CLI names a .cmd that is not a Node shim", async () => {
+      const cmdPath = join(shimRoot, "bb.cmd");
+      await writeFile(cmdPath, "@echo off\r\nstart notepad.exe\r\n");
+      const currentPath = join(shimRoot, "other-bb");
+      await writeFile(currentPath, "");
+      const exit = vi.fn();
+      const stderrWrite = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true);
+
+      let stderrOutput = "";
+      try {
+        await maybeReexecViaBbCli({
+          env: { BB_CLI: cmdPath },
+          currentExecutablePath: currentPath,
+          argv: [],
+          exit,
+        });
+        stderrOutput = stderrWrite.mock.calls
+          .map((call) => String(call[0]))
+          .join("");
+      } finally {
+        stderrWrite.mockRestore();
+      }
+
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(stderrOutput).toBe(
+        `bb: failed to re-exec BB_CLI=${realpathSync(cmdPath)}: Windows launcher ${realpathSync(cmdPath)} is not a Node shim bb can start directly\n`,
+      );
+    });
+  },
+);

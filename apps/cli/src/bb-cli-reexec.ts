@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { extname, resolve } from "node:path";
-import { readNodeCmdShim } from "@bb/process-utils";
+import { extname, resolve, win32 as win32Path } from "node:path";
 
 export const BB_CLI_REEXEC_ENV = "BB_CLI_REEXEC";
 
@@ -9,6 +8,7 @@ interface MaybeReexecViaBbCliArgs {
   env?: NodeJS.ProcessEnv;
   argv?: string[];
   currentExecutablePath?: string;
+  exit?: (code: number) => void;
   reexec?: (args: {
     target: string;
     argv: string[];
@@ -39,6 +39,7 @@ export async function resolveNodeLauncherSpawnPlan(
   if (platform !== "win32" || !WINDOWS_SHIM_EXTENSIONS.has(extension)) {
     return { command: cliPath, argsPrefix: [] };
   }
+  const { readNodeCmdShim } = await import("@bb/process-utils");
   const shim = await readNodeCmdShim(cliPath);
   if (shim === null) {
     throw new Error(
@@ -46,6 +47,20 @@ export async function resolveNodeLauncherSpawnPlan(
     );
   }
   return { command: shim.command, argsPrefix: shim.args };
+}
+
+export function nodeLauncherPlanTargetsScript(
+  plan: NodeLauncherSpawnPlan,
+  scriptPath: string,
+): boolean {
+  const shimTarget = plan.argsPrefix[0];
+  if (shimTarget === undefined) {
+    return false;
+  }
+  return (
+    win32Path.resolve(shimTarget).toLowerCase() ===
+    win32Path.resolve(scriptPath).toLowerCase()
+  );
 }
 
 export async function maybeReexecViaBbCli(
@@ -83,6 +98,8 @@ export async function maybeReexecViaBbCli(
     return;
   }
 
+  const exitProcess = options.exit ?? process.exit;
+
   let plan: NodeLauncherSpawnPlan;
   try {
     plan = await resolveNodeLauncherSpawnPlan(target, process.platform);
@@ -92,7 +109,11 @@ export async function maybeReexecViaBbCli(
         error instanceof Error ? error.message : String(error)
       }\n`,
     );
-    process.exitCode = 1;
+    exitProcess(1);
+    return;
+  }
+
+  if (nodeLauncherPlanTargetsScript(plan, current)) {
     return;
   }
 
@@ -107,5 +128,5 @@ export async function maybeReexecViaBbCli(
     process.exitCode = 1;
     return;
   }
-  process.exit(result.status === null ? 1 : result.status);
+  exitProcess(result.status === null ? 1 : result.status);
 }
