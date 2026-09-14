@@ -498,22 +498,44 @@ async function defaultExecFile(
   options?: ExecFileOptions,
 ): Promise<ExecFileResult> {
   if (options?.detached === true) {
-    const child = spawn(file, args, {
-      cwd: options.cwd,
-      detached: true,
-      env: sanitizeInheritedChildProcessEnv({
-        env: options.env ?? process.env,
-      }),
-      stdio: "ignore",
-      windowsHide: options.windowsHide ?? true,
+    const detachedOptions = options;
+    return new Promise<ExecFileResult>((resolveSpawn, rejectSpawn) => {
+      const child = spawn(file, args, {
+        cwd: detachedOptions.cwd,
+        detached: true,
+        env: sanitizeInheritedChildProcessEnv({
+          env: detachedOptions.env ?? process.env,
+        }),
+        stdio: "ignore",
+        windowsHide: detachedOptions.windowsHide ?? true,
+        ...(detachedOptions.windowsVerbatimArguments === undefined
+          ? {}
+          : {
+              windowsVerbatimArguments:
+                detachedOptions.windowsVerbatimArguments,
+            }),
+      });
+      child.once("error", (error) => {
+        rejectSpawn(
+          new WorkspaceOpenTargetError({
+            code: "target_unavailable",
+            message: `Failed to launch ${file}: ${error.message}`,
+          }),
+        );
+      });
+      child.once("spawn", () => {
+        child.unref();
+        resolveSpawn({ stdout: "" });
+      });
     });
-    child.unref();
-    return { stdout: "" };
   }
 
   const result = await execFileAsync(file, args, {
     env: sanitizeInheritedChildProcessEnv({ env: options?.env ?? process.env }),
     windowsHide: options?.windowsHide ?? true,
+    ...(options?.windowsVerbatimArguments === undefined
+      ? {}
+      : { windowsVerbatimArguments: options.windowsVerbatimArguments }),
   });
   return {
     stdout: result.stdout,

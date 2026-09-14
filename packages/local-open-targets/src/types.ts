@@ -39,6 +39,7 @@ export interface ExecFileOptions {
   detached?: boolean;
   env?: NodeJS.ProcessEnv;
   windowsHide?: boolean;
+  windowsVerbatimArguments?: boolean;
 }
 
 export type ExecFileHandler = (

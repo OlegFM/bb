@@ -28,6 +28,7 @@ const WINDOWS_APP_PATHS_SUBKEY =
 const WINDOWS_APP_PATHS_HIVES = ["HKLM", "HKCU"] as const;
 const WINDOWS_REGISTRY_VALUE_PATTERN = /\sREG_(?:EXPAND_)?SZ\s+(.*)$/mu;
 const WINDOWS_CMD_SHIM_EXTENSIONS = new Set([".bat", ".cmd"]);
+const WINDOWS_LAUNCHER_EXTENSIONS = new Set([".bat", ".cmd", ".exe"]);
 const WINDOWS_DEFAULT_SYSTEM_ROOT = "C:\\Windows";
 const WINDOWS_INSTALL_ROOT_ENV_VARIABLES = [
   "ProgramFiles",
@@ -49,6 +50,7 @@ interface WindowsLaunchInvocation extends ExecFileInvocation {
   detached?: boolean;
   explorerPath?: string;
   windowsHide?: boolean;
+  windowsVerbatimArguments?: boolean;
 }
 
 interface ResolveWindowsCliOpenArgs {
@@ -76,7 +78,7 @@ function isExitCodeOneError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === 1;
 }
 
-function readWindowsEnvValue(
+function readWindowsRuntimeEnvValue(
   runtime: WorkspaceOpenTargetRuntime,
   name: string,
 ): string | undefined {
@@ -97,7 +99,7 @@ function readWindowsDirectoryEnvValue(
   runtime: WorkspaceOpenTargetRuntime,
   name: string,
 ): string | null {
-  const value = readWindowsEnvValue(runtime, name)?.trim();
+  const value = readWindowsRuntimeEnvValue(runtime, name)?.trim();
   return value === undefined || value === "" ? null : value;
 }
 
@@ -307,23 +309,24 @@ async function findWindowsExecutablePath(
 ): Promise<string | null> {
   const candidates = [command, ...(command.fallbackExecutables ?? [])];
   for (const candidate of candidates) {
-    const resolved = await resolveExecutable({
-      command: candidate.executable,
-      env: runtime.env,
-      platform: "win32",
-    });
+    const resolved = await resolveWindowsLauncherExecutable(
+      candidate.executable,
+      runtime,
+    );
     if (resolved !== null) {
       return resolved;
     }
   }
-  for (const candidate of candidates) {
-    const appPath = await readWindowsAppPath(
-      candidate.executable,
-      runtime,
-      cache,
-    );
-    if (appPath !== null) {
-      return appPath;
+  if (definition.windows !== undefined) {
+    for (const candidate of candidates) {
+      const appPath = await readWindowsAppPath(
+        candidate.executable,
+        runtime,
+        cache,
+      );
+      if (appPath !== null) {
+        return appPath;
+      }
     }
   }
   for (const candidatePath of getWindowsKnownExecutablePaths(
@@ -342,6 +345,34 @@ async function findWindowsExecutablePath(
     return toolboxScriptPath;
   }
   return findWindowsJetBrainsInstallPath(definition, runtime);
+}
+
+function isWindowsLauncherPath(candidatePath: string): boolean {
+  return WINDOWS_LAUNCHER_EXTENSIONS.has(
+    path.extname(candidatePath).toLowerCase(),
+  );
+}
+
+async function resolveWindowsLauncherExecutable(
+  command: string,
+  runtime: WorkspaceOpenTargetRuntime,
+): Promise<string | null> {
+  const resolved = await resolveExecutable({
+    command,
+    env: runtime.env,
+    platform: "win32",
+  });
+  return resolved !== null && isWindowsLauncherPath(resolved) ? resolved : null;
+}
+
+function buildWindowsCmdShimCommandLine(
+  executablePath: string,
+  args: string[],
+): string {
+  const quoted = [executablePath, ...args]
+    .map((value) => `"${value}"`)
+    .join(" ");
+  return `"${quoted}"`;
 }
 
 async function buildWindowsExecutableInvocation(
@@ -364,8 +395,14 @@ async function buildWindowsExecutableInvocation(
   }
   return {
     file: resolveWindowsSystemToolPath("cmd.exe", runtime.env),
-    args: ["/d", "/c", executablePath, ...args],
+    args: [
+      "/d",
+      "/s",
+      "/c",
+      buildWindowsCmdShimCommandLine(executablePath, args),
+    ],
     env: runtime.env,
+    windowsVerbatimArguments: true,
   };
 }
 
@@ -579,12 +616,18 @@ function resolveWindowsFileManagerInvocation(
   existingPath: ExistingPath,
   runtime: WorkspaceOpenTargetRuntime,
 ): WindowsLaunchInvocation {
+  if (existingPath.type === "file") {
+    return {
+      file: resolveWindowsExplorerPath(runtime),
+      args: [`/select,"${existingPath.path}"`],
+      env: runtime.env,
+      explorerPath: existingPath.path,
+      windowsVerbatimArguments: true,
+    };
+  }
   return {
     file: resolveWindowsExplorerPath(runtime),
-    args:
-      existingPath.type === "file"
-        ? [`/select,${existingPath.path}`]
-        : [existingPath.path],
+    args: [existingPath.path],
     env: runtime.env,
     explorerPath: existingPath.path,
   };
@@ -593,11 +636,10 @@ function resolveWindowsFileManagerInvocation(
 async function findWindowsTerminalExecutable(
   runtime: WorkspaceOpenTargetRuntime,
 ): Promise<string | null> {
-  const resolved = await resolveExecutable({
-    command: WINDOWS_TERMINAL_COMMAND,
-    env: runtime.env,
-    platform: "win32",
-  });
+  const resolved = await resolveWindowsLauncherExecutable(
+    WINDOWS_TERMINAL_COMMAND,
+    runtime,
+  );
   if (resolved !== null) {
     return resolved;
   }
@@ -695,7 +737,11 @@ async function resolveWindowsOpenInvocation(
   const cache: WindowsAppPathCache = new Map();
   const definition = findWindowsLaunchAdapter(args.targetId);
   if (args.context.kind === "remote-ssh") {
-    if (definition !== null && getWindowsRemoteSshOpenCommand(definition)) {
+    if (
+      definition !== null &&
+      getWindowsCliOpenCommand(definition) !== null &&
+      getWindowsRemoteSshOpenCommand(definition) !== null
+    ) {
       return resolveWindowsRemoteSshInvocation(
         {
           columnNumber: args.columnNumber,
@@ -771,6 +817,9 @@ export async function openWindowsPathInTarget(
       ...(invocation.windowsHide === undefined
         ? {}
         : { windowsHide: invocation.windowsHide }),
+      ...(invocation.windowsVerbatimArguments === undefined
+        ? {}
+        : { windowsVerbatimArguments: invocation.windowsVerbatimArguments }),
     });
   } catch (error) {
     if (
