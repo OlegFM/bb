@@ -5,8 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
-import { queryWindowsProcess, spawnPortableProcess } from "@bb/process-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import {
+  clearSweepRootProcesses,
+  queryWindowsProcess,
+  resolveWindowsSystemToolPath,
+  spawnPortableProcess,
+} from "@bb/process-utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createWorktreeHostEntry } from "./host.js";
 
 const execFileAsync = promisify(execFile);
@@ -19,6 +24,22 @@ function isPidAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+async function forceKillWindowsProcess(pid: number): Promise<void> {
+  if (pid === 0) {
+    return;
+  }
+  await new Promise((resolveKill) => {
+    const kill = spawnPortableProcess({
+      command: resolveWindowsSystemToolPath("taskkill.exe", process.env),
+      args: ["/PID", String(pid), "/F"],
+      platform: "win32",
+      stdio: "ignore",
+    });
+    kill.once("error", () => resolveKill(undefined));
+    kill.once("exit", () => resolveKill(undefined));
+  });
 }
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
@@ -109,7 +130,12 @@ function progressText(harness: ReturnType<typeof createHarness>): string {
     .join("\n");
 }
 
+beforeEach(() => {
+  clearSweepRootProcesses();
+});
+
 afterEach(async () => {
+  clearSweepRootProcesses();
   await Promise.all(
     temporaryRoots
       .splice(0)
@@ -413,6 +439,7 @@ describe("worktree host entry", () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         lingeringProcess = await queryWindowsProcess(lingeringPid);
       }
+      await forceKillWindowsProcess(lingeringPid);
       expect(removed).toEqual({ status: "removed" });
       expect(lingeringProcess).toBeNull();
       expect(progressText(harness)).not.toContain("tearing-down");
