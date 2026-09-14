@@ -263,7 +263,7 @@ export async function startLocalApiServer(
       connected: options.getConnected(),
       protocolVersion: HOST_DAEMON_PROTOCOL_VERSION,
       serverUrl: options.serverUrl,
-      supportsNativeFolderPicker: platform === "darwin",
+      supportsNativeFolderPicker: platform === "darwin" || platform === "win32",
       platform,
     }),
   );

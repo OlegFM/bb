@@ -188,7 +188,8 @@ describe("local API server", () => {
       connected: true,
       protocolVersion: HOST_DAEMON_PROTOCOL_VERSION,
       serverUrl: "http://server.test",
-      supportsNativeFolderPicker: process.platform === "darwin",
+      supportsNativeFolderPicker:
+        process.platform === "darwin" || process.platform === "win32",
       platform: resolveHostPlatform(),
     });
     const healthResponse = await client.health.$get();
