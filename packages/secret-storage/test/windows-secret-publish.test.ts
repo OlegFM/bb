@@ -6,30 +6,32 @@ import { readOrCreateSecretFile } from "../src/index.js";
 import type { WindowsAclCommandResult } from "../src/windows-acl.js";
 
 interface FileSystemHooks {
+  linkAttempts: number;
   linkError?: Error;
   stagedRemovalError?: Error;
-  beforeRename?: (oldPath: string, newPath: string) => Promise<void>;
+  afterRename?: (oldPath: string, newPath: string) => Promise<void>;
 }
 
-const hooks = vi.hoisted((): FileSystemHooks => ({}));
+const hooks = vi.hoisted((): FileSystemHooks => ({ linkAttempts: 0 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   return {
     ...actual,
     link: async (existingPath: string, newPath: string) => {
+      hooks.linkAttempts += 1;
       if (hooks.linkError !== undefined) {
         throw hooks.linkError;
       }
       await actual.link(existingPath, newPath);
     },
     rename: async (oldPath: string, newPath: string) => {
-      const beforeRename = hooks.beforeRename;
-      if (beforeRename !== undefined) {
-        hooks.beforeRename = undefined;
-        await beforeRename(oldPath, newPath);
-      }
       await actual.rename(oldPath, newPath);
+      const afterRename = hooks.afterRename;
+      if (afterRename !== undefined) {
+        hooks.afterRename = undefined;
+        await afterRename(oldPath, newPath);
+      }
     },
     rm: async (
       target: string,
@@ -89,9 +91,10 @@ function createSecret(dataDir: string): Promise<string> {
 }
 
 afterEach(async () => {
+  hooks.linkAttempts = 0;
   hooks.linkError = undefined;
   hooks.stagedRemovalError = undefined;
-  hooks.beforeRename = undefined;
+  hooks.afterRename = undefined;
   await Promise.all(
     tempDirs
       .splice(0)
@@ -133,7 +136,7 @@ describe("publishing a win32 secret", () => {
     const dataDir = await makeTempDir();
     const secretPath = path.join(dataDir, "secret");
     await writeFile(secretPath, "", "utf8");
-    hooks.beforeRename = async () => {
+    hooks.afterRename = async () => {
       await writeFile(secretPath, "published-by-another-process\n", "utf8");
     };
 
@@ -144,6 +147,7 @@ describe("publishing a win32 secret", () => {
       "published-by-another-process\n",
     );
     expect(await readdir(dataDir)).toEqual(["secret"]);
+    expect(hooks.linkAttempts).toBe(0);
   });
 
   it("replaces an empty file and leaves no aside copy behind", async () => {
