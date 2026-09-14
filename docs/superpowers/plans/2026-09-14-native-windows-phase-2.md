@@ -6138,8 +6138,6 @@ installed and Windows PowerShell 5.1 otherwise, `node` scripts through the
 server's own Node runtime, and `bash`/`sh` scripts only when Git for Windows
 puts `bash.exe` on `Path`.
 
-````
-
 `plugins/automations/skills/automations/references/script-runtime.md` — replace the "common macOS install paths" sentence in "Variables and CLI lookup":
 
 ```md
