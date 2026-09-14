@@ -385,16 +385,24 @@ export function ghCandidatePaths(
   if (platform !== "win32") {
     return ["gh", "/opt/homebrew/bin/gh", "/usr/local/bin/gh"];
   }
+  const readInstallRoot = (value: string | undefined): string | undefined => {
+    const trimmed = value?.trim();
+    return trimmed !== undefined && trimmed.length > 0 ? trimmed : undefined;
+  };
   const candidates = [
     "gh",
     path.win32.join(
-      env.ProgramFiles ?? "C:\\Program Files",
+      readInstallRoot(env.ProgramFiles) ?? "C:\\Program Files",
       "GitHub CLI",
       "gh.exe",
     ),
   ];
-  const localAppData = env.LOCALAPPDATA?.trim();
-  if (localAppData !== undefined && localAppData.length > 0) {
+  const programFilesX86 = readInstallRoot(env["ProgramFiles(x86)"]);
+  if (programFilesX86 !== undefined) {
+    candidates.push(path.win32.join(programFilesX86, "GitHub CLI", "gh.exe"));
+  }
+  const localAppData = readInstallRoot(env.LOCALAPPDATA);
+  if (localAppData !== undefined) {
     candidates.push(
       path.win32.join(localAppData, "Programs", "GitHub CLI", "gh.exe"),
     );

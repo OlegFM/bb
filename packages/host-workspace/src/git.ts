@@ -520,6 +520,43 @@ interface PipelineChildOutcome {
   error?: Error;
 }
 
+interface PipelineOutputCollector {
+  chunks: Buffer[];
+  byteLength: number;
+  exceededMaxBuffer: boolean;
+}
+
+function createPipelineOutputCollector(): PipelineOutputCollector {
+  return { chunks: [], byteLength: 0, exceededMaxBuffer: false };
+}
+
+function collectPipelineChunk(
+  collector: PipelineOutputCollector,
+  chunk: Buffer,
+): void {
+  const remaining = DEFAULT_BUFFER_BYTES - collector.byteLength;
+  if (chunk.length > remaining) {
+    collector.exceededMaxBuffer = true;
+  }
+  if (remaining <= 0) {
+    return;
+  }
+  const accepted =
+    chunk.length > remaining ? chunk.subarray(0, remaining) : chunk;
+  collector.chunks.push(Buffer.from(accepted));
+  collector.byteLength += accepted.length;
+}
+
+function readPipelineOutput(collector: PipelineOutputCollector): string {
+  return Buffer.concat(collector.chunks).toString("utf8");
+}
+
+function stopPipelineChild(child: PortableChildProcess): void {
+  try {
+    child.kill();
+  } catch {}
+}
+
 function waitForPipelineChildClose(
   child: PortableChildProcess,
 ): Promise<PipelineChildOutcome> {
@@ -608,28 +645,43 @@ export async function runGitOutputPipeline(
     cwd: options.cwd,
     env,
   });
+  producer.stdin.end();
   producer.stdout.pipe(consumer.stdin);
   producer.stdout.on("error", () => {});
   consumer.stdin.on("error", () => {});
 
-  const stdoutChunks: Buffer[] = [];
-  const stderrChunks: Buffer[] = [];
+  let timedOut = false;
+  let exceededMaxBuffer = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const stopProducer = (): void => {
+    producer.stdout.destroy();
+    stopPipelineChild(producer);
+  };
+  const killBoth = (): void => {
+    stopProducer();
+    stopPipelineChild(consumer);
+  };
+
+  const stdoutCollector = createPipelineOutputCollector();
+  const stderrCollector = createPipelineOutputCollector();
+  const collect = (collector: PipelineOutputCollector, chunk: Buffer): void => {
+    collectPipelineChunk(collector, chunk);
+    if (collector.exceededMaxBuffer && !exceededMaxBuffer) {
+      exceededMaxBuffer = true;
+      killBoth();
+    }
+  };
   producer.stderr.on("data", (chunk: Buffer) => {
-    stderrChunks.push(Buffer.from(chunk));
+    collect(stderrCollector, chunk);
   });
   consumer.stdout.on("data", (chunk: Buffer) => {
-    stdoutChunks.push(Buffer.from(chunk));
+    collect(stdoutCollector, chunk);
   });
   consumer.stderr.on("data", (chunk: Buffer) => {
-    stderrChunks.push(Buffer.from(chunk));
+    collect(stderrCollector, chunk);
   });
+  consumer.once("close", stopProducer);
 
-  let timedOut = false;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const killBoth = (): void => {
-    producer.kill();
-    consumer.kill();
-  };
   options.signal?.addEventListener("abort", killBoth, { once: true });
   if (options.timeoutMs !== undefined) {
     timeout = setTimeout(() => {
@@ -643,13 +695,24 @@ export async function runGitOutputPipeline(
       waitForPipelineChildClose(producer),
       waitForPipelineChildClose(consumer),
     ]);
-    const stdout = Buffer.concat(stdoutChunks).toString("utf8");
-    const stderr = Buffer.concat(stderrChunks).toString("utf8");
+    const stdout = readPipelineOutput(stdoutCollector);
+    const stderr = readPipelineOutput(stderrCollector);
     if (options.signal?.aborted) {
       throw createShellPipelineCancelledError(options.signal.reason);
     }
     if (timedOut && options.timeoutMs !== undefined) {
       throw createShellPipelineTimedOutError(options.timeoutMs);
+    }
+    if (exceededMaxBuffer) {
+      if (options.allowFailure) {
+        return { stdout, stderr, exitCode: 1 };
+      }
+      const trimmed = trimOutput(stderr);
+      const detail = trimmed ? `: ${trimmed}` : "";
+      throw new WorkspaceError(
+        "shell_pipeline_failed",
+        `shell pipeline failed${detail}`,
+      );
     }
     const producerFailed =
       producerOutcome.error !== undefined ||

@@ -382,6 +382,33 @@ describe("Workspace", () => {
     expect(status.mergeBase?.deletions).toBe(0);
   });
 
+  it("detects a squash merge through the win32 pipeline on every platform", async () => {
+    const { primaryRepo, worktreePath } =
+      await createPrimaryAndFeatureWorktree();
+    await fs.writeFile(
+      path.join(worktreePath, "feature.txt"),
+      "feature extra\n",
+      "utf8",
+    );
+    await runGit(["add", "feature.txt"], { cwd: worktreePath });
+    await runGit(["commit", "-m", "Feature extra"], { cwd: worktreePath });
+
+    const workspace = new Workspace(worktreePath, { platform: "win32" });
+    await mergeFeatureIntoMainWithSquash(
+      primaryRepo,
+      "feat: squash merge multi-commit feature into main",
+    );
+
+    const status = await workspace.getStatus({ mergeBaseBranch: "main" });
+
+    expect(status.mergeBase).toMatchObject({
+      mergeBaseBranch: "main",
+      hasCommittedUnmergedChanges: false,
+      aheadCount: 0,
+    });
+    expect(status.mergeBase?.commits).toEqual([]);
+  });
+
   it("recognizes squash-merged branch after main advances past the squash commit", async () => {
     const { primaryRepo, worktreePath } =
       await createPrimaryAndFeatureWorktree();

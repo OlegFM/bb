@@ -140,6 +140,18 @@ async function initPatchIdRepo() {
   return repoPath;
 }
 
+async function initOversizedDiffDir() {
+  const dirPath = await fs.mkdtemp(path.join(os.tmpdir(), "bb-pipeline-cap-"));
+  tempDirs.push(dirPath);
+  await fs.writeFile(path.join(dirPath, "empty.txt"), "", "utf8");
+  await fs.writeFile(
+    path.join(dirPath, "big.txt"),
+    `${"x".repeat(63)}\n`.repeat(280_000),
+    "utf8",
+  );
+  return dirPath;
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(
@@ -211,9 +223,11 @@ describe("runGitOutputPipeline", () => {
         { cwd: repoPath },
       );
 
-      expect(parsePatchId(piped.stdout.split("\n")[0])).toBe(
-        parsePatchId(shelled.stdout.split("\n")[0]),
-      );
+      expect(piped.stdout).toBe(shelled.stdout);
+      expect(piped.exitCode).toBe(shelled.exitCode);
+      const sharedPatchId = parsePatchId(piped.stdout.split("\n")[0]);
+      expect(sharedPatchId).toBe(parsePatchId(shelled.stdout.split("\n")[0]));
+      expect(sharedPatchId).toMatch(/^[0-9a-f]{40}$/u);
     },
   );
 
@@ -248,13 +262,49 @@ describe("runGitOutputPipeline", () => {
     const repoPath = await initEmptyRepo();
 
     await expect(
-      runGitOutputPipeline(
-        ["hash-object", "--stdin"],
-        ["patch-id", "--stable"],
-        { cwd: repoPath, allowFailure: true, timeoutMs: 50 },
-      ),
+      runGitOutputPipeline(["--version"], ["patch-id", "--stable"], {
+        cwd: repoPath,
+        allowFailure: true,
+        timeoutMs: 1,
+      }),
     ).rejects.toMatchObject({
       code: "shell_pipeline_timeout",
+      name: "WorkspaceError",
+    });
+  });
+
+  it("stops the producer when the consumer exits before reading its output", async () => {
+    const dirPath = await initOversizedDiffDir();
+
+    const result = await runGitOutputPipeline(
+      ["diff", "--no-index", "--", "empty.txt", "big.txt"],
+      ["--version"],
+      { cwd: dirPath, allowFailure: true, timeoutMs: 5_000 },
+    );
+
+    expect(result.stdout).toContain("git version");
+  });
+
+  it("caps collected output at the shell pipeline buffer limit", async () => {
+    const dirPath = await initOversizedDiffDir();
+
+    const capped = await runGitOutputPipeline(
+      ["--version"],
+      ["diff", "--no-index", "--", "empty.txt", "big.txt"],
+      { cwd: dirPath, allowFailure: true },
+    );
+
+    expect(Buffer.byteLength(capped.stdout, "utf8")).toBe(16 * 1024 * 1024);
+    expect(capped.exitCode).toBe(1);
+
+    await expect(
+      runGitOutputPipeline(
+        ["--version"],
+        ["diff", "--no-index", "--", "empty.txt", "big.txt"],
+        { cwd: dirPath },
+      ),
+    ).rejects.toMatchObject({
+      code: "shell_pipeline_failed",
       name: "WorkspaceError",
     });
   });

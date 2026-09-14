@@ -55,9 +55,12 @@ describe("findWorktreeForBranch", () => {
 
   it("returns null for a branch with no worktree", async () => {
     const { repoPath } = await initWorktreeLayout();
+    const expectedMain = await fs.realpath(repoPath);
 
-    await expect(findWorktreeForBranch(repoPath, "main")).resolves.not.toBe(
-      null,
+    const mainWorktree = await findWorktreeForBranch(repoPath, "main");
+
+    expect(comparablePath(mainWorktree ?? "")).toBe(
+      comparablePath(expectedMain),
     );
     await expect(
       findWorktreeForBranch(repoPath, "no-such-branch"),

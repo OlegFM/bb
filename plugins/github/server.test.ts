@@ -232,4 +232,20 @@ describe("gh discovery", () => {
       "C:\\Program Files\\GitHub CLI\\gh.exe",
     ]);
   });
+
+  it("ignores blank Windows install roots and keeps a 32-bit program files root", () => {
+    expect(
+      ghCandidatePaths("win32", { ProgramFiles: "   ", LOCALAPPDATA: "  " }),
+    ).toEqual(["gh", "C:\\Program Files\\GitHub CLI\\gh.exe"]);
+    expect(
+      ghCandidatePaths("win32", {
+        ProgramFiles: "C:\\Program Files",
+        "ProgramFiles(x86)": "C:\\Program Files (x86)",
+      }),
+    ).toEqual([
+      "gh",
+      "C:\\Program Files\\GitHub CLI\\gh.exe",
+      "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    ]);
+  });
 });
