@@ -200,6 +200,27 @@ describe("parseLocalFileHref", () => {
       }),
     ).toBeNull();
   });
+
+  it("treats a backslash as an ordinary character in a POSIX basename", () => {
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "/workspace/a.b\\c",
+      }),
+    ).toEqual({ path: "/workspace/a.b\\c", lineRange: null });
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "C:\\workspace\\a.b",
+      }),
+    ).toEqual({ path: "C:\\workspace\\a.b", lineRange: null });
+    expect(
+      parseLocalFileHref({
+        absoluteLinks: TRUSTED_HOST_ABSOLUTE_LINKS,
+        href: "C:\\workspace\\a.b\\c",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("buildLocalFileAnchorHref", () => {

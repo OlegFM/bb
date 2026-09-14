@@ -57,6 +57,20 @@ describe("project-path", () => {
     expect(normalizeProjectPathInput("   ")).toBe("");
   });
 
+  it("normalizes non-Windows input exactly as before the Windows port", () => {
+    expect(normalizeProjectPathInput("//")).toBe("");
+    expect(normalizeProjectPathInput("///")).toBe("");
+    expect(normalizeProjectPathInput(" // ")).toBe("");
+    expect(normalizeProjectPathInput("/")).toBe("/");
+    expect(normalizeProjectPathInput("/x//")).toBe("/x");
+    expect(normalizeProjectPathInput("//x/")).toBe("//x");
+    expect(normalizeProjectPathInput("/x//y")).toBe("/x//y");
+    expect(normalizeProjectPathInput("/x/../y")).toBe("/x/../y");
+    expect(normalizeProjectPathInput("x/")).toBe("x");
+    expect(normalizeProjectPathInput("./x/")).toBe("./x");
+    expect(normalizeProjectPathInput("~/x/")).toBe("~/x");
+  });
+
   it("returns clear validation messages", () => {
     expect(getProjectPathValidationMessage("/srv/repos/bb")).toBeNull();
     expect(getProjectPathValidationMessage(windowsProjectPath)).toBeNull();

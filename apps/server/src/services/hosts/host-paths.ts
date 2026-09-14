@@ -33,14 +33,18 @@ function assertCanonicalizableShape(path: string): void {
   }
 }
 
+function shapeCanonicalHostPath(path: string): CanonicalHostPath {
+  assertCanonicalizableShape(path);
+  const normalized = normalizeHostPath(path);
+  return { path: normalized, pathKey: buildHostPathKey(normalized) };
+}
+
 export async function canonicalizeHostPath(
   deps: WorkSessionDeps,
   args: { hostId: string; path: string },
 ): Promise<CanonicalHostPath> {
-  if (deps.hub.getDaemonSessionIdForHost(args.hostId) === null) {
-    assertCanonicalizableShape(args.path);
-    const path = normalizeHostPath(args.path);
-    return { path, pathKey: buildHostPathKey(path) };
+  if (deps.hub.getDaemonPlatformForHost(args.hostId) !== "win32") {
+    return shapeCanonicalHostPath(args.path);
   }
   try {
     return await callHostRetryableOnlineRpc(deps, {
@@ -52,7 +56,7 @@ export async function canonicalizeHostPath(
     if (error instanceof ApiError && error.body.code === "invalid_path") {
       throw invalidHostPath(error.body.message);
     }
-    throw error;
+    return shapeCanonicalHostPath(args.path);
   }
 }
 

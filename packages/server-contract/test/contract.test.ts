@@ -1171,6 +1171,36 @@ describe("server-contract canonical schemas", () => {
     });
   });
 
+  it("keeps the pre-port project path messages on the schema path", () => {
+    const createMessages = (path: string) =>
+      createProjectSourceRequestSchema
+        .safeParse({ hostId: "host_123", type: "local_path", path })
+        .error?.issues.map((issue) => issue.message);
+    const updateMessages = (path: string) =>
+      contract.updateProjectSourceRequestSchema
+        .safeParse({ type: "local_path", path })
+        .error?.issues.map((issue) => issue.message);
+
+    for (const path of ["//", "///", " // "]) {
+      expect(createMessages(path)).toContain(
+        "Project path must be an absolute path.",
+      );
+      expect(updateMessages(path)).toContain(
+        "Project path must be an absolute path.",
+      );
+    }
+    expect(createMessages("/")).toContain(
+      "Project path must point to a project directory, not the filesystem root.",
+    );
+    expect(
+      createProjectSourceRequestSchema.parse({
+        hostId: "host_123",
+        type: "local_path",
+        path: "//srv/repo/",
+      }),
+    ).toMatchObject({ path: "//srv/repo" });
+  });
+
   it("normalizes the deprecated writable alias without widening readonly", () => {
     const createBase = {
       projectId: "proj_123",

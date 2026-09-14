@@ -12,8 +12,9 @@ describe("canonicalizeHostPath", () => {
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-canon",
+        platform: "win32",
       });
-      registerHostRpcResponder(harness, {
+      const responder = registerHostRpcResponder(harness, {
         hostId: host.id,
         sessionId: session.id,
         handle: (request) => {
@@ -32,12 +33,40 @@ describe("canonicalizeHostPath", () => {
           path: "c:/work/bb/",
         }),
       ).resolves.toEqual({ path: "C:\\Work\\bb", pathKey: "c:/work/bb" });
+      expect(responder.requests.map((request) => request.command.type)).toEqual(
+        ["host.canonicalize_path"],
+      );
+    }));
+
+  it("never asks a POSIX host to canonicalize", async () =>
+    withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-canon-posix",
+      });
+      const responder = registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => {
+          throw new Error(`unexpected ${request.command.type}`);
+        },
+      });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "/srv/link/repo/",
+        }),
+      ).resolves.toEqual({
+        path: "/srv/link/repo",
+        pathKey: "/srv/link/repo",
+      });
+      expect(responder.requests).toEqual([]);
     }));
 
   it("surfaces daemon path rejections as 400 invalid_path", async () =>
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-canon-bad",
+        platform: "win32",
       });
       registerHostRpcResponder(harness, {
         hostId: host.id,
@@ -64,10 +93,11 @@ describe("canonicalizeHostPath", () => {
       });
     }));
 
-  it("keeps other daemon failures at their transport status", async () =>
+  it("degrades to the shape result when a win32 daemon call fails", async () =>
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-canon-broken",
+        platform: "win32",
       });
       registerHostRpcResponder(harness, {
         hostId: host.id,
@@ -81,11 +111,17 @@ describe("canonicalizeHostPath", () => {
       await expect(
         canonicalizeHostPath(harness.deps, {
           hostId: host.id,
-          path: "/srv/repo",
+          path: "c:/work/bb/",
+        }),
+      ).resolves.toEqual({ path: "C:\\work\\bb", pathKey: "c:/work/bb" });
+      await expect(
+        canonicalizeHostPath(harness.deps, {
+          hostId: host.id,
+          path: "\\\\server\\share\\bb",
         }),
       ).rejects.toMatchObject({
-        status: 502,
-        body: { code: "internal_error", message: "canonicalization crashed" },
+        status: 400,
+        body: { code: "invalid_path" },
       });
     }));
 

@@ -10,6 +10,7 @@ import {
   updateThread,
 } from "@bb/db";
 import {
+  detectHostPathFlavor,
   isAbsoluteHostPath,
   isHostPathRoot,
   isUncOrDeviceHostPath,
@@ -95,6 +96,17 @@ function toolCallFailure(text: string): ToolCallResponse {
 
 function toolCallSuccess(text: string): ToolCallResponse {
   return toolCallTextResponse(true, text);
+}
+
+export function normalizeEnvironmentDirectoryPath(path: string): string {
+  const trimmed = path.trim();
+  if (detectHostPathFlavor(trimmed) === "windows") {
+    return normalizeHostPath(trimmed);
+  }
+  if (trimmed === "/") {
+    return trimmed;
+  }
+  return trimmed.replace(/\/+$/u, "");
 }
 
 export function validateEnvironmentDirectoryPath(path: string): string | null {
@@ -274,7 +286,7 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     );
   }
 
-  const requestedPath = normalizeHostPath(input.data.path);
+  const requestedPath = normalizeEnvironmentDirectoryPath(input.data.path);
   const pathFailure = validateEnvironmentDirectoryPath(requestedPath);
   if (pathFailure) {
     return toolCallFailure(pathFailure);

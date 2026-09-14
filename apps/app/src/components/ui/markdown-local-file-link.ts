@@ -194,7 +194,9 @@ function parseLineSuffix(value: string): LocalFileHrefParts | null {
 }
 
 function hasLikelyFileBasename(path: string): boolean {
-  const segments = path.split(/[/\\]/u);
+  const segments = isWindowsAbsoluteFilePath(path)
+    ? path.split(/[/\\]/u)
+    : path.split("/");
   const basename = segments[segments.length - 1] ?? "";
   return basename.startsWith(".") || basename.includes(".");
 }

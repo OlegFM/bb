@@ -17,6 +17,7 @@ import {
   createThreadStartup,
 } from "../../../src/services/threads/thread-startup-store.js";
 import { z } from "zod";
+import type { HostPlatform } from "@bb/host-daemon-contract";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { handleUpdateEnvironmentDirectoryToolCall } from "../../../src/services/threads/thread-environment-directory.js";
@@ -74,8 +75,12 @@ import {
 function setup(
   harness: TestAppHarness,
   overrides: Partial<PluginEnvironmentProviderDeclaration> = {},
+  sessionPlatform?: HostPlatform,
 ) {
-  const { host, session } = seedHostSession(harness.deps, { id: "host_test" });
+  const { host, session } = seedHostSession(harness.deps, {
+    id: "host_test",
+    ...(sessionPlatform === undefined ? {} : { platform: sessionPlatform }),
+  });
   const { project, source } = seedProjectWithSource(harness.deps, {
     hostId: host.id,
     path: "/tmp/project",
@@ -676,12 +681,18 @@ describe("core environment orchestration", () => {
 
   it("moves the claim to the canonical key when the daemon resolves the produced path", async () =>
     withTestHarness(async (harness) => {
-      const fixture = setup(harness, {
-        create: async (context) => {
-          expect(await context.experimental_claimPath("/tmp/ws-1")).toBe(true);
-          return { status: "created", path: "/tmp/ws-1", ownsPath: false };
+      const fixture = setup(
+        harness,
+        {
+          create: async (context) => {
+            expect(await context.experimental_claimPath("/tmp/ws-1")).toBe(
+              true,
+            );
+            return { status: "created", path: "/tmp/ws-1", ownsPath: false };
+          },
         },
-      });
+        "win32",
+      );
       registerHostRpcResponder(harness, {
         hostId: fixture.host.id,
         sessionId: fixture.session.id,
@@ -709,18 +720,22 @@ describe("core environment orchestration", () => {
 
   it("binds the produced path as typed when the daemon refuses its shape", async () =>
     withTestHarness(async (harness) => {
-      const fixture = setup(harness, {
-        create: async (context) => {
-          expect(await context.experimental_claimPath("/tmp/ws-refused")).toBe(
-            true,
-          );
-          return {
-            status: "created",
-            path: "/tmp/ws-refused/",
-            ownsPath: false,
-          };
+      const fixture = setup(
+        harness,
+        {
+          create: async (context) => {
+            expect(
+              await context.experimental_claimPath("/tmp/ws-refused"),
+            ).toBe(true);
+            return {
+              status: "created",
+              path: "/tmp/ws-refused/",
+              ownsPath: false,
+            };
+          },
         },
-      });
+        "win32",
+      );
       registerHostRpcResponder(harness, {
         hostId: fixture.host.id,
         sessionId: fixture.session.id,
@@ -770,7 +785,7 @@ describe("core environment orchestration", () => {
       });
     }));
 
-  it("names both accepted shapes when a claimed path is not absolute", async () =>
+  it("keeps the pre-port message when a claimed path is not absolute", async () =>
     withTestHarness(async (harness) => {
       const fixture = setup(harness, {
         create: async (context) => {
@@ -787,10 +802,31 @@ describe("core environment orchestration", () => {
       expect(fixture.row()).toMatchObject({
         status: "error",
         statusMessage: expect.stringContaining(
-          JSON.stringify(
-            "Claimed path must be absolute (for example /home/me/ws or C:\\Users\\me\\ws)",
-          ).slice(1, -1),
+          JSON.stringify('Invalid string: must start with "/"').slice(1, -1),
         ),
+      });
+    }));
+
+  it("accepts a drive-absolute claimed path", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async (context) => {
+          expect(
+            await context.experimental_claimPath("C:\\Users\\me\\ws"),
+          ).toBe(true);
+          return {
+            status: "created",
+            path: "C:\\Users\\me\\ws",
+            ownsPath: false,
+          };
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row()).toMatchObject({
+        path: "C:\\Users\\me\\ws",
+        pathKey: "c:/users/me/ws",
+        status: "provisioning",
       });
     }));
 

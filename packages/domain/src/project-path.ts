@@ -1,12 +1,11 @@
 import {
   basenameHostPath,
+  detectHostPathFlavor,
   isAbsoluteHostPath,
   isHostPathRoot,
   isUncOrDeviceHostPath,
   normalizeHostPath,
 } from "./host-path.js";
-
-const SEPARATOR_ONLY_PATH_PATTERN = /^[\\/]+$/u;
 
 export const INVALID_PROJECT_PATH_MESSAGE =
   "Project path must be an absolute path.";
@@ -21,23 +20,25 @@ export function isAbsoluteProjectPath(path: string): boolean {
 
 export function normalizeProjectPathInput(path: string): string {
   const trimmedPath = path.trim();
-  if (!trimmedPath || !isAbsoluteHostPath(trimmedPath)) {
+  if (!trimmedPath) {
+    return "";
+  }
+  if (detectHostPathFlavor(trimmedPath) === "windows") {
+    return normalizeHostPath(trimmedPath);
+  }
+  if (trimmedPath === "/") {
     return trimmedPath;
   }
-  return normalizeHostPath(trimmedPath);
+  return trimmedPath.replace(/\/+$/u, "");
 }
 
 export function getProjectPathValidationMessage(path: string): string | null {
-  const trimmedPath = path.trim();
-  const normalizedPath = normalizeProjectPathInput(trimmedPath);
+  const normalizedPath = normalizeProjectPathInput(path);
   if (!normalizedPath) {
     return INVALID_PROJECT_PATH_MESSAGE;
   }
   if (isUncOrDeviceHostPath(normalizedPath)) {
     return UNSUPPORTED_UNC_PROJECT_PATH_MESSAGE;
-  }
-  if (trimmedPath !== "/" && SEPARATOR_ONLY_PATH_PATTERN.test(trimmedPath)) {
-    return INVALID_PROJECT_PATH_MESSAGE;
   }
   if (!isAbsoluteHostPath(normalizedPath)) {
     return INVALID_PROJECT_PATH_MESSAGE;

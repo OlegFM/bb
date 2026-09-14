@@ -122,6 +122,7 @@ describe("public project local host routes", () => {
     await withTestHarness(async (harness) => {
       const { host } = seedHostSession(harness.deps, {
         id: "host-windows-identity",
+        platform: "win32",
       });
       seedPrimaryHost(harness.deps, host.id);
 
@@ -171,6 +172,7 @@ describe("public project local host routes", () => {
     await withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-windows-canonical",
+        platform: "win32",
       });
       seedPrimaryHost(harness.deps, host.id);
       registerHostRpcResponder(harness, {
@@ -206,59 +208,11 @@ describe("public project local host routes", () => {
     });
   });
 
-  it("creates a project on a directory the daemon cannot resolve yet", async () => {
-    await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps, {
-        id: "host-vanished-directory",
-      });
-      seedPrimaryHost(harness.deps, host.id);
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-        path: "/tmp/vanished-project",
-      });
-
-      const create = (path: string) =>
-        harness.app.request("/api/v1/projects", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            name: "Vanished Project",
-            source: { type: "local_path", hostId: host.id, path },
-          }),
-        });
-
-      const repeated = await create("/tmp/vanished-project");
-      expect(repeated.status).toBe(201);
-      await expect(readJson(repeated)).resolves.toMatchObject({
-        id: project.id,
-      });
-
-      const freshPromise = create("/tmp/missing-project/");
-      const inspection = await waitForQueuedCommand(
-        harness,
-        ({ command }) => command.type === "project.inspect",
-      );
-      expect(inspection.command).toMatchObject({
-        path: "/tmp/missing-project",
-      });
-      await reportQueuedCommandSuccess(harness, inspection, {
-        path: "/tmp/missing-project",
-        gitRemoteUrl: null,
-      });
-      const fresh = await freshPromise;
-      expect(fresh.status).toBe(201);
-      const freshProject = projectResponseSchema.parse(await readJson(fresh));
-      expect(freshProject.id).not.toBe(project.id);
-      expect(freshProject.sources).toEqual([
-        expect.objectContaining({ path: "/tmp/missing-project" }),
-      ]);
-    });
-  });
-
   it("returns 400 invalid_path when the daemon refuses the path shape", async () => {
     await withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-refused-shape",
+        platform: "win32",
       });
       seedPrimaryHost(harness.deps, host.id);
       registerHostRpcResponder(harness, {

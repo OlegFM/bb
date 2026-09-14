@@ -2,6 +2,7 @@ import { buildHostPathKey } from "@bb/domain";
 import { describe, expect, it } from "vitest";
 import {
   handleUpdateEnvironmentDirectoryToolCall,
+  normalizeEnvironmentDirectoryPath,
   validateEnvironmentDirectoryPath,
 } from "../../src/services/threads/thread-environment-directory.js";
 import { registerHostRpcResponder } from "../helpers/host-rpc.js";
@@ -31,6 +32,31 @@ describe("validateEnvironmentDirectoryPath", () => {
     );
     expect(validateEnvironmentDirectoryPath("/srv/re\0po")).toMatch(/NUL/u);
   });
+
+  it("refuses separator-only input with the pre-port message", () => {
+    for (const input of ["//", "///", " // "]) {
+      expect(
+        validateEnvironmentDirectoryPath(
+          normalizeEnvironmentDirectoryPath(input),
+        ),
+      ).toBe("Path must be an absolute path on the current host.");
+    }
+    expect(
+      validateEnvironmentDirectoryPath(normalizeEnvironmentDirectoryPath("/")),
+    ).toBe("Path must name a project directory, not the filesystem root.");
+  });
+
+  it("normalizes non-Windows input exactly as before the Windows port", () => {
+    expect(normalizeEnvironmentDirectoryPath(" /srv/repo/ ")).toBe("/srv/repo");
+    expect(normalizeEnvironmentDirectoryPath("//srv/repo/")).toBe("//srv/repo");
+    expect(normalizeEnvironmentDirectoryPath("/srv//repo")).toBe("/srv//repo");
+    expect(normalizeEnvironmentDirectoryPath("/")).toBe("/");
+    expect(normalizeEnvironmentDirectoryPath("//")).toBe("");
+    expect(normalizeEnvironmentDirectoryPath("repo/")).toBe("repo");
+    expect(normalizeEnvironmentDirectoryPath("c:/work/bb/")).toBe(
+      "C:\\work\\bb",
+    );
+  });
 });
 
 describe("update_environment_directory managed-root containment", () => {
@@ -38,6 +64,7 @@ describe("update_environment_directory managed-root containment", () => {
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-managed-symlink",
+        platform: "win32",
       });
       const { project } = seedProjectWithSource(harness.deps, {
         hostId: host.id,
@@ -98,6 +125,7 @@ describe("update_environment_directory managed-root containment", () => {
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-case-insensitive",
+        platform: "win32",
       });
       const { project } = seedProjectWithSource(harness.deps, {
         hostId: host.id,
@@ -148,10 +176,11 @@ describe("update_environment_directory managed-root containment", () => {
       });
     }));
 
-  it("returns a tool failure when canonicalizing the host data dir fails", async () =>
+  it("keeps checking managed roots when the host data dir cannot be canonicalized", async () =>
     withTestHarness(async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-datadir-transport",
+        platform: "win32",
       });
       const { project } = seedProjectWithSource(harness.deps, {
         hostId: host.id,
@@ -197,7 +226,7 @@ describe("update_environment_directory managed-root containment", () => {
           currentEnvironment: current,
           thread,
           turnId: "turn-datadir-transport",
-          input: { path: "/tmp/other-directory" },
+          input: { path: `/tmp/bb-host-data/${host.id}/worktrees/env_x/repo` },
         },
       );
 
@@ -206,7 +235,9 @@ describe("update_environment_directory managed-root containment", () => {
         contentItems: [
           {
             type: "inputText",
-            text: expect.stringContaining("daemon exploded"),
+            text: expect.stringContaining(
+              "bb-managed workspace owned by another project",
+            ),
           },
         ],
       });

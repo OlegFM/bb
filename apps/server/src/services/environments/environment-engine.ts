@@ -46,7 +46,7 @@ import {
 } from "@bb/db";
 import {
   buildHostPathKey,
-  isAbsoluteHostPath,
+  detectHostPathFlavor,
   jsonValueSchema,
   type Environment,
   type EnvironmentMachineSelection,
@@ -158,6 +158,16 @@ const removeResultSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("removed") }),
   z.object({ status: z.literal("failed"), message: z.string().min(1) }),
 ]);
+const posixClaimPathSchema = z
+  .string()
+  .min(1)
+  .startsWith("/")
+  .refine((path) => !path.includes("\0"));
+const windowsClaimPathSchema = z
+  .string()
+  .min(1)
+  .refine((path) => detectHostPathFlavor(path) === "windows")
+  .refine((path) => !path.includes("\0"));
 const environmentOperations = new WeakMap<
   object,
   Map<string, ActiveOperation>
@@ -370,15 +380,10 @@ async function runCreate(
             attempt: provisioning.attempt,
             rebuild: previous !== null,
             experimental_claimPath: async (value) => {
-              const path = z
-                .string()
-                .min(1)
-                .refine(isAbsoluteHostPath, {
-                  message:
-                    "Claimed path must be absolute (for example /home/me/ws or C:\\Users\\me\\ws)",
-                })
-                .refine((path) => !path.includes("\0"))
-                .parse(value);
+              const windowsClaim = windowsClaimPathSchema.safeParse(value);
+              const path = windowsClaim.success
+                ? windowsClaim.data
+                : posixClaimPathSchema.parse(value);
               if (signal.aborted) return false;
               return claimEnvironmentPathKey(
                 deps.db,
