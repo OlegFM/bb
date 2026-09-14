@@ -136,6 +136,7 @@
   },
   "dependencies": {
     "@bb/domain": "workspace:*",
+    "@bb/process-utils": "workspace:*",
     "zod": "4.3.6"
   },
   "devDependencies": {

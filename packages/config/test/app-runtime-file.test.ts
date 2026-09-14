@@ -1,6 +1,8 @@
+import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { WindowsProcessSnapshotEntry } from "@bb/process-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   claimBbAppRuntimeFile,
@@ -8,6 +10,7 @@ import {
   readBbAppRuntimeFile,
 } from "../src/app-runtime-file.js";
 import {
+  createNodeVerifiedProcessOps,
   parseElapsedSeconds,
   stopVerifiedProcess,
   type VerifiedProcessOps,
@@ -177,4 +180,177 @@ describe("stopVerifiedProcess", () => {
 
     expect(result).toMatchObject({ kind: "unverified", reason: "start-time" });
   });
+});
+
+describe("stopVerifiedProcess on Windows", () => {
+  const commandLine =
+    '"C:\\Program Files\\nodejs\\node.exe" C:\\bb\\bb-app.js start';
+
+  function windowsEntry(
+    overrides: Partial<WindowsProcessSnapshotEntry> = {},
+  ): WindowsProcessSnapshotEntry {
+    return {
+      pid: 4_242,
+      parentPid: 1,
+      executablePath: "C:\\Program Files\\nodejs\\node.exe",
+      commandLine,
+      creationDate: new Date(Date.now() - 60_000).toISOString(),
+      ...overrides,
+    };
+  }
+
+  function windowsOps(
+    entry: WindowsProcessSnapshotEntry | null,
+    overrides: Partial<VerifiedProcessOps> = {},
+  ): VerifiedProcessOps {
+    return {
+      ...createNodeVerifiedProcessOps("win32", {
+        queryProcess: async () => entry,
+      }),
+      isRunning: () => true,
+      kill: () => undefined,
+      waitForExit: async () => true,
+      ...overrides,
+    };
+  }
+
+  const startedAt = new Date(Date.now() - 60_000).toISOString();
+
+  it("terminates a verified process in a single stage", async () => {
+    const killed: number[] = [];
+
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(windowsEntry(), {
+          kill: (pid) => {
+            killed.push(pid);
+          },
+        }),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toEqual({ kind: "stopped", usedKill: true });
+    expect(killed).toEqual([4_242]);
+  });
+
+  it("refuses a pid whose command line no longer looks like bb", async () => {
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(
+          windowsEntry({ commandLine: "C:\\Windows\\System32\\notepad.exe" }),
+        ),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toMatchObject({ kind: "unverified", reason: "command" });
+  });
+
+  it("refuses a pid whose creation date drifted from the record", async () => {
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(
+          windowsEntry({
+            creationDate: new Date(Date.now() - 3_600_000).toISOString(),
+          }),
+        ),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toMatchObject({ kind: "unverified", reason: "start-time" });
+  });
+
+  it("refuses a pid CIM cannot describe", async () => {
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(null),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toMatchObject({ kind: "unverified", reason: "command" });
+  });
+
+  it("reports a process that is still alive after the terminate", async () => {
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(windowsEntry(), {
+          waitForExit: async () => false,
+        }),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toEqual({ kind: "still-running" });
+  });
+
+  it("reports a recorded pid that already exited", async () => {
+    await expect(
+      stopVerifiedProcess({
+        killTimeoutMs: 10,
+        pid: 4_242,
+        platform: "win32",
+        processOps: windowsOps(null, { isRunning: () => false }),
+        signal: "SIGTERM",
+        startedAt,
+        timeoutMs: 10,
+        verifyTokens: ["bb-app.js"],
+      }),
+    ).resolves.toEqual({ kind: "not-running" });
+  });
+
+  it.runIf(process.platform === "win32")(
+    "verifies and stops a real Node process through CIM",
+    async () => {
+      const marker = `bb-verified-stop-${String(process.pid)}-${String(Date.now())}`;
+      const startedAtReal = new Date().toISOString();
+      const child = spawn(
+        process.execPath,
+        ["-e", "setTimeout(() => {}, 60000)", marker],
+        { stdio: "ignore", windowsHide: true },
+      );
+      const pid = child.pid ?? 0;
+      expect(pid).toBeGreaterThan(0);
+
+      try {
+        await expect(
+          stopVerifiedProcess({
+            killTimeoutMs: 5_000,
+            pid,
+            signal: "SIGTERM",
+            startedAt: startedAtReal,
+            timeoutMs: 5_000,
+            verifyTokens: [marker],
+          }),
+        ).resolves.toEqual({ kind: "stopped", usedKill: true });
+      } finally {
+        try {
+          child.kill();
+        } catch {}
+      }
+    },
+    60_000,
+  );
 });

@@ -1,5 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  queryWindowsProcess,
+  type WindowsProcessSnapshotEntry,
+} from "@bb/process-utils";
 
 const execFileAsync = promisify(execFile);
 const POLL_INTERVAL_MS = 100;
@@ -22,6 +26,7 @@ export interface WaitForProcessExitArgs {
 interface StopVerifiedProcessArgs {
   killTimeoutMs: number;
   pid: number;
+  platform?: NodeJS.Platform;
   processOps?: VerifiedProcessOps;
   signal: NodeJS.Signals;
   startedAt: string;
@@ -92,7 +97,62 @@ async function waitForProcessExit(
   return !isProcessRunning(args.pid);
 }
 
-export function createNodeVerifiedProcessOps(): VerifiedProcessOps {
+interface NodeVerifiedProcessOpsOverrides {
+  queryProcess?: (pid: number) => Promise<WindowsProcessSnapshotEntry | null>;
+}
+
+function createWindowsVerifiedProcessOps(
+  queryProcess: (pid: number) => Promise<WindowsProcessSnapshotEntry | null>,
+): VerifiedProcessOps {
+  const pending = new Map<
+    number,
+    Promise<WindowsProcessSnapshotEntry | null>
+  >();
+  const readEntry = (
+    pid: number,
+  ): Promise<WindowsProcessSnapshotEntry | null> => {
+    const existing = pending.get(pid);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const started = queryProcess(pid);
+    pending.set(pid, started);
+    return started;
+  };
+
+  return {
+    isRunning: (pid) => isProcessRunning(pid),
+    kill: (pid) => {
+      process.kill(pid);
+    },
+    async readCommand(pid) {
+      const entry = await readEntry(pid);
+      return entry?.commandLine ?? null;
+    },
+    async readElapsedSeconds(pid) {
+      const entry = await readEntry(pid);
+      if (entry === null || entry.creationDate === null) {
+        return null;
+      }
+      const createdAt = Date.parse(entry.creationDate);
+      if (Number.isNaN(createdAt)) {
+        return null;
+      }
+      return Math.max(0, Math.round((Date.now() - createdAt) / 1_000));
+    },
+    waitForExit: (args) => waitForProcessExit(args),
+  };
+}
+
+export function createNodeVerifiedProcessOps(
+  platform: NodeJS.Platform = process.platform,
+  overrides: NodeVerifiedProcessOpsOverrides = {},
+): VerifiedProcessOps {
+  if (platform === "win32") {
+    return createWindowsVerifiedProcessOps(
+      overrides.queryProcess ?? ((pid) => queryWindowsProcess(pid)),
+    );
+  }
   return {
     isRunning: (pid) => isProcessRunning(pid),
     kill(pid, signal) {
@@ -142,7 +202,8 @@ async function verifyProcessIdentity(
 export async function stopVerifiedProcess(
   args: StopVerifiedProcessArgs,
 ): Promise<StopVerifiedProcessResult> {
-  const processOps = args.processOps ?? createNodeVerifiedProcessOps();
+  const platform = args.platform ?? process.platform;
+  const processOps = args.processOps ?? createNodeVerifiedProcessOps(platform);
 
   if (!processOps.isRunning(args.pid)) {
     return { kind: "not-running" };
@@ -160,6 +221,18 @@ export async function stopVerifiedProcess(
       kind: "unverified",
       reason: mismatch.reason,
     };
+  }
+
+  if (platform === "win32") {
+    processOps.kill(args.pid, args.signal);
+    const terminated = await processOps.waitForExit({
+      pid: args.pid,
+      timeoutMs: args.timeoutMs + args.killTimeoutMs,
+    });
+    if (!terminated && processOps.isRunning(args.pid)) {
+      return { kind: "still-running" };
+    }
+    return { kind: "stopped", usedKill: true };
   }
 
   processOps.kill(args.pid, args.signal);

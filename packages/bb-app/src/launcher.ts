@@ -3286,6 +3286,11 @@ async function runStopCommand(args: { dataDir: string }): Promise<void> {
     return;
   }
 
+  const forcedStopName =
+    process.platform === "win32" ? "being terminated" : "SIGKILL";
+  const forcedStopSuffix =
+    process.platform === "win32" ? " (terminated)" : " with SIGKILL";
+
   const result = await stopVerifiedProcess({
     killTimeoutMs: STOP_KILL_TIMEOUT_MS,
     pid: runtimeFile.pid,
@@ -3321,7 +3326,7 @@ async function runStopCommand(args: { dataDir: string }): Promise<void> {
 
   if (result.kind === "still-running") {
     process.stderr.write(
-      `bb (pid ${String(runtimeFile.pid)}) did not stop, even after SIGKILL.\n`,
+      `bb (pid ${String(runtimeFile.pid)}) did not stop, even after ${forcedStopName}.\n`,
     );
     process.exitCode = 1;
     return;
@@ -3333,7 +3338,7 @@ async function runStopCommand(args: { dataDir: string }): Promise<void> {
   });
   log(
     green("✓"),
-    `Stopped bb (pid ${String(runtimeFile.pid)})${result.usedKill ? " with SIGKILL" : ""}`,
+    `Stopped bb (pid ${String(runtimeFile.pid)})${result.usedKill ? forcedStopSuffix : ""}`,
   );
 }
 
