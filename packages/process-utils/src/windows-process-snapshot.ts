@@ -341,27 +341,32 @@ function canonicalizeWindowsPath(value: string): string {
 
 const WINDOWS_SHORT_NAME_SEGMENT_PATTERN = /~\d+(?=[\\/]|$)/u;
 
+const expandedWindowsShortPaths = new Map<string, string>();
+
 function expandWindowsShortPath(value: string): string {
   if (!WINDOWS_SHORT_NAME_SEGMENT_PATTERN.test(value)) {
     return value;
   }
-  try {
-    return realpathSync.native(value);
-  } catch {
-    return value;
+  const cached = expandedWindowsShortPaths.get(value);
+  if (cached !== undefined) {
+    return cached;
   }
+  let expanded: string;
+  try {
+    expanded = realpathSync.native(value);
+  } catch {
+    expanded = value;
+  }
+  expandedWindowsShortPaths.set(value, expanded);
+  return expanded;
 }
 
-export function isWindowsPathUnderDirectory(
+function isCanonicalizedWindowsPathUnderDirectory(
   candidate: string,
   directory: string,
 ): boolean {
-  const canonicalCandidate = canonicalizeWindowsPath(
-    expandWindowsShortPath(candidate),
-  );
-  const canonicalDirectory = canonicalizeWindowsPath(
-    expandWindowsShortPath(directory),
-  );
+  const canonicalCandidate = canonicalizeWindowsPath(candidate);
+  const canonicalDirectory = canonicalizeWindowsPath(directory);
   if (canonicalCandidate === canonicalDirectory) {
     return true;
   }
@@ -369,6 +374,16 @@ export function isWindowsPathUnderDirectory(
     ? canonicalDirectory
     : `${canonicalDirectory}\\`;
   return canonicalCandidate.startsWith(directoryPrefix);
+}
+
+export function isWindowsPathUnderDirectory(
+  candidate: string,
+  directory: string,
+): boolean {
+  return isCanonicalizedWindowsPathUnderDirectory(
+    expandWindowsShortPath(candidate),
+    expandWindowsShortPath(directory),
+  );
 }
 
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/]/u;
@@ -421,7 +436,7 @@ function matchWindowsProcessPath(args: {
 }): { path: string; evidence: WindowsSweepMatchEvidence } | null {
   if (
     args.entry.executablePath !== null &&
-    isWindowsPathUnderDirectory(
+    isCanonicalizedWindowsPathUnderDirectory(
       args.canonicalize(args.entry.executablePath),
       args.directory,
     )
@@ -433,7 +448,7 @@ function matchWindowsProcessPath(args: {
       args.entry.commandLine,
     )) {
       if (
-        isWindowsPathUnderDirectory(
+        isCanonicalizedWindowsPathUnderDirectory(
           args.canonicalize(candidate),
           args.directory,
         )
@@ -478,7 +493,9 @@ export function matchWindowsProcessesUnderDirectory(
     if (pid === args.selfPid) {
       continue;
     }
-    if (isWindowsPathUnderDirectory(canonicalize(rootCwd), directory)) {
+    if (
+      isCanonicalizedWindowsPathUnderDirectory(canonicalize(rootCwd), directory)
+    ) {
       evidenceByPid.set(pid, { cwd: rootCwd, evidence: "spawn-registry" });
     }
   }

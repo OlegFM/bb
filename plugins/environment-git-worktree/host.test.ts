@@ -130,12 +130,7 @@ function progressText(harness: ReturnType<typeof createHarness>): string {
     .join("\n");
 }
 
-beforeEach(() => {
-  clearSweepRootProcesses();
-});
-
 afterEach(async () => {
-  clearSweepRootProcesses();
   await Promise.all(
     temporaryRoots
       .splice(0)
@@ -396,9 +391,16 @@ describe("worktree host entry", () => {
     },
   );
 
-  it.runIf(process.platform === "win32")(
-    "leaves teardown to core, kills workspace processes, and prunes the path-key parent on Windows",
-    async () => {
+  describe.runIf(process.platform === "win32")("on Windows", () => {
+    beforeEach(() => {
+      clearSweepRootProcesses();
+    });
+
+    afterEach(() => {
+      clearSweepRootProcesses();
+    });
+
+    it("leaves teardown to core, kills workspace processes, and prunes the path-key parent", async () => {
       const { root, sourcePath, dataDir } = await createSourceRepository();
       await writeFile(
         join(sourcePath, ".bb-env-teardown.sh"),
@@ -439,7 +441,9 @@ describe("worktree host entry", () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         lingeringProcess = await queryWindowsProcess(lingeringPid);
       }
-      await forceKillWindowsProcess(lingeringPid);
+      if (lingeringProcess !== null) {
+        await forceKillWindowsProcess(lingeringPid);
+      }
       expect(removed).toEqual({ status: "removed" });
       expect(lingeringProcess).toBeNull();
       expect(progressText(harness)).not.toContain("tearing-down");
@@ -447,6 +451,6 @@ describe("worktree host entry", () => {
       expect(existsSync(created.path)).toBe(false);
       expect(await readdir(join(dataDir, "worktrees"))).toEqual([]);
       await harness.experimental_dispose();
-    },
-  );
+    });
+  });
 });

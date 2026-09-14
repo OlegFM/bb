@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { resolve, win32 as win32Path } from "node:path";
+import { extname, resolve, win32 as win32Path } from "node:path";
 
 export const BB_CLI_REEXEC_ENV = "BB_CLI_REEXEC";
 
@@ -29,11 +29,16 @@ export interface NodeLauncherSpawnPlan {
   argsPrefix: string[];
 }
 
+function mayBeWindowsNodeShim(cliPath: string): boolean {
+  const extension = extname(cliPath).toLowerCase();
+  return extension === ".cmd" || extension === ".bat";
+}
+
 export async function resolveNodeLauncherSpawnPlan(
   cliPath: string,
   platform: NodeJS.Platform,
 ): Promise<NodeLauncherSpawnPlan> {
-  if (platform !== "win32") {
+  if (platform !== "win32" || !mayBeWindowsNodeShim(cliPath)) {
     return { command: cliPath, argsPrefix: [] };
   }
   const { nodeShimRefusalMessage, resolveNodeShimSpawnPlan } =

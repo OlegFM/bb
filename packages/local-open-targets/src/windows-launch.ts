@@ -366,7 +366,7 @@ async function resolveWindowsLauncherExecutable(
 ): Promise<string | null> {
   return resolveExecutable({
     command,
-    env: buildWindowsLauncherResolutionEnv(runtime.env),
+    env: buildWindowsLauncherResolutionEnv(runtime.env ?? process.env),
     platform: "win32",
   });
 }

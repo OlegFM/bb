@@ -363,6 +363,20 @@ describe("windows environment scripts", () => {
       const pidPath = join(workspacePath, "pids.txt");
       const controller = new AbortController();
       const descendants: number[] = [];
+      const recordDescendants = async (): Promise<void> => {
+        if (descendants.length > 0) {
+          return;
+        }
+        let recorded: string;
+        try {
+          recorded = await readFile(pidPath, "utf8");
+        } catch {
+          return;
+        }
+        for (const value of recorded.split(" ")) {
+          descendants.push(Number.parseInt(value, 10));
+        }
+      };
 
       try {
         await expect(
@@ -378,9 +392,7 @@ describe("windows environment scripts", () => {
           }),
         ).rejects.toThrow("cancelled");
 
-        for (const value of (await readFile(pidPath, "utf8")).split(" ")) {
-          descendants.push(Number.parseInt(value, 10));
-        }
+        await recordDescendants();
         expect(descendants).toHaveLength(2);
         expect(descendants.every(Number.isSafeInteger)).toBe(true);
         await expect(
@@ -390,7 +402,11 @@ describe("windows environment scripts", () => {
           queryWindowsProcess(descendants[1] ?? 0),
         ).resolves.toBeNull();
       } finally {
+        await recordDescendants();
         for (const pid of descendants) {
+          if (!Number.isSafeInteger(pid) || pid <= 0) {
+            continue;
+          }
           try {
             process.kill(pid, "SIGKILL");
           } catch {}

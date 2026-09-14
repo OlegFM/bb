@@ -9,6 +9,7 @@ interface FileSystemHooks {
   linkAttempts: number;
   linkError?: Error;
   stagedRemovalError?: Error;
+  beforeRename?: (oldPath: string, newPath: string) => Promise<void>;
   afterRename?: (oldPath: string, newPath: string) => Promise<void>;
 }
 
@@ -26,6 +27,11 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       await actual.link(existingPath, newPath);
     },
     rename: async (oldPath: string, newPath: string) => {
+      const beforeRename = hooks.beforeRename;
+      if (beforeRename !== undefined) {
+        hooks.beforeRename = undefined;
+        await beforeRename(oldPath, newPath);
+      }
       await actual.rename(oldPath, newPath);
       const afterRename = hooks.afterRename;
       if (afterRename !== undefined) {
@@ -94,6 +100,7 @@ afterEach(async () => {
   hooks.linkAttempts = 0;
   hooks.linkError = undefined;
   hooks.stagedRemovalError = undefined;
+  hooks.beforeRename = undefined;
   hooks.afterRename = undefined;
   await Promise.all(
     tempDirs
@@ -137,6 +144,24 @@ describe("publishing a win32 secret", () => {
     const secretPath = path.join(dataDir, "secret");
     await writeFile(secretPath, "", "utf8");
     hooks.afterRename = async () => {
+      await writeFile(secretPath, "published-by-another-process\n", "utf8");
+    };
+
+    await expect(createSecret(dataDir)).resolves.toBe(
+      "published-by-another-process",
+    );
+    expect(await readFile(secretPath, "utf8")).toBe(
+      "published-by-another-process\n",
+    );
+    expect(await readdir(dataDir)).toEqual(["secret"]);
+    expect(hooks.linkAttempts).toBe(0);
+  });
+
+  it("carries a secret published just before the empty file moved aside back", async () => {
+    const dataDir = await makeTempDir();
+    const secretPath = path.join(dataDir, "secret");
+    await writeFile(secretPath, "", "utf8");
+    hooks.beforeRename = async () => {
       await writeFile(secretPath, "published-by-another-process\n", "utf8");
     };
 

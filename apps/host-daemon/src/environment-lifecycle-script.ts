@@ -347,7 +347,9 @@ async function runLifecycleScript(
 
     if (abortRequested || timedOut) {
       if (terminationPromise !== null) {
-        reportIncompleteTermination(await terminationPromise);
+        try {
+          reportIncompleteTermination(await terminationPromise);
+        } catch {}
       }
       while (isProcessGroupAlive(child, platform)) await delay(25);
     }
