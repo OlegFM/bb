@@ -23,6 +23,8 @@ const NON_SCRIPT_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([
   ".exe",
 ]);
 
+const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".bat", ".cmd"]);
+
 const NODE_CMD_SHIM_PATTERNS: readonly RegExp[] = [
   /^\s*@?node(?:\.exe)?\s+"%~dp0\\?([^"\r\n]+)"/imu,
   /"%~dp0\\?node\.exe"\s+"%~dp0\\?([^"\r\n]+)"/iu,
@@ -190,4 +192,17 @@ export async function readNodeCmdShim(
     return { command: process.execPath, args: [script] };
   }
   return null;
+}
+
+export function nodeShimRefusalMessage(launcherPath: string): string {
+  return `Windows launcher ${launcherPath} is not a Node shim bb can start directly`;
+}
+
+export async function resolveNodeShimSpawnPlan(
+  launcherPath: string,
+): Promise<NodeCmdShimTarget | null> {
+  if (!WINDOWS_SHIM_EXTENSIONS.has(extname(launcherPath).toLowerCase())) {
+    return { command: launcherPath, args: [] };
+  }
+  return readNodeCmdShim(launcherPath);
 }

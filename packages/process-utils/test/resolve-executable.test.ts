@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  nodeShimRefusalMessage,
   POWERSHELL_NONINTERACTIVE_ARGS,
   readNodeCmdShim,
   resolveExecutable,
+  resolveNodeShimSpawnPlan,
   resolvePowerShellExecutable,
   resolveWindowsSystemToolPath,
   windowsExecutableExtensions,
@@ -336,5 +338,49 @@ describe("readNodeCmdShim", () => {
     await writeFile(shim, '@echo off\r\n"%~dp0..\\tools\\helper.exe" %*\r\n');
     await expect(readNodeCmdShim(shim)).resolves.toBeNull();
     await expect(readNodeCmdShim(join(root, "absent.cmd"))).resolves.toBeNull();
+  });
+});
+
+describe("resolveNodeShimSpawnPlan", () => {
+  it("passes a non-shim launcher through untouched", async () => {
+    const root = await makeRoot();
+    const launcher = join(root, "bb.exe");
+    await writeFile(launcher, "");
+    await expect(resolveNodeShimSpawnPlan(launcher)).resolves.toEqual({
+      command: launcher,
+      args: [],
+    });
+  });
+
+  it("plans a node run for a .cmd and a .bat node shim", async () => {
+    const root = await makeRoot();
+    const cmdShim = join(root, "bb.cmd");
+    await writeFile(cmdShim, '@node "%~dp0bb" %*\r\n');
+    await expect(resolveNodeShimSpawnPlan(cmdShim)).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "bb")],
+    });
+    const batShim = join(root, "bb.bat");
+    await writeFile(batShim, '@node "%~dp0bb" %*\r\n');
+    await expect(resolveNodeShimSpawnPlan(batShim)).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "bb")],
+    });
+  });
+
+  it("refuses a shim extension that does not run node", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "code.cmd");
+    await writeFile(shim, '@echo off\r\n"%~dp0..\\code.exe" %*\r\n');
+    await expect(resolveNodeShimSpawnPlan(shim)).resolves.toBeNull();
+    await expect(
+      resolveNodeShimSpawnPlan(join(root, "absent.cmd")),
+    ).resolves.toBeNull();
+  });
+
+  it("names the launcher in the single refusal message", () => {
+    expect(nodeShimRefusalMessage("C:\\tools\\code.cmd")).toBe(
+      "Windows launcher C:\\tools\\code.cmd is not a Node shim bb can start directly",
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { extname, resolve, win32 as win32Path } from "node:path";
+import { resolve, win32 as win32Path } from "node:path";
 
 export const BB_CLI_REEXEC_ENV = "BB_CLI_REEXEC";
 
@@ -24,8 +24,6 @@ function tryRealpath(path: string): string | null {
   }
 }
 
-const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".cmd", ".bat"]);
-
 export interface NodeLauncherSpawnPlan {
   command: string;
   argsPrefix: string[];
@@ -35,18 +33,16 @@ export async function resolveNodeLauncherSpawnPlan(
   cliPath: string,
   platform: NodeJS.Platform,
 ): Promise<NodeLauncherSpawnPlan> {
-  const extension = extname(cliPath).toLowerCase();
-  if (platform !== "win32" || !WINDOWS_SHIM_EXTENSIONS.has(extension)) {
+  if (platform !== "win32") {
     return { command: cliPath, argsPrefix: [] };
   }
-  const { readNodeCmdShim } = await import("@bb/process-utils");
-  const shim = await readNodeCmdShim(cliPath);
-  if (shim === null) {
-    throw new Error(
-      `Windows launcher ${cliPath} is not a Node shim bb can start directly`,
-    );
+  const { nodeShimRefusalMessage, resolveNodeShimSpawnPlan } =
+    await import("@bb/process-utils");
+  const plan = await resolveNodeShimSpawnPlan(cliPath);
+  if (plan === null) {
+    throw new Error(nodeShimRefusalMessage(cliPath));
   }
-  return { command: shim.command, argsPrefix: shim.args };
+  return { command: plan.command, argsPrefix: plan.args };
 }
 
 export function nodeLauncherPlanTargetsScript(

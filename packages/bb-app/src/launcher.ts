@@ -13,7 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
@@ -59,7 +59,10 @@ import { validateLogLevel } from "@bb/config/log-level";
 import { validateOptionalUrl } from "@bb/config/public-url";
 import { parseServerBindHost, type ServerBindHost } from "@bb/config/server";
 import { toOptionalString } from "@bb/config/strings";
-import { readNodeCmdShim } from "@bb/process-utils";
+import {
+  nodeShimRefusalMessage,
+  resolveNodeShimSpawnPlan,
+} from "@bb/process-utils";
 import {
   BB_PROD_HOST_DAEMON_PORT,
   BB_LOOPBACK_HOST,
@@ -2097,23 +2100,18 @@ export function resolveBundledBbCliPath(
   return join(daemonBundleDir, resolveBundledBbCliFileName(platform));
 }
 
-const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".cmd", ".bat"]);
-
 export async function resolveBundledCliSpawnPlan(
   cliPath: string,
   platform: NodeJS.Platform,
 ): Promise<{ command: string; argsPrefix: string[] }> {
-  const extension = extname(cliPath).toLowerCase();
-  if (platform !== "win32" || !WINDOWS_SHIM_EXTENSIONS.has(extension)) {
+  if (platform !== "win32") {
     return { command: cliPath, argsPrefix: [] };
   }
-  const shim = await readNodeCmdShim(cliPath);
-  if (shim === null) {
-    throw new Error(
-      `Windows launcher ${cliPath} is not a Node shim bb can start directly`,
-    );
+  const plan = await resolveNodeShimSpawnPlan(cliPath);
+  if (plan === null) {
+    throw new Error(nodeShimRefusalMessage(cliPath));
   }
-  return { command: shim.command, argsPrefix: shim.args };
+  return { command: plan.command, argsPrefix: plan.args };
 }
 
 function requiredHostArtifactPaths(

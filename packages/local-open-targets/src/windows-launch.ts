@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { WorkspaceOpenTarget } from "@bb/host-daemon-contract";
 import {
-  readNodeCmdShim,
   resolveExecutable,
+  resolveNodeShimSpawnPlan,
   resolvePowerShellExecutable,
   resolveWindowsSystemToolPath,
 } from "@bb/process-utils";
@@ -27,7 +27,6 @@ const WINDOWS_APP_PATHS_SUBKEY =
   "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths";
 const WINDOWS_APP_PATHS_HIVES = ["HKLM", "HKCU"] as const;
 const WINDOWS_REGISTRY_VALUE_PATTERN = /\sREG_(?:EXPAND_)?SZ\s+(.*)$/mu;
-const WINDOWS_CMD_SHIM_EXTENSIONS = new Set([".bat", ".cmd"]);
 const WINDOWS_LAUNCHER_EXTENSIONS = new Set([".bat", ".cmd", ".com", ".exe"]);
 const WINDOWS_DEFAULT_SYSTEM_ROOT = "C:\\Windows";
 const WINDOWS_INSTALL_ROOT_ENV_VARIABLES = [
@@ -387,12 +386,7 @@ async function buildWindowsExecutableInvocation(
   args: string[],
   runtime: WorkspaceOpenTargetRuntime,
 ): Promise<WindowsLaunchInvocation> {
-  if (
-    !WINDOWS_CMD_SHIM_EXTENSIONS.has(path.extname(executablePath).toLowerCase())
-  ) {
-    return { file: executablePath, args, env: runtime.env };
-  }
-  const nodeShim = await readNodeCmdShim(executablePath);
+  const nodeShim = await resolveNodeShimSpawnPlan(executablePath);
   if (nodeShim !== null) {
     return {
       file: nodeShim.command,
