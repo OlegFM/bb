@@ -21,6 +21,7 @@ import {
 } from "../src/index.js";
 import { LAUNCH_ADAPTERS } from "../src/macos-launch-adapters.js";
 import type { ExecFileOptions } from "../src/types.js";
+import { buildWindowsLauncherResolutionEnv } from "../src/windows-launch.js";
 
 describe("default workspace open-target runtime", () => {
   it("exposes the resolved shell PATH without changing system-tool launches", async () => {
@@ -2899,10 +2900,11 @@ describe("workspace open targets", () => {
         expect(windowsExecutableName(calls[0]?.file ?? "")).toBe("cmd.exe");
         expect(calls[0]?.args.slice(0, 3)).toEqual(["/d", "/s", "/c"]);
         expect(calls[0]?.args[3]).toMatch(
-          /^"start "" \/D "[^"]+" "[^"]*(?:pwsh|powershell)\.exe" -NoLogo"$/u,
+          /^"start "" "[^"]*(?:pwsh|powershell)\.exe" -NoLogo"$/u,
         );
-        expect(calls[0]?.args[3]).toContain(`/D "${workspacePath}"`);
+        expect(calls[0]?.args[3]).not.toContain(workspacePath);
         expect(calls[0]?.options).toEqual({
+          cwd: workspacePath,
           detached: true,
           env: {},
           windowsHide: true,
@@ -2939,8 +2941,9 @@ describe("workspace open targets", () => {
           "/d",
           "/s",
           "/c",
-          `"start "" /D "${workspacePath}" "${shellPath}" -NoLogo"`,
+          `"start "" "${shellPath}" -NoLogo"`,
         ]);
+        expect(calls[0]?.options?.cwd).toBe(workspacePath);
         expect(calls[0]?.options?.windowsVerbatimArguments).toBe(true);
         expect(calls[0]?.options?.windowsHide).toBe(true);
         expect(calls[0]?.options?.detached).toBe(true);
@@ -2965,13 +2968,28 @@ describe("workspace open targets", () => {
         };
         const shellPath = resolvePowerShellExecutable(runtimeEnv);
 
-        const isFallbackShell = (
+        const interactiveShellImageNames = new Set([
+          "powershell.exe",
+          "pwsh.exe",
+        ]);
+
+        const shellImageName = (entry: WindowsProcessSnapshotEntry): string => {
+          const commandLine = entry.commandLine ?? "";
+          const firstToken =
+            /^\s*"([^"]+)"/u.exec(commandLine)?.[1] ??
+            /^\s*(\S+)/u.exec(commandLine)?.[1] ??
+            "";
+          return path.win32
+            .basename(entry.executablePath ?? firstToken)
+            .toLowerCase();
+        };
+
+        const isInteractiveShellConsole = (
           entry: WindowsProcessSnapshotEntry,
         ): boolean => {
           const commandLine = entry.commandLine ?? "";
           return (
-            (entry.executablePath ?? "").toLowerCase() ===
-              shellPath.toLowerCase() &&
+            interactiveShellImageNames.has(shellImageName(entry)) &&
             commandLine.includes("-NoLogo") &&
             !commandLine.includes("-NonInteractive")
           );
@@ -3010,7 +3028,8 @@ describe("workspace open targets", () => {
           await new Promise((resolveWait) => setTimeout(resolveWait, 2000));
 
           launched = (await takeWindowsProcessSnapshot()).filter(
-            (entry) => !beforePids.has(entry.pid) && isFallbackShell(entry),
+            (entry) =>
+              !beforePids.has(entry.pid) && isInteractiveShellConsole(entry),
           );
           console.log(
             `terminal fallback consoles: ${
@@ -3023,6 +3042,9 @@ describe("workspace open targets", () => {
           );
 
           expect(launched.length).toBeGreaterThan(0);
+          expect(
+            launched.map((entry) => (entry.executablePath ?? "").toLowerCase()),
+          ).toContain(shellPath.toLowerCase());
 
           for (const entry of launched) {
             await killFallbackShell(entry.pid);
@@ -3543,6 +3565,38 @@ describe("workspace open targets", () => {
       }
     });
 
+    it("does not let an earlier-Path script hide a later launcher", async () => {
+      const scriptDirectory = await createWindowsPathDirectory(["code.ps1"]);
+      const launcherDirectory = await createWindowsPathDirectory(["code.exe"]);
+      const workspacePath = await mkdtemp(path.join(tmpdir(), "bb-workspace-"));
+      const calls: WindowsExecFileCall[] = [];
+      const env = { Path: `${scriptDirectory};${launcherDirectory}` };
+
+      try {
+        const targets = await listWorkspaceOpenTargetsWithRuntime(
+          createWindowsRuntime({ env }),
+        );
+        expect(targets.map((target) => target.id)).toContain("vscode");
+
+        await openPathInTargetWithRuntime(
+          {
+            context: { kind: "local" },
+            columnNumber: null,
+            lineNumber: null,
+            path: workspacePath,
+            targetId: "vscode",
+          },
+          createWindowsRuntime({ calls, env }),
+        );
+
+        expect(calls[0]?.file).toBe(path.join(launcherDirectory, "code.exe"));
+      } finally {
+        await rm(scriptDirectory, { force: true, recursive: true });
+        await rm(launcherDirectory, { force: true, recursive: true });
+        await rm(workspacePath, { force: true, recursive: true });
+      }
+    });
+
     it("probes App Paths only for adapters that declare Windows install paths", async () => {
       const calls: WindowsExecFileCall[] = [];
 
@@ -3605,7 +3659,11 @@ describe("workspace open targets", () => {
         );
         const resolvedExecutables = await Promise.all(
           adapterExecutables.map((command) =>
-            resolveExecutable({ command, platform: "win32" }),
+            resolveExecutable({
+              command,
+              env: buildWindowsLauncherResolutionEnv(process.env),
+              platform: "win32",
+            }),
           ),
         );
         const staticTargetIds = new Set([

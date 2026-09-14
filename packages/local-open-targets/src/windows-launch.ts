@@ -27,7 +27,7 @@ const WINDOWS_APP_PATHS_SUBKEY =
   "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths";
 const WINDOWS_APP_PATHS_HIVES = ["HKLM", "HKCU"] as const;
 const WINDOWS_REGISTRY_VALUE_PATTERN = /\sREG_(?:EXPAND_)?SZ\s+(.*)$/mu;
-const WINDOWS_LAUNCHER_EXTENSIONS = new Set([".bat", ".cmd", ".com", ".exe"]);
+const WINDOWS_LAUNCHER_PATHEXT = ".exe;.cmd;.bat;.com";
 const WINDOWS_DEFAULT_SYSTEM_ROOT = "C:\\Windows";
 const WINDOWS_INSTALL_ROOT_ENV_VARIABLES = [
   "ProgramFiles",
@@ -346,22 +346,29 @@ async function findWindowsExecutablePath(
   return findWindowsJetBrainsInstallPath(definition, runtime);
 }
 
-function isWindowsLauncherPath(candidatePath: string): boolean {
-  return WINDOWS_LAUNCHER_EXTENSIONS.has(
-    path.extname(candidatePath).toLowerCase(),
-  );
+export function buildWindowsLauncherResolutionEnv(
+  env: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv {
+  const launcherEnv: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env ?? {})) {
+    if (value === undefined || key.toLowerCase() === "pathext") {
+      continue;
+    }
+    launcherEnv[key] = value;
+  }
+  launcherEnv.PATHEXT = WINDOWS_LAUNCHER_PATHEXT;
+  return launcherEnv;
 }
 
 async function resolveWindowsLauncherExecutable(
   command: string,
   runtime: WorkspaceOpenTargetRuntime,
 ): Promise<string | null> {
-  const resolved = await resolveExecutable({
+  return resolveExecutable({
     command,
-    env: runtime.env,
+    env: buildWindowsLauncherResolutionEnv(runtime.env),
     platform: "win32",
   });
-  return resolved !== null && isWindowsLauncherPath(resolved) ? resolved : null;
 }
 
 function buildWindowsCmdShimCommandLine(
@@ -374,11 +381,8 @@ function buildWindowsCmdShimCommandLine(
   return `"${quoted}"`;
 }
 
-function buildWindowsStartConsoleCommandLine(
-  directory: string,
-  shellPath: string,
-): string {
-  return `"start "" /D "${directory}" "${shellPath}" -NoLogo"`;
+function buildWindowsStartConsoleCommandLine(shellPath: string): string {
+  return `"start "" "${shellPath}" -NoLogo"`;
 }
 
 async function buildWindowsExecutableInvocation(
@@ -676,10 +680,10 @@ async function resolveWindowsTerminalInvocation(
       "/s",
       "/c",
       buildWindowsStartConsoleCommandLine(
-        directory,
         resolvePowerShellExecutable(runtime.env),
       ),
     ],
+    cwd: directory,
     detached: true,
     env: runtime.env,
     windowsHide: true,
