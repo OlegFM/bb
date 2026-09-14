@@ -10,10 +10,15 @@ import { ExpectedCommandDispatchError } from "../command-dispatch-support.js";
 
 const execFileAsync = promisify(execFile);
 
+export interface NativeFolderPickerExecFileOptions {
+  env?: NodeJS.ProcessEnv;
+  windowsHide?: boolean;
+}
+
 export type NativeFolderPickerExecFile = (
   file: string,
   args: string[],
-  options?: { env?: NodeJS.ProcessEnv },
+  options?: NativeFolderPickerExecFileOptions,
 ) => Promise<{ stdout: string }>;
 
 export interface NativeFolderPickerDeps {
@@ -38,12 +43,23 @@ const WINDOWS_FOLDER_PICKER_SCRIPT = [
 async function defaultExecFile(
   file: string,
   args: string[],
-  options?: { env?: NodeJS.ProcessEnv },
+  options?: NativeFolderPickerExecFileOptions,
 ): Promise<{ stdout: string }> {
   const result = await execFileAsync(file, args, {
     env: options?.env,
+    windowsHide: options?.windowsHide,
   });
   return { stdout: result.stdout };
+}
+
+function buildExecOptions(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): NativeFolderPickerExecFileOptions {
+  return {
+    env,
+    ...(platform === "win32" ? { windowsHide: true } : {}),
+  };
 }
 
 function toPickFolderResult(selectedPath: string): PickFolderResult {
@@ -75,9 +91,10 @@ async function pickMacOsFolder(
         "-e",
         'try\nPOSIX path of (choose folder with prompt "Choose a project folder")\non error number -128\nreturn ""\nend try',
       ],
-      {
-        env: sanitizeInheritedChildProcessEnv({ env: process.env }),
-      },
+      buildExecOptions(
+        sanitizeInheritedChildProcessEnv({ env: process.env }),
+        "darwin",
+      ),
     );
     stdout = result.stdout;
   } catch (error) {
@@ -100,9 +117,10 @@ async function pickWindowsFolder(
         "-Command",
         WINDOWS_FOLDER_PICKER_SCRIPT,
       ],
-      {
-        env: sanitizeInheritedChildProcessEnv({ env, platform: "win32" }),
-      },
+      buildExecOptions(
+        sanitizeInheritedChildProcessEnv({ env, platform: "win32" }),
+        "win32",
+      ),
     );
     stdout = result.stdout;
   } catch (error) {

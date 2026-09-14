@@ -6,6 +6,7 @@ interface RecordedCall {
   args: string[];
   env?: NodeJS.ProcessEnv;
   file: string;
+  windowsHide?: boolean;
 }
 
 function createExecFile(options: {
@@ -16,9 +17,14 @@ function createExecFile(options: {
   return async (
     file: string,
     args: string[],
-    execOptions?: { env?: NodeJS.ProcessEnv },
+    execOptions?: { env?: NodeJS.ProcessEnv; windowsHide?: boolean },
   ): Promise<{ stdout: string }> => {
-    options.calls?.push({ file, args, env: execOptions?.env });
+    options.calls?.push({
+      file,
+      args,
+      env: execOptions?.env,
+      windowsHide: execOptions?.windowsHide,
+    });
     if (options.failure !== undefined) {
       throw options.failure;
     }
@@ -125,5 +131,25 @@ describe("pickHostFolderWithDeps on other platforms", () => {
       code: "unsupported_platform",
       message: "Folder picker is only supported on macOS",
     });
+  });
+});
+
+describe("pickHostFolderWithDeps windowsHide option", () => {
+  it("hides the console window only on win32", async () => {
+    const win32Calls: RecordedCall[] = [];
+    const darwinCalls: RecordedCall[] = [];
+
+    await pickHostFolderWithDeps({
+      env: {},
+      execFile: createExecFile({ calls: win32Calls, stdout: "" }),
+      platform: "win32",
+    });
+    await pickHostFolderWithDeps({
+      execFile: createExecFile({ calls: darwinCalls, stdout: "" }),
+      platform: "darwin",
+    });
+
+    expect(win32Calls[0]?.windowsHide).toBe(true);
+    expect(darwinCalls[0]?.windowsHide).toBeUndefined();
   });
 });
