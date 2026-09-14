@@ -114,6 +114,7 @@ export const automationScriptInterpreterSchema = z.enum([
   "sh",
   "node",
   "python3",
+  "powershell",
 ]);
 export type AutomationScriptInterpreter = z.infer<
   typeof automationScriptInterpreterSchema

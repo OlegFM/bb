@@ -20,6 +20,20 @@ Use `script` when the output is fully determined by code: watchdogs, threshold a
 
 Design the script to print nothing when there is nothing to report: an exit-0 run with empty stdout/stderr, or a last non-empty line of `{"wakeAgent": false}`, is recorded as a skipped silent tick. Any other output is captured; non-zero exit or timeout is recorded as a failed run.
 
+The interpreter comes from the script file extension unless `--interpreter`
+overrides it: `.sh`/`.bash` run under `bash`, `.js`/`.mjs` under `node`, `.py`
+under `python3`, `.ps1` under `powershell`. On a Windows server use `.ps1`:
+
+```bash
+bb automation create --project <id> --name "Disk watch" --cron "0 * * * *" \
+  --timezone UTC --script-file ./disk-watch.ps1 --interpreter powershell
+```
+
+A Windows server runs `powershell` scripts through `pwsh.exe` when it is
+installed and Windows PowerShell 5.1 otherwise, `node` scripts through the
+server's own Node runtime, and `bash`/`sh` scripts only when Git for Windows
+puts `bash.exe` on `Path`.
+
 Use `agent` when the run needs reasoning: summarize a feed, pick interesting items, draft a human-friendly message, or branch on content.
 
 Creating:

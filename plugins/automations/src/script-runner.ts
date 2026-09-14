@@ -1,9 +1,14 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { constants } from "node:fs";
-import { delimiter, dirname, isAbsolute, join } from "node:path";
+import path, { extname } from "node:path";
 import { promisify } from "node:util";
 import { access, mkdir, stat } from "node:fs/promises";
-import { assignPathEnv } from "@bb/process-utils";
+import {
+  assignPathEnv,
+  readNodeCmdShim,
+  resolveExecutable,
+  resolveWindowsSystemToolPath,
+} from "@bb/process-utils";
 import {
   AUTOMATION_SCRIPT_TIMEOUT_MAX_MS,
   type AutomationScriptInterpreter,
@@ -23,19 +28,66 @@ let resolvedBbPath: string | null = null;
 const BB_NOT_INJECTED_WARNING =
   "[bb] warning: could not locate the bb CLI, so `bb` is not on PATH for this script.";
 
-async function commandWorks(command: string, args: string[]): Promise<boolean> {
+async function resolveProbeSpawnPlan(
+  command: string,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): Promise<{ command: string; argsPrefix: string[] }> {
+  if (platform !== "win32" || !command.toLowerCase().endsWith(".cmd")) {
+    return { command, argsPrefix: [] };
+  }
+  const shim = await readNodeCmdShim(command);
+  if (shim !== null) {
+    return { command: shim.command, argsPrefix: shim.args };
+  }
+  return {
+    command: resolveWindowsSystemToolPath("cmd.exe", env),
+    argsPrefix: ["/d", "/c", command],
+  };
+}
+
+async function commandWorks(
+  command: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
   try {
-    await execFileAsync(command, args, { timeout: 5_000 });
+    const plan = await resolveProbeSpawnPlan(command, platform, env);
+    await execFileAsync(plan.command, [...plan.argsPrefix, ...args], {
+      timeout: 5_000,
+    });
     return true;
   } catch {
     return false;
   }
 }
 
-export function bbBinaryCandidates(env: NodeJS.ProcessEnv): string[] {
+function readPathValue(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): string {
+  if (platform !== "win32") {
+    return env.PATH ?? "";
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (/^path$/iu.test(key) && value !== undefined) {
+      return value;
+    }
+  }
+  return "";
+}
+
+export function bbBinaryCandidates(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  const pathImpl = platform === "win32" ? path.win32 : path.posix;
+  const pathDelimiter = platform === "win32" ? ";" : ":";
+  const fileNames = platform === "win32" ? ["bb.cmd", "bb"] : ["bb"];
   const candidates: string[] = [];
   const pushIfAbsolute = (candidate: string): void => {
-    if (isAbsolute(candidate)) {
+    if (pathImpl.isAbsolute(candidate)) {
       candidates.push(candidate);
     }
   };
@@ -45,22 +97,42 @@ export function bbBinaryCandidates(env: NodeJS.ProcessEnv): string[] {
   }
   const fromCliDir = env.BB_CLI_DIR?.trim();
   if (fromCliDir !== undefined && fromCliDir.length > 0) {
-    pushIfAbsolute(join(fromCliDir, "bb"));
-  }
-  for (const entry of (env.PATH ?? "").split(delimiter)) {
-    const trimmed = entry.trim();
-    if (trimmed.length > 0) {
-      pushIfAbsolute(join(trimmed, "bb"));
+    for (const fileName of fileNames) {
+      pushIfAbsolute(pathImpl.join(fromCliDir, fileName));
     }
   }
-  candidates.push("/opt/homebrew/bin/bb", "/usr/local/bin/bb");
+  for (const entry of readPathValue(env, platform).split(pathDelimiter)) {
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) {
+      for (const fileName of fileNames) {
+        pushIfAbsolute(pathImpl.join(trimmed, fileName));
+      }
+    }
+  }
+  if (platform !== "win32") {
+    candidates.push("/opt/homebrew/bin/bb", "/usr/local/bin/bb");
+  }
   return candidates;
 }
 
-async function isExecutableFile(candidate: string): Promise<boolean> {
+async function isExecutableFile(
+  candidate: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
   try {
     const stats = await stat(candidate);
     if (!stats.isFile()) return false;
+    if (platform === "win32") {
+      if (extname(candidate).length === 0) return false;
+      return (
+        (await resolveExecutable({
+          command: candidate,
+          env,
+          platform,
+        })) !== null
+      );
+    }
     await access(candidate, constants.X_OK);
     return true;
   } catch {
@@ -70,11 +142,12 @@ async function isExecutableFile(candidate: string): Promise<boolean> {
 
 async function resolveBbBinary(
   env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<string | null> {
   if (resolvedBbPath !== null) return resolvedBbPath;
-  for (const candidate of bbBinaryCandidates(env)) {
-    if (!(await isExecutableFile(candidate))) continue;
-    if (await commandWorks(candidate, ["--version"])) {
+  for (const candidate of bbBinaryCandidates(env, platform)) {
+    if (!(await isExecutableFile(candidate, platform, env))) continue;
+    if (await commandWorks(candidate, ["--version"], platform, env)) {
       resolvedBbPath = candidate;
       return candidate;
     }
@@ -85,13 +158,16 @@ async function resolveBbBinary(
 export function scriptPathEnv(
   bbPath: string | null,
   inheritedPath: string | undefined,
+  platform: NodeJS.Platform = process.platform,
 ): string {
+  const pathImpl = platform === "win32" ? path.win32 : path.posix;
+  const pathDelimiter = platform === "win32" ? ";" : ":";
   const basePath = inheritedPath ?? "";
-  if (bbPath === null || !isAbsolute(bbPath)) {
+  if (bbPath === null || !pathImpl.isAbsolute(bbPath)) {
     return basePath;
   }
-  const bbDir = dirname(bbPath);
-  return basePath.length > 0 ? `${bbDir}${delimiter}${basePath}` : bbDir;
+  const bbDir = pathImpl.dirname(bbPath);
+  return basePath.length > 0 ? `${bbDir}${pathDelimiter}${basePath}` : bbDir;
 }
 
 export function isWakeAgentSuppressed(output: string): boolean {
@@ -193,7 +269,7 @@ function signalProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
 
 function executeWithProcessGroup(args: {
   command: string;
-  scriptPath: string;
+  args: string[];
   cwd: string;
   timeoutMs: number;
   env: NodeJS.ProcessEnv;
@@ -206,7 +282,7 @@ function executeWithProcessGroup(args: {
     const stderrChunks: Buffer[] = [];
     let forceKill: NodeJS.Timeout | undefined;
     let timeout: NodeJS.Timeout;
-    const child = spawn(args.command, [args.scriptPath], {
+    const child = spawn(args.command, args.args, {
       cwd: args.cwd,
       detached: process.platform !== "win32",
       env: args.env,
@@ -280,20 +356,28 @@ export async function executeStoredScript(args: {
     automationId: args.automationId,
     scriptFile: args.scriptFile,
   });
+  const platform = args.platform ?? process.platform;
   const interpreter =
     args.interpreter ?? resolveDefaultInterpreter(args.scriptFile);
-  const command = resolveInterpreterCommand(interpreter);
-  const bbPath = await resolveBbBinary();
+  const { command, argsPrefix } = await resolveInterpreterCommand(
+    interpreter,
+    platform,
+    process.env,
+  );
+  const bbPath = await resolveBbBinary(process.env, platform);
   const warning = bbPath === null ? `${BB_NOT_INJECTED_WARNING}\n` : "";
-  const scriptEnv: NodeJS.ProcessEnv = assignPathEnv({
-    env: { ...process.env, ...(args.env ?? {}) },
-    path: scriptPathEnv(bbPath, process.env.PATH),
-    platform: args.platform ?? process.platform,
+  const scriptEnv = assignPathEnv({
+    env: {
+      ...process.env,
+      ...(args.env ?? {}),
+      BB_SERVER_URL: args.serverUrl,
+      BB_PROJECT_ID: args.projectId,
+      BB_AUTOMATION_ID: args.automationId,
+      BB_AUTOMATION_RUN_ID: args.runId,
+    },
+    path: scriptPathEnv(bbPath, process.env.PATH, platform),
+    platform,
   });
-  scriptEnv.BB_SERVER_URL = args.serverUrl;
-  scriptEnv.BB_PROJECT_ID = args.projectId;
-  scriptEnv.BB_AUTOMATION_ID = args.automationId;
-  scriptEnv.BB_AUTOMATION_RUN_ID = args.runId;
   if (bbPath !== null) {
     scriptEnv.BB_CLI = bbPath;
   }
@@ -301,7 +385,7 @@ export async function executeStoredScript(args: {
   await mkdir(cwd, { recursive: true });
   const result = await executeWithProcessGroup({
     command,
-    scriptPath,
+    args: [...argsPrefix, scriptPath],
     cwd,
     timeoutMs: Math.min(args.timeoutMs, AUTOMATION_SCRIPT_TIMEOUT_MAX_MS),
     env: scriptEnv,

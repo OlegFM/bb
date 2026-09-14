@@ -9,6 +9,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, extname, join, resolve, relative } from "node:path";
+import {
+  POWERSHELL_NONINTERACTIVE_ARGS,
+  resolveExecutable,
+  resolvePowerShellExecutable,
+} from "@bb/process-utils";
 import type { AutomationScriptInterpreter } from "./rpc-types.js";
 
 const SCRIPT_DIR_NAME = "scripts";
@@ -20,6 +25,7 @@ const INTERPRETER_BY_EXTENSION: Record<string, AutomationScriptInterpreter> = {
   ".js": "node",
   ".mjs": "node",
   ".py": "python3",
+  ".ps1": "powershell",
 };
 
 const INTERPRETER_COMMAND: Record<AutomationScriptInterpreter, string> = {
@@ -27,6 +33,7 @@ const INTERPRETER_COMMAND: Record<AutomationScriptInterpreter, string> = {
   sh: "sh",
   node: "node",
   python3: "python3",
+  powershell: "pwsh",
 };
 
 export function scriptsRoot(dataDir: string): string {
@@ -51,10 +58,63 @@ export function resolveDefaultInterpreter(
   return INTERPRETER_BY_EXTENSION[extname(scriptFile).toLowerCase()] ?? "bash";
 }
 
-export function resolveInterpreterCommand(
+export interface InterpreterCommand {
+  command: string;
+  argsPrefix: string[];
+}
+
+const POWERSHELL_SCRIPT_ARGS = [...POWERSHELL_NONINTERACTIVE_ARGS, "-File"];
+
+async function resolveWindowsInterpreterCommand(
   interpreter: AutomationScriptInterpreter,
-): string {
-  return INTERPRETER_COMMAND[interpreter];
+  env: NodeJS.ProcessEnv,
+): Promise<InterpreterCommand> {
+  if (interpreter === "powershell") {
+    return {
+      command: resolvePowerShellExecutable(env),
+      argsPrefix: [...POWERSHELL_SCRIPT_ARGS],
+    };
+  }
+  if (interpreter === "node") {
+    return { command: process.execPath, argsPrefix: [] };
+  }
+  const names =
+    interpreter === "python3" ? ["python3", "python"] : [interpreter];
+  for (const name of names) {
+    const resolved = await resolveExecutable({
+      command: name,
+      env,
+      platform: "win32",
+    });
+    if (resolved !== null) {
+      return { command: resolved, argsPrefix: [] };
+    }
+  }
+  if (interpreter === "python3") {
+    throw new Error(
+      "Automation interpreter python3 was not found on this Windows host. Install Python and put python.exe on Path, or use the node or powershell interpreter.",
+    );
+  }
+  throw new Error(
+    `Automation interpreter ${interpreter} was not found on this Windows host. Install Git for Windows so ${interpreter}.exe is on Path, or use the powershell or node interpreter.`,
+  );
+}
+
+export async function resolveInterpreterCommand(
+  interpreter: AutomationScriptInterpreter,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<InterpreterCommand> {
+  if (platform === "win32") {
+    return resolveWindowsInterpreterCommand(interpreter, env);
+  }
+  if (interpreter === "powershell") {
+    return {
+      command: INTERPRETER_COMMAND[interpreter],
+      argsPrefix: [...POWERSHELL_SCRIPT_ARGS],
+    };
+  }
+  return { command: INTERPRETER_COMMAND[interpreter], argsPrefix: [] };
 }
 
 async function pathExists(path: string): Promise<boolean> {

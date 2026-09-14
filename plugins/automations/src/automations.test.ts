@@ -46,7 +46,12 @@ import { reconcileRunningAutomationRuns } from "./run.js";
 import { sweepDueAutomations } from "./sweep.js";
 import { createAutomationService } from "./service.js";
 import { registerAutomationCli } from "./cli.js";
-import { automationScriptDir } from "./script-files.js";
+import { automationScriptInterpreterSchema } from "./rpc-types.js";
+import {
+  automationScriptDir,
+  resolveDefaultInterpreter,
+  resolveInterpreterCommand,
+} from "./script-files.js";
 
 function createTestDb(): Db {
   const db = new Database(":memory:");
@@ -1573,52 +1578,137 @@ describe("automation CLI --script-file", () => {
 describe("bb CLI injection for script runs", () => {
   it("prefers the env pointers over PATH and macOS install locations", () => {
     expect(
-      bbBinaryCandidates({
-        BB_CLI: "/daemon/bundle/bb",
-        BB_CLI_DIR: "/other/dir",
-      })[0],
+      bbBinaryCandidates(
+        {
+          BB_CLI: "/daemon/bundle/bb",
+          BB_CLI_DIR: "/other/dir",
+        },
+        "darwin",
+      )[0],
     ).toBe("/daemon/bundle/bb");
-    expect(bbBinaryCandidates({ BB_CLI_DIR: "/daemon/bundle" })[0]).toBe(
-      "/daemon/bundle/bb",
-    );
+    expect(
+      bbBinaryCandidates({ BB_CLI_DIR: "/daemon/bundle" }, "darwin")[0],
+    ).toBe("/daemon/bundle/bb");
   });
 
   it("expands PATH itself so every candidate is absolute", () => {
-    expect(bbBinaryCandidates({ PATH: "/usr/bin:/opt/tools" })).toEqual([
+    expect(
+      bbBinaryCandidates({ PATH: "/usr/bin:/opt/tools" }, "darwin"),
+    ).toEqual([
       "/usr/bin/bb",
       "/opt/tools/bb",
       "/opt/homebrew/bin/bb",
       "/usr/local/bin/bb",
     ]);
     expect(
-      bbBinaryCandidates({ PATH: "/usr/bin" }).every((c) => c.startsWith("/")),
+      bbBinaryCandidates({ PATH: "/usr/bin" }, "darwin").every((c) =>
+        c.startsWith("/"),
+      ),
     ).toBe(true);
   });
 
   it("drops entries that would resolve against the wrong directory", () => {
-    expect(bbBinaryCandidates({ PATH: "/usr/bin::/bin" })).toEqual([
+    expect(bbBinaryCandidates({ PATH: "/usr/bin::/bin" }, "darwin")).toEqual([
       "/usr/bin/bb",
       "/bin/bb",
       "/opt/homebrew/bin/bb",
       "/usr/local/bin/bb",
     ]);
     expect(
-      bbBinaryCandidates({ BB_CLI: "  ", BB_CLI_DIR: "", PATH: "" }),
+      bbBinaryCandidates({ BB_CLI: "  ", BB_CLI_DIR: "", PATH: "" }, "darwin"),
     ).toEqual(["/opt/homebrew/bin/bb", "/usr/local/bin/bb"]);
     expect(
-      bbBinaryCandidates({ BB_CLI: "./bb", BB_CLI_DIR: "rel/dir", PATH: "" }),
+      bbBinaryCandidates(
+        { BB_CLI: "./bb", BB_CLI_DIR: "rel/dir", PATH: "" },
+        "darwin",
+      ),
     ).toEqual(["/opt/homebrew/bin/bb", "/usr/local/bin/bb"]);
   });
 
   it("prepends bb's directory to PATH only when it is absolute", () => {
-    expect(scriptPathEnv("/daemon/bundle/bb", "/usr/bin:/bin")).toBe(
+    expect(scriptPathEnv("/daemon/bundle/bb", "/usr/bin:/bin", "darwin")).toBe(
       "/daemon/bundle:/usr/bin:/bin",
     );
-    expect(scriptPathEnv("bb", "/usr/bin:/bin")).toBe("/usr/bin:/bin");
-    expect(scriptPathEnv(null, "/usr/bin:/bin")).toBe("/usr/bin:/bin");
-    expect(scriptPathEnv("/daemon/bundle/bb", undefined)).toBe(
+    expect(scriptPathEnv("bb", "/usr/bin:/bin", "darwin")).toBe(
+      "/usr/bin:/bin",
+    );
+    expect(scriptPathEnv(null, "/usr/bin:/bin", "darwin")).toBe(
+      "/usr/bin:/bin",
+    );
+    expect(scriptPathEnv("/daemon/bundle/bb", undefined, "darwin")).toBe(
       "/daemon/bundle",
     );
+  });
+});
+
+describe("Windows automation interpreters", () => {
+  it("accepts powershell in the interpreter schema", () => {
+    expect(
+      automationScriptInterpreterSchema.safeParse("powershell").success,
+    ).toBe(true);
+    expect(automationScriptInterpreterSchema.safeParse("cmd").success).toBe(
+      false,
+    );
+  });
+
+  it("maps .ps1 to the powershell interpreter and keeps the POSIX map", () => {
+    expect(resolveDefaultInterpreter("watch.ps1")).toBe("powershell");
+    expect(resolveDefaultInterpreter("watch.PS1")).toBe("powershell");
+    expect(resolveDefaultInterpreter("watch.sh")).toBe("bash");
+    expect(resolveDefaultInterpreter("watch.py")).toBe("python3");
+    expect(resolveDefaultInterpreter("watch.unknown")).toBe("bash");
+  });
+
+  it("keeps the POSIX interpreter argv at command plus script", async () => {
+    for (const interpreter of ["bash", "sh", "node", "python3"] as const) {
+      await expect(
+        resolveInterpreterCommand(interpreter, "darwin"),
+      ).resolves.toEqual({ command: interpreter, argsPrefix: [] });
+    }
+    await expect(
+      resolveInterpreterCommand("powershell", "darwin"),
+    ).resolves.toEqual({
+      command: "pwsh",
+      argsPrefix: [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+      ],
+    });
+  });
+
+  it("resolves node to this runtime on win32", async () => {
+    await expect(
+      resolveInterpreterCommand("node", "win32", {}),
+    ).resolves.toEqual({ command: process.execPath, argsPrefix: [] });
+  });
+
+  it("names Git for Windows when bash is absent on win32", async () => {
+    await expect(
+      resolveInterpreterCommand("bash", "win32", { Path: "", PATHEXT: ".EXE" }),
+    ).rejects.toThrow(/Git for Windows/u);
+  });
+
+  it("adds bb.cmd and drops the Homebrew fallbacks on win32", () => {
+    expect(
+      bbBinaryCandidates({ BB_CLI_DIR: "C:\\tools", Path: "C:\\bin" }, "win32"),
+    ).toEqual([
+      "C:\\tools\\bb.cmd",
+      "C:\\tools\\bb",
+      "C:\\bin\\bb.cmd",
+      "C:\\bin\\bb",
+    ]);
+    expect(
+      bbBinaryCandidates({ PATH: "C:\\bin" }, "win32").some((candidate) =>
+        candidate.startsWith("/opt/homebrew"),
+      ),
+    ).toBe(false);
+    expect(
+      bbBinaryCandidates({ BB_CLI: "C:\\tools\\bb.cmd" }, "win32")[0],
+    ).toBe("C:\\tools\\bb.cmd");
   });
 });
 
@@ -1856,4 +1946,37 @@ describe("legacy import", () => {
       }
     }
   });
+});
+
+describe("PowerShell automation scripts", () => {
+  it.runIf(process.platform === "win32")(
+    "runs a stored .ps1 script through PowerShell",
+    async () => {
+      const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-ps1-"));
+      const scriptDir = automationScriptDir(pluginDataDir, "auto_ps1");
+      await mkdir(scriptDir, { recursive: true });
+      await writeFile(
+        join(scriptDir, "script.ps1"),
+        "Write-Output 'hello'\nexit 0\n",
+      );
+
+      try {
+        const result = await executeStoredScript({
+          pluginDataDir,
+          automationId: "auto_ps1",
+          runId: "run_ps1",
+          projectId: "proj_test",
+          scriptFile: "script.ps1",
+          timeoutMs: 60_000,
+          serverUrl: "http://127.0.0.1:38886",
+        });
+
+        expect(result.timedOut).toBe(false);
+        expect(result.exitCode).toBe(0);
+        expect(result.output).toContain("hello");
+      } finally {
+        await rm(pluginDataDir, { recursive: true, force: true });
+      }
+    },
+  );
 });

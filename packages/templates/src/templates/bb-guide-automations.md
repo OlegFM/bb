@@ -34,7 +34,7 @@ Agent execution:
 Script execution:
 
   --script <inline> | --script-file <path> [--host <name-or-id>]
-  [--interpreter <bash|sh|node|python3>]
+  [--interpreter <bash|sh|node|python3|powershell>]
   [--timeout <milliseconds>] [--env-json '{"KEY":"value"}']
 
 `--script-file` reads the file relative to your current directory from the

@@ -216,7 +216,7 @@ function parseScriptInterpreter(
   const parsed = automationScriptInterpreterSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new Error(
-    "Invalid --interpreter. Expected bash, sh, node, or python3.",
+    "Invalid --interpreter. Expected bash, sh, node, python3, or powershell.",
   );
 }
 
@@ -226,6 +226,7 @@ const INTERPRETER_BY_EXTENSION: Record<string, AutomationScriptInterpreter> = {
   ".js": "node",
   ".mjs": "node",
   ".py": "python3",
+  ".ps1": "powershell",
 };
 
 function inferInterpreterFromPath(

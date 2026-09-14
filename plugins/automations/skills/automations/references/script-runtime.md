@@ -33,8 +33,10 @@ BB_CLI                 The absolute BB CLI path, when available
 
 The plugin does not inject `BB_ENVIRONMENT_ID` or `BB_HOST_DAEMON_PORT`.
 
-The plugin resolves `bb` from `BB_CLI`, `BB_CLI_DIR`, `PATH`, and common macOS
-install paths. It adds the selected directory to `PATH`.
+The plugin resolves `bb` from `BB_CLI`, `BB_CLI_DIR`, and `PATH`, plus the
+common macOS install paths on macOS and Linux. On Windows it looks for `bb.cmd`
+before `bb` in the same places and skips the macOS paths. It adds the selected
+directory to `PATH`.
 
 If the plugin cannot find `bb`, the script still starts. Its output starts with
 a `[bb] warning:` line. A later `bb` call then fails normally.
