@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { experimental_createHostEntryHarness } from "@get-bb/plugin-sdk/testing/host";
+import { queryWindowsProcess, spawnPortableProcess } from "@bb/process-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorktreeHostEntry } from "./host.js";
 
@@ -320,49 +321,105 @@ describe("worktree host entry", () => {
     await harness.experimental_dispose();
   });
 
-  it("leaves teardown to core, kills workspace processes, and prunes the path-key parent", async () => {
-    const { root, sourcePath, dataDir } = await createSourceRepository();
-    await writeFile(
-      join(sourcePath, ".bb-env-teardown.sh"),
-      `#!/usr/bin/env bash\necho teardown-ran > ${join(root, "teardown.marker")}\necho tearing-down\n`,
-    );
-    await git(sourcePath, "add", ".");
-    await git(sourcePath, "commit", "-m", "add teardown script");
-    const harness = createHarness(dataDir);
-    const created = await harness.experimental_call(
-      "create",
-      createInput({
-        operationId: "create",
-        sourcePath,
+  it.skipIf(process.platform === "win32")(
+    "leaves teardown to core, kills workspace processes, and prunes the path-key parent",
+    async () => {
+      const { root, sourcePath, dataDir } = await createSourceRepository();
+      await writeFile(
+        join(sourcePath, ".bb-env-teardown.sh"),
+        `#!/usr/bin/env bash\necho teardown-ran > ${join(root, "teardown.marker")}\necho tearing-down\n`,
+      );
+      await git(sourcePath, "add", ".");
+      await git(sourcePath, "commit", "-m", "add teardown script");
+      const harness = createHarness(dataDir);
+      const created = await harness.experimental_call(
+        "create",
+        createInput({
+          operationId: "create",
+          sourcePath,
+          pathKey: "thr_6",
+          branchName: "bb/teardown-thr_6",
+        }),
+      );
+      if (created.status !== "created") throw new Error(created.message);
+      const lingering = spawn(
+        process.execPath,
+        ["-e", "setTimeout(() => {}, 300000)"],
+        {
+          cwd: created.path,
+          detached: true,
+          stdio: "ignore",
+        },
+      );
+      lingering.unref();
+      const removed = await harness.experimental_call("remove", {
+        operationId: "remove",
         pathKey: "thr_6",
-        branchName: "bb/teardown-thr_6",
-      }),
-    );
-    if (created.status !== "created") throw new Error(created.message);
-    const lingering = spawn(
-      process.execPath,
-      ["-e", "setTimeout(() => {}, 300000)"],
-      {
+        path: created.path,
+        timeoutMs: 30_000,
+      });
+      const lingeringAlive = isPidAlive(lingering.pid ?? 0);
+      lingering.kill("SIGKILL");
+      expect(removed).toEqual({ status: "removed" });
+      expect(lingeringAlive).toBe(false);
+      expect(progressText(harness)).not.toContain("tearing-down");
+      expect(existsSync(join(root, "teardown.marker"))).toBe(false);
+      expect(existsSync(created.path)).toBe(false);
+      expect(await readdir(join(dataDir, "worktrees"))).toEqual([]);
+      await harness.experimental_dispose();
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "leaves teardown to core, kills workspace processes, and prunes the path-key parent on Windows",
+    async () => {
+      const { root, sourcePath, dataDir } = await createSourceRepository();
+      await writeFile(
+        join(sourcePath, ".bb-env-teardown.sh"),
+        `#!/usr/bin/env bash\necho teardown-ran > ${join(root, "teardown.marker")}\necho tearing-down\n`,
+      );
+      await git(sourcePath, "add", ".");
+      await git(sourcePath, "commit", "-m", "add teardown script");
+      const harness = createHarness(dataDir);
+      const created = await harness.experimental_call(
+        "create",
+        createInput({
+          operationId: "create",
+          sourcePath,
+          pathKey: "thr_6",
+          branchName: "bb/teardown-thr_6",
+        }),
+      );
+      if (created.status !== "created") throw new Error(created.message);
+      const lingering = spawnPortableProcess({
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => {}, 300000)"],
         cwd: created.path,
         detached: true,
         stdio: "ignore",
-      },
-    );
-    lingering.unref();
-    const removed = await harness.experimental_call("remove", {
-      operationId: "remove",
-      pathKey: "thr_6",
-      path: created.path,
-      timeoutMs: 30_000,
-    });
-    const lingeringAlive = isPidAlive(lingering.pid ?? 0);
-    lingering.kill("SIGKILL");
-    expect(removed).toEqual({ status: "removed" });
-    expect(lingeringAlive).toBe(false);
-    expect(progressText(harness)).not.toContain("tearing-down");
-    expect(existsSync(join(root, "teardown.marker"))).toBe(false);
-    expect(existsSync(created.path)).toBe(false);
-    expect(await readdir(join(dataDir, "worktrees"))).toEqual([]);
-    await harness.experimental_dispose();
-  });
+        platform: "win32",
+      });
+      lingering.unref();
+      const removed = await harness.experimental_call("remove", {
+        operationId: "remove",
+        pathKey: "thr_6",
+        path: created.path,
+        timeoutMs: 30_000,
+      });
+      const lingeringPid = lingering.pid ?? 0;
+      const deadline = Date.now() + 5_000;
+      let lingeringProcess = await queryWindowsProcess(lingeringPid);
+      while (lingeringProcess !== null && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        lingeringProcess = await queryWindowsProcess(lingeringPid);
+      }
+      expect(removed).toEqual({ status: "removed" });
+      expect(lingeringProcess).toBeNull();
+      expect(progressText(harness)).not.toContain("tearing-down");
+      expect(existsSync(join(root, "teardown.marker"))).toBe(false);
+      expect(existsSync(created.path)).toBe(false);
+      expect(await readdir(join(dataDir, "worktrees"))).toEqual([]);
+      await harness.experimental_dispose();
+    },
+  );
 });

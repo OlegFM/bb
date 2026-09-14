@@ -58,6 +58,51 @@ describe("claude skill plugins", () => {
     ).toContain("name: demo");
   });
 
+  it("links the skills directory as a junction on Windows", () => {
+    const pluginsRoot = createClaudeSkillPluginsRoot(baseDir);
+    const skillsPath = stageSkills("win");
+
+    const pluginPath = ensureClaudeSkillPlugin({
+      pluginsRoot,
+      root: { id: "win", path: skillsPath },
+      platform: "win32",
+    });
+
+    const skillsLink = join(pluginPath, "skills");
+    expect(lstatSync(skillsLink).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(skillsLink)).toBe(skillsPath);
+    expect(
+      readFileSync(join(skillsLink, "demo", "SKILL.md"), "utf8"),
+    ).toContain("name: demo");
+
+    expect(
+      ensureClaudeSkillPlugin({
+        pluginsRoot,
+        root: { id: "win", path: skillsPath },
+        platform: "win32",
+      }),
+    ).toBe(pluginPath);
+    expect(readlinkSync(skillsLink)).toBe(skillsPath);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "links the skills directory as a directory symlink off Windows",
+    () => {
+      const pluginsRoot = createClaudeSkillPluginsRoot(baseDir);
+      const skillsPath = stageSkills("posix");
+
+      const pluginPath = ensureClaudeSkillPlugin({
+        pluginsRoot,
+        root: { id: "posix", path: skillsPath },
+        platform: "linux",
+      });
+
+      const skillsLink = join(pluginPath, "skills");
+      expect(lstatSync(skillsLink).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(skillsLink)).toBe(skillsPath);
+    },
+  );
+
   it("is idempotent for a root and re-points the link when the root moves", () => {
     const pluginsRoot = createClaudeSkillPluginsRoot(baseDir);
     const first = stageSkills("a");
