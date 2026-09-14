@@ -229,6 +229,30 @@ describe("secret files on win32 (injected runner)", () => {
     );
   });
 
+  it("refuses an unsupported secret file name before creating or spawning anything", async () => {
+    const dataDir = await makeTempDir();
+    const acl = createFakeWindowsAcl();
+
+    await expect(
+      readOrCreateSecretFile({
+        bytes: 32,
+        dataDir,
+        encoding: "base64",
+        fileName: "se cret",
+        platform: "win32",
+        deps: { runCommand: acl.runCommand },
+      }),
+    ).rejects.toThrow(/must use ASCII/u);
+    await expect(
+      writeSecretFile(path.join(dataDir, "to ken"), "xoxb-123", {
+        platform: "win32",
+        deps: { runCommand: acl.runCommand },
+      }),
+    ).rejects.toThrow(/must use ASCII/u);
+    expect(acl.calls).toEqual([]);
+    expect(await readdir(dataDir)).toEqual([]);
+  });
+
   it("never runs icacls on the POSIX arm", async () => {
     const dir = await makeTempDir();
     const secretPath = path.join(dir, "token");

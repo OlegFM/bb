@@ -31,58 +31,102 @@ export interface WindowsFileAce {
   rights: string;
 }
 
+export interface WindowsAclToolRun {
+  output: Promise<WindowsAclCommandResult>;
+  kill: () => void;
+}
+
+export type WindowsAclToolSpawner = (
+  command: string,
+  args: string[],
+  cwd?: string,
+) => WindowsAclToolRun;
+
+export interface WindowsAclToolRunnerOptions {
+  spawn?: WindowsAclToolSpawner;
+  timeoutMs?: number;
+}
+
 export const SECRET_FILE_ACL_REMEDY =
   "Store the bb data directory on an NTFS volume where icacls can set permissions";
 
 const WINDOWS_SID_PATTERN = /^S-\d+(?:-\d+)+$/u;
 const WINDOWS_USER_CSV_ROW_PATTERN = /^"([^"]*)","([^"]*)"$/u;
-const ASCII_FILE_NAME_PATTERN = /^[ -~]+$/u;
+const SECRET_FILE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/u;
 const WINDOWS_ACL_COMMAND_TIMEOUT_MS = 30_000;
 
-function runWindowsAclTool(
+function spawnWindowsAclTool(
   command: string,
   args: string[],
   cwd?: string,
-): Promise<WindowsAclCommandResult> {
-  return new Promise((resolveRun, rejectRun) => {
-    const child = spawnPortableOutputProcess({
-      command,
-      args,
-      platform: "win32",
-      ...(cwd !== undefined ? { cwd } : {}),
-    });
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-    let settled = false;
-    const timer = setTimeout(() => {
-      settled = true;
-      child.kill("SIGKILL");
-      rejectRun(
-        new Error(
-          `Timed out after ${String(WINDOWS_ACL_COMMAND_TIMEOUT_MS)}ms waiting for "${command}". ${SECRET_FILE_ACL_REMEDY}.`,
-        ),
-      );
-    }, WINDOWS_ACL_COMMAND_TIMEOUT_MS);
-    child.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
-    child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
-    child.once("error", (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      rejectRun(error);
-    });
-    child.once("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolveRun({
-        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
-        stderr: Buffer.concat(stderrChunks).toString("utf8"),
-        exitCode: code,
-      });
-    });
+): WindowsAclToolRun {
+  const child = spawnPortableOutputProcess({
+    command,
+    args,
+    platform: "win32",
+    ...(cwd !== undefined ? { cwd } : {}),
   });
+  const output = new Promise<WindowsAclCommandResult>(
+    (resolveRun, rejectRun) => {
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      child.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+      child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+      child.once("error", rejectRun);
+      child.once("close", (code) => {
+        resolveRun({
+          stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+          stderr: Buffer.concat(stderrChunks).toString("utf8"),
+          exitCode: code,
+        });
+      });
+    },
+  );
+  return {
+    output,
+    kill: () => {
+      child.kill("SIGKILL");
+    },
+  };
 }
+
+export function createWindowsAclToolRunner(
+  options: WindowsAclToolRunnerOptions = {},
+): WindowsAclCommandRunner {
+  const spawn = options.spawn ?? spawnWindowsAclTool;
+  const timeoutMs = options.timeoutMs ?? WINDOWS_ACL_COMMAND_TIMEOUT_MS;
+  return (command, args, cwd) =>
+    new Promise<WindowsAclCommandResult>((resolveRun, rejectRun) => {
+      const run = spawn(command, args, cwd);
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        run.kill();
+        rejectRun(
+          new Error(
+            `Timed out after ${String(timeoutMs)}ms waiting for "${command}". ${SECRET_FILE_ACL_REMEDY}.`,
+          ),
+        );
+      }, timeoutMs);
+      run.output.then(
+        (result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolveRun(result);
+        },
+        (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          rejectRun(error);
+        },
+      );
+    });
+}
+
+const defaultWindowsAclToolRunner = createWindowsAclToolRunner();
 
 function describeCommandFailure(result: WindowsAclCommandResult): string {
   const detail = result.stderr.trim();
@@ -90,14 +134,18 @@ function describeCommandFailure(result: WindowsAclCommandResult): string {
   return detail.length > 0 ? `${exit}: ${detail}` : exit;
 }
 
-function secretFileName(path: string): string {
+export function assertSecretFileNameIsSupported(path: string): void {
   const name = win32Path.basename(path);
-  if (!ASCII_FILE_NAME_PATTERN.test(name)) {
+  if (!SECRET_FILE_NAME_PATTERN.test(name) || name === "." || name === "..") {
     throw new Error(
-      `Could not secure the secret file "${path}": the secret file name "${name}" must use ASCII characters only.`,
+      `Could not secure the secret file "${path}": the secret file name "${name}" must use ASCII letters, digits, ".", "-" or "_", and cannot be "." or "..".`,
     );
   }
-  return name;
+}
+
+function secretFileName(path: string): string {
+  assertSecretFileNameIsSupported(path);
+  return win32Path.basename(path);
 }
 
 export function parseWindowsUserCsv(stdout: string): WindowsSecretUser {
@@ -121,7 +169,7 @@ export async function resolveCurrentWindowsUser(
   deps: WindowsAclDeps = {},
 ): Promise<WindowsSecretUser> {
   const load = async (): Promise<WindowsSecretUser> => {
-    const run = deps.runCommand ?? runWindowsAclTool;
+    const run = deps.runCommand ?? defaultWindowsAclToolRunner;
     const command = resolveWindowsSystemToolPath("whoami.exe", deps.env);
     const result = await run(command, ["/user", "/fo", "csv"]);
     if (result.exitCode !== 0) {
@@ -151,7 +199,7 @@ export async function tightenSecretFileAcl(
   deps: WindowsAclDeps = {},
 ): Promise<void> {
   const name = secretFileName(path);
-  const run = deps.runCommand ?? runWindowsAclTool;
+  const run = deps.runCommand ?? defaultWindowsAclToolRunner;
   const command = resolveWindowsSystemToolPath("icacls.exe", deps.env);
   const result = await run(
     command,
@@ -209,7 +257,7 @@ export async function readSecretFileAcl(
   deps: WindowsAclDeps = {},
 ): Promise<WindowsFileAce[]> {
   const name = secretFileName(path);
-  const run = deps.runCommand ?? runWindowsAclTool;
+  const run = deps.runCommand ?? defaultWindowsAclToolRunner;
   const command = resolveWindowsSystemToolPath("icacls.exe", deps.env);
   const result = await run(command, [name], win32Path.dirname(path));
   if (result.exitCode !== 0) {
@@ -258,6 +306,7 @@ export async function ensureSecretFileIsPrivate(
   path: string,
   deps: WindowsAclDeps = {},
 ): Promise<void> {
+  assertSecretFileNameIsSupported(path);
   const user = await resolveCurrentWindowsUser(deps);
   await tightenSecretFileAcl(path, user, deps);
   assertSecretFileAclIsPrivate(path, await readSecretFileAcl(path, deps), user);

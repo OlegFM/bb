@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assertSecretFileAclIsPrivate,
+  assertSecretFileNameIsSupported,
+  createWindowsAclToolRunner,
   parseSecretFileAcl,
   parseWindowsUserCsv,
   readSecretFileAcl,
@@ -270,5 +272,115 @@ describe("windows acl commands", () => {
       /\u0441\u0435\u043a\u0440\u0435\u0442[\s\S]*must use ASCII/u,
     );
     expect(calls).toEqual([]);
+  });
+});
+
+describe("assertSecretFileNameIsSupported", () => {
+  it("accepts the names bb actually uses", () => {
+    for (const name of [
+      "secret",
+      "auth-secret",
+      "http-token",
+      "apiKey",
+      "secret.a1b2c3d4e5f6.tmp",
+      "secret.a1b2c3d4e5f6.empty",
+    ]) {
+      expect(() =>
+        assertSecretFileNameIsSupported(`${SECRET_DIR}\\${name}`),
+      ).not.toThrow();
+    }
+  });
+
+  it("refuses traversal, wildcards, separators and non-ASCII names", () => {
+    for (const name of [
+      "..",
+      ".",
+      "a b",
+      "*",
+      "?",
+      "se:cret",
+      "\u0441\u0435\u043a\u0440\u0435\u0442",
+    ]) {
+      expect(() =>
+        assertSecretFileNameIsSupported(`${SECRET_DIR}\\${name}`),
+      ).toThrow(/must use ASCII/u);
+    }
+  });
+});
+
+describe("windows acl tool runner", () => {
+  it("kills the tool and fails closed when it never exits", async () => {
+    const spawned: Array<{
+      command: string;
+      args: string[];
+      cwd: string | undefined;
+    }> = [];
+    const kills: string[] = [];
+    const run = createWindowsAclToolRunner({
+      timeoutMs: 5,
+      spawn: (command, args, cwd) => {
+        spawned.push({ command, args, cwd });
+        return {
+          output: new Promise<WindowsAclCommandResult>(() => {}),
+          kill: () => {
+            kills.push("SIGKILL");
+          },
+        };
+      },
+    });
+
+    await expect(
+      run("C:\\Windows\\System32\\icacls.exe", [SECRET_NAME], SECRET_DIR),
+    ).rejects.toThrow(
+      /Timed out after 5ms[\s\S]*icacls\.exe[\s\S]*NTFS volume/u,
+    );
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(spawned).toEqual([
+      {
+        command: "C:\\Windows\\System32\\icacls.exe",
+        args: [SECRET_NAME],
+        cwd: SECRET_DIR,
+      },
+    ]);
+  });
+
+  it("returns the tool output and never kills a tool that exits", async () => {
+    const kills: string[] = [];
+    const run = createWindowsAclToolRunner({
+      timeoutMs: 5_000,
+      spawn: () => ({
+        output: Promise.resolve({
+          stdout: `${SECRET_NAME} OMEN\\olege:(F)`,
+          stderr: "",
+          exitCode: 0,
+        }),
+        kill: () => {
+          kills.push("SIGKILL");
+        },
+      }),
+    });
+
+    await expect(
+      run("C:\\Windows\\System32\\icacls.exe", [SECRET_NAME], SECRET_DIR),
+    ).resolves.toEqual({
+      stdout: `${SECRET_NAME} OMEN\\olege:(F)`,
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(kills).toEqual([]);
+  });
+
+  it("propagates a spawn failure without a timeout message", async () => {
+    const run = createWindowsAclToolRunner({
+      timeoutMs: 5_000,
+      spawn: () => ({
+        output: Promise.reject(new Error("spawn ENOENT")),
+        kill: () => {},
+      }),
+    });
+
+    await expect(run("icacls.exe", [SECRET_NAME])).rejects.toThrow(
+      "spawn ENOENT",
+    );
   });
 });
