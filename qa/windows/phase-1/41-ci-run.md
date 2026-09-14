@@ -220,3 +220,111 @@ EXIT_VL=0
 
 Cancelling the overall run afterwards does not change the `Windows x64` job's recorded `success`.
 
+
+---
+
+# Gate refresh 3 at `c3e4a8590` (2026-09-14)
+
+The sections above measured the CI leg at `203acb273` and at `e976524b4`. This one measures it at the head
+after the POSIX-parity round. The push carried four commits on top of the previously pushed `81bed7a61`:
+`783b01ac1`, `59ee6327f`, `c3e4a8590`, and (in the later evidence push) this round's evidence commit.
+
+## Push
+
+```powershell
+git -C C:\Users\olege\Work\bb rev-parse HEAD; git -C C:\Users\olege\Work\bb push origin windows-native/phase-1 2>&1; "EXIT=$LASTEXITCODE"
+```
+```
+c3e4a8590ccb28c4f2110fc0137a2cdb29d0104a
+To github.com:OlegFM/bb.git
+   81bed7a61..c3e4a8590  windows-native/phase-1 -> windows-native/phase-1
+EXIT=0
+```
+
+```powershell
+gh run list --repo OlegFM/bb --branch windows-native/phase-1 --limit 6
+```
+```
+queued		Degrade only on host RPC failures when canonicalizing paths	Version Lockstep	windows-native/phase-1	push	34817953533	45s	2026-09-14T07:27:35Z
+queued		Degrade only on host RPC failures when canonicalizing paths	CI	windows-native/phase-1	push	34817953559	45s	2026-09-14T07:27:35Z
+completed	cancelled	Keep separator-only, relative and backslash inputs behaving as before…	Version Lockstep	windows-native/phase-1	push	34812886219	5m49s	2026-09-14T06:18:14Z
+completed	cancelled	Keep separator-only, relative and backslash inputs behaving as before…	CI	windows-native/phase-1	push	34812886132	5m55s	2026-09-14T06:18:14Z
+completed	cancelled	Record the POSIX re-check after the final fix round	Version Lockstep	windows-native/phase-1	push	34760418490	26s	2026-09-13T13:38:42Z
+completed	cancelled	Record the POSIX re-check after the final fix round	CI	windows-native/phase-1	push	34760418527	35s	2026-09-13T13:38:42Z
+```
+
+As in every earlier round, only the `Windows x64` job actually runs on this fork — the Blacksmith-hosted
+jobs stay `queued` forever because the fork has no Blacksmith runners.
+
+## Result
+
+```bash
+gh run view 34817953559 -R OlegFM/bb --json url,headSha,displayTitle,event,createdAt,jobs --jq '{url,headSha,displayTitle,event,createdAt, windows: (.jobs[]|select(.name|test("Windows"))|{name,status,conclusion,startedAt,completedAt,url,steps:[.steps[]|{name,conclusion}]})}' 2>&1; echo "EXIT=$?"
+```
+```
+{"createdAt":"2026-09-14T07:27:35Z","displayTitle":"Degrade only on host RPC failures when canonicalizing paths","event":"push","headSha":"c3e4a8590ccb28c4f2110fc0137a2cdb29d0104a","url":"https://github.com/OlegFM/bb/actions/runs/34817953559","windows":{"completedAt":"2026-09-14T07:35:27Z","conclusion":"success","name":"Windows x64 (windows-2025, Node 22.x)","startedAt":"2026-09-14T07:27:37Z","status":"completed","steps":[{"conclusion":"success","name":"Set up job"},{"conclusion":"success","name":"Checkout repository"},{"conclusion":"success","name":"Set up pnpm"},{"conclusion":"success","name":"Set up Node.js"},{"conclusion":"success","name":"Install dependencies"},{"conclusion":"success","name":"Load native add-ons"},{"conclusion":"success","name":"Typecheck and build"},{"conclusion":"success","name":"Test (Windows baseline)"},{"conclusion":"success","name":"Upload Windows test run summaries"},{"conclusion":"success","name":"Post Set up Node.js"},{"conclusion":"success","name":"Post Set up pnpm"},{"conclusion":"success","name":"Post Checkout repository"},{"conclusion":"success","name":"Complete job"}],"url":"https://github.com/OlegFM/bb/actions/runs/34817953559/job/103892680345"}}
+EXIT=0
+```
+
+- Run URL: <https://github.com/OlegFM/bb/actions/runs/34817953559>
+- Job URL: <https://github.com/OlegFM/bb/actions/runs/34817953559/job/103892680345>
+- Measured SHA: `c3e4a8590ccb28c4f2110fc0137a2cdb29d0104a`
+- Job: `Windows x64 (windows-2025, Node 22.x)` — **conclusion: `success`**, 07:27:37Z–07:35:27Z (**7m50s**)
+- Every step `success`, including `Typecheck and build` and `Test (Windows baseline)`.
+
+`Test (Windows baseline)` carries `continue-on-error: true` in `ci.yml`, so its own `success` is weak
+evidence on its own; the uploaded artifact below is the real signal. `Typecheck and build` does **not**
+carry that flag, so its `success` means the whole workspace built and typechecked on a clean
+`windows-2025` runner at this head.
+
+## Artifact
+
+```powershell
+gh api repos/OlegFM/bb/actions/runs/34817953559/artifacts --jq '.artifacts[] | "\(.name)\t\(.size_in_bytes)\t\(.id)"'
+```
+```
+windows-x64-test-results	34352	10337640355
+```
+
+Downloaded (`EXIT=0`) and summarised:
+
+```bash
+node qa/windows/scripts/summarize-turbo-run.mjs <scratch>/ci-artifact-r3; echo "EXIT=$?"
+```
+```
+| package | test task |
+|---|---|
+| @bb/desktop | fail (1) |
+| @bb/domain | pass |
+| @bb/host-daemon | fail (1) |
+| @bb/process-utils | fail (1) |
+| @bb/scripts | fail (1) |
+
+Source: <scratch>\ci-artifact-r3\3JJFZjXx12rWZ0Q8tKT9Xhy8oL3.json
+EXIT=0
+```
+
+**Identical, package for package, to the Phase 0 CI baseline, to this branch's run at `203acb273`, and to
+refresh 1 at `e976524b4`.** No package changed state in the CI leg across the whole POSIX-parity round.
+`@bb/domain` — the package that owns the shared path helpers the round rewrote — still passes on the CI
+runner.
+
+## Cancellations
+
+```bash
+gh run cancel 34817953559 -R OlegFM/bb 2>&1; echo "EXIT_CI=$?"; gh run cancel 34817953533 -R OlegFM/bb 2>&1; echo "EXIT_VL=$?"
+```
+```
+✓ Request to cancel workflow 34817953559 submitted.
+EXIT_CI=0
+✓ Request to cancel workflow 34817953533 submitted.
+EXIT_VL=0
+```
+
+Cancelling the overall run afterwards does not change the `Windows x64` job's recorded `success` — the job
+had already completed when the cancellation was submitted.
+
+The evidence push for this round queues one more CI run and one more Version Lockstep run; both are
+cancelled the same way immediately after that push, and the command and its output are recorded in
+`.superpowers/sdd/2026-09-13-native-windows-phase-1/task-11-report.md` (they happen after this file is
+committed, so they cannot appear here).

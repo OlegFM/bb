@@ -657,3 +657,279 @@ timeout/`findBy*` expiry that passes when the file is run on its own, or the sin
 `bb-official-generator.test.ts` date-format failure that this file already proved fails identically at the
 Phase 0 head.
 
+
+---
+
+# Gate refresh 3 at `c3e4a8590` (POSIX) — 2026-09-14
+
+Everything above this line is unchanged. This is the POSIX leg of gate refresh 3, on the head that the
+follow-up re-review confirmed is byte-identical to `779b0a127` for non-Windows input: `783b01ac1` (POSIX
+hosts make **no** `host.canonicalize_path` RPC — the server shapes the path locally for them; pre-port
+messages restored), `59ee6327f` (docs), `c3e4a8590` (the degradation catch narrowed to host RPC failures,
+with a warning log).
+
+Because that round rewrote the shared canonicalization code rather than only the win32 branch, the POSIX
+side is the measurement that matters most in this refresh.
+
+## Fetch, checkout, install
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc 'cd ~/bb-posix-check && git fetch origin windows-native/phase-1 2>&1 | tail -5 && git checkout -q c3e4a8590ccb28c4f2110fc0137a2cdb29d0104a && git rev-parse HEAD && git status --porcelain | head && echo FETCH_EXIT=$?'
+```
+```
+From /mnt/c/Users/olege/Work/bb
+ * branch                windows-native/phase-1 -> FETCH_HEAD
+   6d8071e93..c3e4a8590  windows-native/phase-1 -> origin/windows-native/phase-1
+c3e4a8590ccb28c4f2110fc0137a2cdb29d0104a
+FETCH_EXIT=0
+```
+
+`git status --porcelain` printed nothing — the guest clone is clean at the measured head.
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc 'set -x; cd ~/bb-posix-check; source ~/.nvm/nvm.sh; nvm use 22.19.0; node -v; corepack pnpm install --frozen-lockfile > /tmp/r3-install.log 2>&1; echo "INSTALL_EXIT=$?"'
+```
+```
+Now using node v22.19.0 (npm v10.9.3)
++ node -v
+v22.19.0
++ corepack pnpm install --frozen-lockfile
++ echo INSTALL_EXIT=0
+INSTALL_EXIT=0
+```
+```
+ WARN  Failed to create bin at /home/olege/bb-posix-check/apps/desktop/node_modules/.bin/bb-app. ENOENT: no such file or directory, open '/home/olege/bb-posix-check/apps/desktop/node_modules/bb-app/dist/bb-app.js'
+ …
+Done in 10.2s
+```
+
+The four `Failed to create bin` warnings are the same benign pre-build warnings every earlier WSL round
+recorded (the `bb-app` bins do not exist until `bb-app` is built).
+
+## A note on how the run was launched
+
+Every attempt to run the suite through the harness's own background mechanism returned `EXIT=3` with an
+empty log: the WSL child process is killed when the background wrapper exits. The run was therefore
+launched **detached inside the guest** and waited on by watching for a marker file, which is why the
+command below is wrapped in `setsid nohup`:
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc 'cd ~/bb-posix-check; rm -f /tmp/r3-posix.log /tmp/r3-posix.done; setsid nohup bash -lc "cd ~/bb-posix-check; source ~/.nvm/nvm.sh; nvm use 22.19.0 >/dev/null; corepack pnpm exec turbo run test --continue --summarize --output-logs=errors-only --filter=@bb/domain --filter=@bb/host-daemon-contract --filter=@bb/server-contract --filter=@bb/host-daemon --filter=@bb/server --filter=@bb/app --filter=bb-plugin-environment-git-worktree --filter=bb-plugin-environment-personal-workspace > /tmp/r3-posix.log 2>&1; echo \"EXIT=\$?\" >> /tmp/r3-posix.log; touch /tmp/r3-posix.done" </dev/null >/dev/null 2>&1 & sleep 2; echo LAUNCHED; pgrep -fa "turbo run test" | head -3'
+```
+
+Nothing else was running on the machine: the Windows dev app had been stopped and no Windows test run was in
+flight.
+
+## Test run
+
+```
+  Tasks:    13 successful, 15 total
+ Cached:    4 cached, 15 total
+   Time:    6m20.521s
+Summary:    /home/olege/bb-posix-check/.turbo/runs/3JJGQCwKLTeafL6XKIZIE5lwJyj.json
+ Failed:    @bb/app#test, @bb/server#test
+
+ ERROR  run failed: command  exited (1)
+EXIT=1
+```
+
+### Per-package pass/fail (summariser, this run's own summary JSON)
+
+```bash
+node qa/windows/scripts/summarize-turbo-run.mjs '//wsl.localhost/Ubuntu-24.04/home/olege/bb-posix-check/.turbo/runs'; echo "EXIT=$?"
+```
+
+| package | test task |
+|---|---|
+| @bb/app | fail (1) |
+| @bb/domain | pass |
+| @bb/host-daemon | pass |
+| @bb/host-daemon-contract | pass |
+| @bb/server | fail (1) |
+| @bb/server-contract | pass |
+| bb-plugin-environment-git-worktree | pass |
+| bb-plugin-environment-personal-workspace | pass |
+
+Source: \\wsl.localhost\Ubuntu-24.04\home\olege\bb-posix-check\.turbo\runs\3JJGQCwKLTeafL6XKIZIE5lwJyj.json
+
+EXIT=0
+
+**Six of the eight packages are completely green on Linux**, including every one the POSIX-parity round
+touched most:
+
+- **`@bb/domain`** — owns `project-path.ts`, `normalizeHostPath`, `buildHostPathKey`,
+  `isUncOrDeviceHostPath`, `isBareDriveHostPath`; rewritten twice in this round.
+- **`@bb/host-daemon`** — 21 failing files on Windows, **0 on Linux**.
+- **`bb-plugin-environment-git-worktree`** and **`bb-plugin-environment-personal-workspace`** — both
+  including the `host/paths.test.ts` added by `81bed7a61`, whose POSIX case (a backslash is a legal filename
+  character on POSIX and must not be refused) is exactly the parity rule; on Windows it is the Windows case
+  that runs and the POSIX case that skips.
+
+### Vitest summaries for the two that failed
+
+```
+@bb/app:test:  Test Files  4 failed | 503 passed (507)
+@bb/server:test:  Test Files  8 failed | 230 passed | 2 skipped (240)
+```
+
+`@bb/app` discovered all **507** files — unlike the Windows full-load run, the WSL guest did not starve the
+fork pool.
+
+## The four server test files that exercise the canonicalize path — all pass on Linux
+
+This is the check the round exists for. The files are the ones the POSIX-parity commits rewrote around, and
+they were run directly, by path, in the guest:
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc 'source ~/.nvm/nvm.sh >/dev/null 2>&1; nvm use 22.19.0 >/dev/null 2>&1; cd ~/bb-posix-check/apps/server && set -o pipefail; corepack pnpm exec vitest run --config vitest.config.ts test/services/hosts/host-paths.test.ts test/public/public-projects-local-host.test.ts test/services/environments/provider-orchestration.test.ts test/threads/environment-directory-path.test.ts 2>&1 | sed -e "s/\x1b\[[0-9;]*m//g" | tail -20; echo "EXIT=$?"'
+```
+```
+ ✓  @bb/server  test/threads/environment-directory-path.test.ts (7 tests) 738ms
+     ✓ refuses a managed workspace reached through a symlinked data dir  643ms
+ ✓  @bb/server  test/services/hosts/host-paths.test.ts (9 tests) 895ms
+     ✓ returns the daemon's canonical path and key  633ms
+ ✓  @bb/server  test/services/environments/provider-orchestration.test.ts (51 tests) 5700ms
+     ✓ limits cleanup globally and per host, and releases slots after failures  607ms
+ ✓  @bb/server  test/public/public-projects-local-host.test.ts (10 tests) 6106ms
+     ✓ creates a project when a personal thread already uses its folder  1660ms
+     ✓ returns the existing project when its local folder is added again  1049ms
+     ✓ registers a Windows project for an offline host with a shape-derived key  1039ms
+     ✓ creates projects and local sources when inspection is unavailable  2046ms
+
+ Test Files  4 passed (4)
+      Tests  77 passed (77)
+   Start at  10:43:32
+   Duration  11.44s (transform 12.54s, setup 0ms, import 20.85s, tests 13.44s, environment 0ms)
+
+EXIT=0
+```
+
+**`4 passed (4)`, `77 passed (77)`, `EXIT=0`.** Stated explicitly, because it is the load-bearing POSIX
+evidence for this round:
+
+| file | Linux | Windows (solo run, Step 3) |
+|---|---|---|
+| `test/services/hosts/host-paths.test.ts` | **9/9 pass** | 9/9 pass |
+| `test/services/environments/provider-orchestration.test.ts` | **51/51 pass** | 51/51 pass |
+| `test/threads/environment-directory-path.test.ts` | **7/7 pass** | 7/7 pass |
+| `test/public/public-projects-local-host.test.ts` | **10/10 pass** | 9/10 — one fake-host `host.read_file` RPC timeout on a file-content route, not a path assertion |
+
+Every one of these files passes on both platforms, and the only divergence is a fake-host RPC timeout on
+Windows in a test that has nothing to do with path shape. `host-paths.test.ts` in particular is the file
+that pins the rule the round introduced — a non-win32 host makes no `host.canonicalize_path` call at all —
+and it passes on the platform where that rule is the one in force.
+
+## The failures, each re-run alone
+
+### `@bb/app` — 4 files, all pass in isolation
+
+```
+src/views/SkillsView.test.tsx
+src/views/ToolsView.plugin-detail.test.tsx
+src/components/secondary-panel/FilePreview.test.tsx
+src/components/thread/timeline/TimelineRowDetails.output-preview.test.tsx
+```
+
+Every failure is the expiring-`findBy*` / timing shape this file has characterised in every round:
+
+```
+      1 TestingLibraryElementError: Unable to find role="button" and name `/retry/i`
+      1 TestingLibraryElementError: Unable to find role="button" and name "Open GitHub details"
+      1 TestingLibraryElementError: Unable to find role="button" and name "Fork Useful skill into a new…"
+      1 TestingLibraryElementError: Unable to find an element by: [data-testid="pierre-file"]
+```
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc '… cd ~/bb-posix-check/apps/app && set -o pipefail; corepack pnpm exec vitest run --config vitest.config.ts SkillsView ToolsView.plugin-detail FilePreview TimelineRowDetails.output-preview 2>&1 | sed -e "s/\x1b\[[0-9;]*m//g" | tail -12; echo "EXIT=$?"'
+```
+```
+ Test Files  4 passed (4)
+      Tests  108 passed (108)
+   Start at  10:43:55
+   Duration  13.74s (transform 10.89s, setup 578ms, import 16.94s, tests 15.96s, environment 2.80s)
+
+EXIT=0
+```
+
+**All four pass, 108/108.**
+
+### `@bb/server` — 8 files, seven pass in isolation
+
+```
+test/app/install-machine-script.test.ts
+test/provider-corpus/timeline-perf.test.ts
+test/services/plugin-catalog/bb-official-generator.test.ts
+test/services/threads/thread-runtime-display.test.ts
+test/services/threads/timeline-event-budget.test.ts
+test/services/threads/timeline-in-turn-window.test.ts
+test/public/public-thread-data.test.ts
+test/services/plugins/plugin-update.test.ts
+```
+```
+     10 Error: Test timed out in Nms.
+      1 AssertionError: expected { …(N) } to deeply equal { …(N) }
+      1 AssertionError: expected null not to be null
+      1 AssertionError: expected N.N to be less than N
+```
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -lc '… cd ~/bb-posix-check/apps/server && set -o pipefail; corepack pnpm exec vitest run --config vitest.config.ts test/app/install-machine-script.test.ts test/provider-corpus/timeline-perf.test.ts test/services/plugin-catalog/bb-official-generator.test.ts test/services/threads/thread-runtime-display.test.ts test/services/threads/timeline-event-budget.test.ts test/services/threads/timeline-in-turn-window.test.ts test/public/public-thread-data.test.ts test/services/plugins/plugin-update.test.ts 2>&1 | sed -e "s/\x1b\[[0-9;]*m//g" | tail -22; echo "EXIT=$?"'
+```
+```
+-   "publishedAt": "2026-01-02T03:04:05Z",
+-   "updatedAt": "2026-02-03T04:05:06Z",
++   "publishedAt": "2026-01-02T03:04:05+00:00",
++   "updatedAt": "2026-02-03T04:05:06+00:00",
+  }
+
+ ❯ test/services/plugin-catalog/bb-official-generator.test.ts:187:33
+    185|     });
+    186|
+    187|     expect(dates.get("sample")).toEqual({
+       |                                 ^
+    188|       publishedAt: "2026-01-02T03:04:05Z",
+    189|       updatedAt: "2026-02-03T04:05:06Z",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 196 passed (197)
+   Start at  10:44:18
+   Duration  72.36s (transform 27.97s, setup 0ms, import 44.10s, tests 146.16s, environment 1ms)
+
+EXIT=1
+```
+
+**Seven of the eight pass.** The one that does not is `bb-official-generator.test.ts`, failing on exactly
+the committer-date format assertion (`"…Z"` expected, `"…+00:00"` received) that the A/B section earlier in
+this file proved fails **identically at the Phase 0 head `779b0a127`** — an environment difference in this
+WSL guest's git, unrelated to any commit on this branch.
+
+## Comparison against the earlier WSL rounds
+
+| | Phase 0 `779b0a127` | Phase 1 `203acb273` | `6d8071e93` | **`c3e4a8590`** |
+|---|---|---|---|---|
+| packages green in the combined run | — | 4 of 6 | 4 of 6 | **6 of 8** |
+| `@bb/domain` | pass | pass | pass | **pass** |
+| `@bb/host-daemon` | pass | pass | pass (52/52) | **pass** |
+| `@bb/host-daemon-contract` | pass | pass | pass | **pass** |
+| `@bb/server-contract` | pass | pass | pass | **pass** |
+| `bb-plugin-environment-git-worktree` | (not run) | (not run) | (not run) | **pass** |
+| `bb-plugin-environment-personal-workspace` | (not run) | (not run) | (not run) | **pass** |
+| `@bb/app` files failing under load | — | 1 alone | 4, all pass alone | **4, all pass alone** |
+| `@bb/server` files failing under load | — | 5, four pass alone | 5, four pass alone | **8, seven pass alone** |
+| reproducible failure | `bb-official-generator.test.ts` (`Z` vs `+00:00`) | identical | identical | **identical** |
+
+The set of files that fail *reproducibly* on POSIX has not changed across any head on this branch: it is
+still exactly `bb-official-generator.test.ts`, and it still fails the same way at the Phase 0 head.
+
+## Verdict
+
+**No POSIX regression at `c3e4a8590`.** Six of the eight packages — including `@bb/domain`,
+`@bb/host-daemon` and both workspace plugins, the packages this round changed most on the POSIX side — are
+completely green in one combined run. The four server test files that drive the canonicalization path pass
+on Linux, 4/4 files and 77/77 tests, with `host-paths.test.ts` (the file that pins "a non-win32 host makes
+no canonicalize RPC") green. Every other failure is a vitest timeout or a `findBy*` expiry that passes when
+the file runs alone, except the single pre-existing `bb-official-generator.test.ts` date-format failure that
+this file already proved fails identically at `779b0a127`.

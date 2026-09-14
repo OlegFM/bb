@@ -520,3 +520,180 @@ is `destroyed` with `teardown_status: removed`.
 - Dev app stopped with `pnpm dev:stop`.
 - `C:\Users\olege\Work\phase1-ui` deleted again; see `00-host.md`.
 
+
+---
+
+# Gate refresh 3 at `c3e4a8590` (2026-09-14) — Step 6 still PASSES
+
+Everything above this line is unchanged. Re-measured because the POSIX-parity round rewrote
+`canonicalizeProducedHostPath` — the helper that canonicalizes a path the *provider* produced, which is
+exactly the managed worktree's directory. At `81bed7a61` that helper fell back to the raw path on any
+`invalid_path`; `c3e4a8590` narrowed the catch to host **RPC failures** only, with a warning log. This step
+is the end-to-end proof that the narrowed catch does not break provisioning.
+
+The manifest asset guard this file originally diagnosed is still fixed at this head:
+
+```bash
+grep -n 'startsWith(realRoot' apps/server/src/services/plugins/manifest.ts
+```
+```
+176:    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
+204:    if (realAsset !== realRoot && !realAsset.startsWith(realRoot + sep)) {
+```
+
+Same dev instance (`http://127.0.0.1:23813`, host `host_45kqba73eq` = `OMEN`), same scratch repository
+`C:\Users\olege\Work\phase1-ui` (hook-less `git init`, one commit `a25bf64`, branch `master`), same project
+`proj_x4gdw7vz68`. As before, the environment is created through `POST /api/v1/threads` — the route the UI's
+composer posts to — because there is no `POST /environments`.
+
+## Thread creation with the Worktree provider
+
+```powershell
+$body = '{"projectId":"proj_x4gdw7vz68","origin":"sdk","providerId":"codex","title":"Phase 1 worktree check r3","input":[{"type":"text","text":"Phase 1 managed worktree provisioning check, refresh 3."}],"environment":{"type":"provider","environmentProviderId":"git-worktree","machine":{"type":"existing","hostId":"host_45kqba73eq"},"inputs":{"branch":{"kind":"default"}}}}'; $body; try { $t = Invoke-RestMethod -Uri "$env:BB_SERVER_URL/api/v1/threads" -Method Post -ContentType "application/json" -Body $body; "id=" + $t.id + " status=" + $t.status + " environmentId=" + $t.environmentId } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+{"projectId":"proj_x4gdw7vz68","origin":"sdk","providerId":"codex","title":"Phase 1 worktree check r3","input":[{"type":"text","text":"Phase 1 managed worktree provisioning check, refresh 3."}],"environment":{"type":"provider","environmentProviderId":"git-worktree","machine":{"type":"existing","hostId":"host_45kqba73eq"},"inputs":{"branch":{"kind":"default"}}}}
+id=thr_eg7guggbn7 status=starting environmentId=
+```
+
+## The environment reaches `ready`
+
+```powershell
+(Invoke-WebRequest -Uri "$env:BB_SERVER_URL/api/v1/environments?projectId=proj_x4gdw7vz68" -Method Get -UseBasicParsing).Content
+```
+```
+[{"id":"env_35cwiwnx7n","name":null,"projectId":"proj_x4gdw7vz68","hostId":"host_45kqba73eq","path":"C:\\Users\\olege\\.bb-dev\\work-bb-21d97a8d7c85\\plugins\\environment-git-worktree\\host-data\\worktrees\\thr_eg7guggbn7-1\\phase1-ui","isGitRepo":true,"isWorktree":true,"branchName":"bb/phase-1-worktree-check-r3-thr_eg7guggbn7","baseBranch":null,"defaultBranch":"master","mergeBaseBranch":null,"status":"ready","environmentProviderId":"git-worktree","lifecycle":{"phase":"active","retireAt":null,"teardown":null},"environmentProviderSelection":{"machine":{"type":"existing","hostId":"host_45kqba73eq"},"inputs":{"branch":{"kind":"default"}}},"environmentProviderInstanceKey":"thr_eg7guggbn7-1","managed":true,"workspaceProvisionType":"managed-worktree","createdAt":1789371156041,"updatedAt":1789371157929}]
+```
+
+- `status`: **`ready`**, reached in **1.888 s** (`createdAt` 1789371156041 → `updatedAt` 1789371157929)
+- `path`: `C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_eg7guggbn7-1\phase1-ui`
+  — drive-absolute, native backslashes, no doubled or mixed separators
+- `isWorktree: true`, `managed: true`, `workspaceProvisionType: "managed-worktree"`
+- `environmentProviderInstanceKey`: `thr_eg7guggbn7-1`
+- branch `bb/phase-1-worktree-check-r3-thr_eg7guggbn7`, default branch `master`
+
+### `path` versus `path_key` in the database
+
+```powershell
+node packages/db/read-rows.mjs "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\bb.db" environments
+```
+```json
+  {
+    "id": "env_35cwiwnx7n",
+    "project_id": "proj_x4gdw7vz68",
+    "host_id": "host_45kqba73eq",
+    "path": "C:\\Users\\olege\\.bb-dev\\work-bb-21d97a8d7c85\\plugins\\environment-git-worktree\\host-data\\worktrees\\thr_eg7guggbn7-1\\phase1-ui",
+    "path_key": "c:/users/olege/.bb-dev/work-bb-21d97a8d7c85/plugins/environment-git-worktree/host-data/worktrees/thr_eg7guggbn7-1/phase1-ui",
+    "status": "ready",
+    "is_worktree": 1,
+    "branch_name": "bb/phase-1-worktree-check-r3-thr_eg7guggbn7",
+    "environment_provider_id": "git-worktree",
+    "environment_provider_instance_key": "thr_eg7guggbn7-1",
+    "provider_owns_path": 1,
+    "teardown_status": null
+  }
+```
+
+The provider-produced path was canonicalized by the **daemon**, not by the degraded local fallback. The dev
+log contains **no** occurrence of the warning `c3e4a8590` added for the degraded branch:
+
+```powershell
+(Select-String -Path "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\dev-app\dev.log" -Pattern 'storing the normalized spelling' | Measure-Object).Count
+```
+```
+0
+```
+
+## On disk and in git while the environment is live
+
+```powershell
+git -C C:\Users\olege\Work\phase1-ui worktree list
+```
+```
+C:/Users/olege/Work/phase1-ui                                                                                                a25bf64 [master]
+C:/Users/olege/.bb-dev/work-bb-21d97a8d7c85/plugins/environment-git-worktree/host-data/worktrees/thr_eg7guggbn7-1/phase1-ui  a25bf64 [bb/phase-1-worktree-check-r3-thr_eg7guggbn7]
+```
+```powershell
+Get-ChildItem "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_eg7guggbn7-1\phase1-ui" -Force | Select-Object Name,Mode | Format-Table -AutoSize
+```
+```
+Name      Mode
+----      ----
+.git      -a-h-
+README.md -a---
+```
+
+The checkout is real: the tracked `README.md` is present and `.git` is the hidden worktree pointer file that
+git creates for a linked worktree on Windows.
+
+## Removal
+
+The 409 contract still holds — `DELETE /environments/:id` is refused while threads are live:
+
+```powershell
+try { $d = Invoke-RestMethod -Uri "$env:BB_SERVER_URL/api/v1/environments/env_35cwiwnx7n" -Method Delete; "DELETE (no archive) ok: " + ($d | ConvertTo-Json -Compress) } catch { "DELETE (no archive) HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+DELETE (no archive) HTTP 409
+
+{
+  "code": "invalid_request",
+  "message": "Environment still has live threads"
+}
+```
+
+Archive the threads through the public route, then delete:
+
+```powershell
+try { $a = Invoke-RestMethod -Uri "$env:BB_SERVER_URL/api/v1/environments/env_35cwiwnx7n/archive-threads" -Method Post -ContentType "application/json" -Body "{}"; "archive-threads: " + ($a | ConvertTo-Json -Compress) } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+archive-threads: {"ok":true,"archivedThreadIds":["thr_eg7guggbn7"]}
+```
+```powershell
+try { $d = Invoke-RestMethod -Uri "$env:BB_SERVER_URL/api/v1/environments/env_35cwiwnx7n" -Method Delete; "DELETE ok: " + ($d | ConvertTo-Json -Compress) } catch { "HTTP " + $_.Exception.Response.StatusCode.value__; $_.ErrorDetails.Message }
+```
+```
+DELETE ok: {"ok":true}
+```
+
+Unlike refresh 2, the delete succeeded on the first attempt after archiving — no `Environment cannot be
+deleted while ready` retry was needed.
+
+## After removal
+
+```powershell
+$p = "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_eg7guggbn7-1\phase1-ui"; "Test-Path env dir: " + (Test-Path $p); "Test-Path instance dir: " + (Test-Path "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\plugins\environment-git-worktree\host-data\worktrees\thr_eg7guggbn7-1"); "--- git worktree list ---"; git -C C:\Users\olege\Work\phase1-ui worktree list; "EXIT=$LASTEXITCODE"; "--- environments API ---"; (Invoke-WebRequest -Uri "$env:BB_SERVER_URL/api/v1/environments?projectId=proj_x4gdw7vz68" -Method Get -UseBasicParsing).Content; "--- row ---"; node packages/db/read-rows.mjs "C:\Users\olege\.bb-dev\work-bb-21d97a8d7c85\bb.db" environments | Select-String -Pattern '"id"|"status"|"path"|"path_key"|"teardown_status"' | Select-Object -First 5
+```
+```
+Test-Path env dir: False
+Test-Path instance dir: False
+--- git worktree list ---
+C:/Users/olege/Work/phase1-ui  a25bf64 [master]
+EXIT=0
+--- environments API ---
+[]
+--- row ---
+
+    "id": "env_35cwiwnx7n",
+    "path": null,
+    "path_key": null,
+    "status": "destroyed",
+    "teardown_status": "removed"
+```
+
+Both the environment directory and its instance directory are gone, git no longer lists the linked worktree,
+the environments listing is empty, and the row is `destroyed` / `teardown_status: removed` with `path` and
+`path_key` cleared — so it no longer occupies the live unique index on `(project_id, host_id, path_key)`.
+
+## Step 6 verdict at this head
+
+**PASS.** Provisioning, the canonical `path`/`path_key` pair, the on-disk and git-visible worktree, and the
+full teardown all behave exactly as in refresh 1, and the narrowed degradation catch in `c3e4a8590` never
+fired — the provider-produced path was canonicalized by the host daemon, with zero warning-log entries.
+
+## Cleanup for this refresh
+
+- Thread `thr_eg7guggbn7` archived by the `archive-threads` call above and left in the dev database.
+- `packages/db/read-rows.mjs`, the throwaway database reader, deleted from the checkout.
+- Dev app stopped with `pnpm dev:stop`.
