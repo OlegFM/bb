@@ -35,7 +35,10 @@ export interface ExecFileResult {
 }
 
 export interface ExecFileOptions {
+  cwd?: string;
+  detached?: boolean;
   env?: NodeJS.ProcessEnv;
+  windowsHide?: boolean;
 }
 
 export type ExecFileHandler = (
@@ -80,6 +83,11 @@ export interface LaunchAdapter {
   kind: WorkspaceOpenTargetKind;
   label: string;
   macos: MacLaunchAdapter;
+  windows?: WindowsLaunchAdapter;
+}
+
+export interface WindowsLaunchAdapter {
+  knownRelativePaths?: string[][];
 }
 
 export interface ExecFileInvocation {

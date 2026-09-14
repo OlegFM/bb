@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -25,6 +25,10 @@ import {
   buildLocalTerminalShellArgs,
   buildRemoteTerminalSshArgs,
 } from "./terminal.js";
+import {
+  listWindowsWorkspaceOpenTargets,
+  openWindowsPathInTarget,
+} from "./windows-launch.js";
 import type {
   BuildMacRemoteSshOpenArgs,
   BuildMacTerminalOpenArgs,
@@ -493,8 +497,23 @@ async function defaultExecFile(
   args: string[],
   options?: ExecFileOptions,
 ): Promise<ExecFileResult> {
+  if (options?.detached === true) {
+    const child = spawn(file, args, {
+      cwd: options.cwd,
+      detached: true,
+      env: sanitizeInheritedChildProcessEnv({
+        env: options.env ?? process.env,
+      }),
+      stdio: "ignore",
+      windowsHide: options.windowsHide ?? true,
+    });
+    child.unref();
+    return { stdout: "" };
+  }
+
   const result = await execFileAsync(file, args, {
     env: sanitizeInheritedChildProcessEnv({ env: options?.env ?? process.env }),
+    windowsHide: options?.windowsHide ?? true,
   });
   return {
     stdout: result.stdout,
@@ -937,6 +956,10 @@ export async function listWorkspaceOpenTargetsWithRuntime(
   runtime: WorkspaceOpenTargetRuntime,
   options: ListWorkspaceOpenTargetsOptions = {},
 ): Promise<WorkspaceOpenTarget[]> {
+  if (runtime.platform === "win32") {
+    return listWindowsWorkspaceOpenTargets(runtime);
+  }
+
   if (runtime.platform !== "darwin") {
     if (runtime.platform !== "linux") {
       return [];
@@ -1945,6 +1968,11 @@ export async function openPathInTargetWithRuntime(
   args: OpenPathInTargetArgs,
   runtime: WorkspaceOpenTargetRuntime,
 ): Promise<void> {
+  if (runtime.platform === "win32") {
+    await openWindowsPathInTarget(args, runtime);
+    return;
+  }
+
   if (runtime.platform !== "darwin") {
     const invocation = await resolvePlatformOpenInvocation(args, runtime);
     await execInvocation(invocation, runtime);
