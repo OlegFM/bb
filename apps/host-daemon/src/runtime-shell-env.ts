@@ -6,10 +6,13 @@ import { fileURLToPath } from "node:url";
 import type { AgentRuntimeOptions } from "@bb/agent-runtime";
 import { assignIfDefined } from "@bb/config/objects";
 import {
+  assignPathEnv,
   readWindowsEnvValue,
   resolvePowerShellExecutable,
   resolveWindowsSystemToolPath,
   spawnPortableOutputProcess,
+  splitWindowsPathList,
+  terminateProcessTree,
 } from "@bb/process-utils";
 
 interface ResolveLocalBbExecutablePathOptions {
@@ -69,12 +72,14 @@ const POWERSHELL_SHELL_ENV_COMMAND = [
   `Write-Output '${SHELL_ENV_END_MARKER}'`,
 ].join("; ");
 const BASE64_VALUE_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/u;
-const REGISTRY_PATH_ROW_PATTERN = /^\s+Path\s+REG_(?:EXPAND_)?SZ\s+(.*)$/iu;
+const REGISTRY_PATH_ROW_PATTERN = /^\s+Path\s+(REG_EXPAND_SZ|REG_SZ)\s+(.*)$/iu;
+const REGISTRY_EXPANDABLE_VALUE_TYPE = "REG_EXPAND_SZ";
 const WINDOWS_MACHINE_ENVIRONMENT_KEY =
   "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment";
 const WINDOWS_USER_ENVIRONMENT_KEY = "HKCU\\Environment";
 const WINDOWS_REGISTRY_QUERY_TIMEOUT_MS = 5_000;
 const WINDOWS_USER_SHELL_ENV_TIMEOUT_MS = 8_000;
+const WINDOWS_PROBE_TERMINATION_GRACE_MS = 1_000;
 
 function getDefaultCliExecutablePath(platform: NodeJS.Platform): string {
   return fileURLToPath(
@@ -386,7 +391,11 @@ function defaultSpawnWindowsCommand(
     }
 
     timeout = setTimeout(() => {
-      child.kill();
+      void terminateProcessTree({
+        child,
+        graceMs: WINDOWS_PROBE_TERMINATION_GRACE_MS,
+        platform: "win32",
+      }).catch(() => undefined);
       settle({
         error: new Error(`Shell env probe timed out after ${args.timeoutMs}ms`),
         signal: null,
@@ -423,14 +432,27 @@ function expandWindowsEnvReferences(
   });
 }
 
-function parseRegistryPathRow(stdout: string): string | null {
+interface RegistryPathRow {
+  expandable: boolean;
+  value: string;
+}
+
+function parseRegistryPathRow(stdout: string): RegistryPathRow | null {
   for (const line of stdout.split(/\r?\n/u)) {
     const match = line.match(REGISTRY_PATH_ROW_PATTERN);
     if (match === null) {
       continue;
     }
-    const value = match[1]?.trim() ?? "";
-    return value.length > 0 ? value : null;
+    const value = match[2]?.trim() ?? "";
+    if (value.length === 0) {
+      return null;
+    }
+    return {
+      expandable:
+        match[1]?.toUpperCase() ===
+        REGISTRY_EXPANDABLE_VALUE_TYPE.toUpperCase(),
+      value,
+    };
   }
   return null;
 }
@@ -441,17 +463,19 @@ export async function readWindowsRegistryPath(args: {
 }): Promise<string | null> {
   const runCommand = args.runCommand ?? defaultSpawnWindowsCommand;
   const regExecutablePath = resolveWindowsSystemToolPath("reg.exe", args.env);
-  const values: string[] = [];
-  for (const key of [
-    WINDOWS_MACHINE_ENVIRONMENT_KEY,
-    WINDOWS_USER_ENVIRONMENT_KEY,
-  ]) {
-    const result = await runCommand({
-      command: regExecutablePath,
-      args: ["query", key, "/v", "Path"],
-      env: args.env,
-      timeoutMs: WINDOWS_REGISTRY_QUERY_TIMEOUT_MS,
-    });
+  const results = await Promise.all(
+    [WINDOWS_MACHINE_ENVIRONMENT_KEY, WINDOWS_USER_ENVIRONMENT_KEY].map((key) =>
+      runCommand({
+        command: regExecutablePath,
+        args: ["query", key, "/v", "Path"],
+        env: args.env,
+        timeoutMs: WINDOWS_REGISTRY_QUERY_TIMEOUT_MS,
+      }),
+    ),
+  );
+
+  const entries: string[] = [];
+  for (const result of results) {
     if (
       result.error !== undefined ||
       result.signal !== null ||
@@ -459,19 +483,19 @@ export async function readWindowsRegistryPath(args: {
     ) {
       continue;
     }
-    const rawValue = parseRegistryPathRow(result.stdout);
-    if (rawValue === null) {
+    const row = parseRegistryPathRow(result.stdout);
+    if (row === null) {
       continue;
     }
-    values.push(expandWindowsEnvReferences(rawValue, args.env));
+    entries.push(
+      ...splitWindowsPathList(
+        row.expandable
+          ? expandWindowsEnvReferences(row.value, args.env)
+          : row.value,
+      ),
+    );
   }
-
-  const joined = values
-    .flatMap((value) => value.split(";"))
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .join(";");
-  return joined.length > 0 ? joined : null;
+  return entries.length > 0 ? entries.join(";") : null;
 }
 
 function findLastMarkerIndex(lines: string[], marker: string): number {
@@ -505,7 +529,7 @@ function parseWindowsPathFromUserShellEnv(stdout: string): string | null {
       continue;
     }
     const encoded = line.slice(separator + 1).trim();
-    if (!BASE64_VALUE_PATTERN.test(encoded)) {
+    if (!BASE64_VALUE_PATTERN.test(encoded) || encoded.length % 4 !== 0) {
       continue;
     }
     const pathValue = Buffer.from(encoded, "base64").toString("utf8").trim();
@@ -519,6 +543,7 @@ function parseWindowsPathFromUserShellEnv(stdout: string): string | null {
 async function resolveWindowsUserShellPath(
   options: ResolveUserShellPathOptions,
   env: NodeJS.ProcessEnv,
+  previousPath: string | null,
 ): Promise<string | null> {
   const registryPath = await readWindowsRegistryPath({
     env,
@@ -532,7 +557,10 @@ async function resolveWindowsUserShellPath(
   const probeResult = await spawnUserShellEnv({
     command: resolvePowerShellExecutable(env),
     args: ["-NoLogo", "-Command", POWERSHELL_SHELL_ENV_COMMAND],
-    env,
+    env:
+      registryPath === null
+        ? env
+        : assignPathEnv({ env, path: registryPath, platform: "win32" }),
     timeoutMs: options.timeoutMs ?? WINDOWS_USER_SHELL_ENV_TIMEOUT_MS,
   });
   const probedPath =
@@ -546,6 +574,9 @@ async function resolveWindowsUserShellPath(
   }
   if (registryPath !== null) {
     return registryPath;
+  }
+  if (previousPath !== null) {
+    return previousPath;
   }
 
   const inheritedPath = readWindowsEnvValue(env, "Path")?.trim();
@@ -566,7 +597,7 @@ async function resolveUserShellPathWithPrevious(
 ): Promise<string | null> {
   const env = options.env ?? process.env;
   if ((options.platform ?? process.platform) === "win32") {
-    return resolveWindowsUserShellPath(options, env);
+    return resolveWindowsUserShellPath(options, env, previousPath);
   }
   const shell = resolveUserShellCommand(
     env,
