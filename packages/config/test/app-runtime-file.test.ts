@@ -202,10 +202,14 @@ describe("stopVerifiedProcess on Windows", () => {
   function windowsOps(
     entry: WindowsProcessSnapshotEntry | null,
     overrides: Partial<VerifiedProcessOps> = {},
+    cimQueries: number[] = [],
   ): VerifiedProcessOps {
     return {
       ...createNodeVerifiedProcessOps("win32", {
-        queryProcess: async () => entry,
+        queryProcess: async (pid) => {
+          cimQueries.push(pid);
+          return entry;
+        },
       }),
       isRunning: () => true,
       kill: () => undefined,
@@ -239,6 +243,8 @@ describe("stopVerifiedProcess on Windows", () => {
   });
 
   it("refuses a pid whose command line no longer looks like bb", async () => {
+    const cimQueries: number[] = [];
+
     await expect(
       stopVerifiedProcess({
         killTimeoutMs: 10,
@@ -246,13 +252,20 @@ describe("stopVerifiedProcess on Windows", () => {
         platform: "win32",
         processOps: windowsOps(
           windowsEntry({ commandLine: "C:\\Windows\\System32\\notepad.exe" }),
+          {},
+          cimQueries,
         ),
         signal: "SIGTERM",
         startedAt,
         timeoutMs: 10,
         verifyTokens: ["bb-app.js"],
       }),
-    ).resolves.toMatchObject({ kind: "unverified", reason: "command" });
+    ).resolves.toMatchObject({
+      command: "C:\\Windows\\System32\\notepad.exe",
+      kind: "unverified",
+      reason: "command",
+    });
+    expect(cimQueries).toEqual([4_242]);
   });
 
   it("refuses a pid whose creation date drifted from the record", async () => {
@@ -275,18 +288,25 @@ describe("stopVerifiedProcess on Windows", () => {
   });
 
   it("refuses a pid CIM cannot describe", async () => {
+    const cimQueries: number[] = [];
+
     await expect(
       stopVerifiedProcess({
         killTimeoutMs: 10,
         pid: 4_242,
         platform: "win32",
-        processOps: windowsOps(null),
+        processOps: windowsOps(null, {}, cimQueries),
         signal: "SIGTERM",
         startedAt,
         timeoutMs: 10,
         verifyTokens: ["bb-app.js"],
       }),
-    ).resolves.toMatchObject({ kind: "unverified", reason: "command" });
+    ).resolves.toMatchObject({
+      command: null,
+      kind: "unverified",
+      reason: "command",
+    });
+    expect(cimQueries).toEqual([4_242]);
   });
 
   it("reports a process that is still alive after the terminate", async () => {
