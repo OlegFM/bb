@@ -14,6 +14,8 @@ import {
 
 const CREATED_AT = "2026-09-14T09:00:00.0000000+00:00";
 const REUSED_AT = "2026-09-14T09:30:00.0000000+00:00";
+const PREDATES_LEADER_AT = "2026-09-14T08:00:00.0000000+00:00";
+const TASKKILL_NOT_FOUND_EXIT_CODE = 128;
 const SWEEP_DIRECTORY = "C:\\work\\bb";
 const WINDOWS_ENV: NodeJS.ProcessEnv = { SystemRoot: "C:\\Windows" };
 
@@ -131,11 +133,64 @@ describe("terminateProcessTree on win32", () => {
     });
 
     expect(leader.signals).toEqual([]);
+    expect(taskkillArgs(requests)).toEqual([["/PID", "1001", "/F"]]);
+    expect(result.leaderExited).toBe(true);
+  });
+
+  it("never kills a descendant candidate that predates the leader", async () => {
+    const leader = createFakeChild(1000);
+    const tree = [
+      cimProcess(1000, 1),
+      cimProcess(1001, 1000, { CreationDate: PREDATES_LEADER_AT }),
+      cimProcess(1002, 1000),
+    ];
+    const { requests, runner } = createFakeRunner([tree, tree]);
+
+    const result = await terminateProcessTree({
+      child: leader.child,
+      graceMs: 30,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+    });
+
     expect(taskkillArgs(requests)).toEqual([
       ["/PID", "1000", "/T"],
-      ["/PID", "1001", "/F"],
+      ["/PID", "1002", "/F"],
     ]);
-    expect(result.leaderExited).toBe(true);
+    expect(result.descendantsKilled).toEqual([1002]);
+    expect(result.descendantsSkipped).toEqual([]);
+  });
+
+  it("reports no kill when taskkill cannot find the descendant", async () => {
+    const leader = createFakeChild(1000);
+    const skipped: SkippedProcessEvent[] = [];
+    const tree = [cimProcess(1000, 1), cimProcess(1001, 1000)];
+    const runner: WindowsCommandRunner = async (request) => {
+      if (isTaskkill(request)) {
+        return request.args.includes("/F")
+          ? {
+              stdout: "",
+              stderr: "not found",
+              exitCode: TASKKILL_NOT_FOUND_EXIT_CODE,
+            }
+          : { stdout: "", stderr: "", exitCode: 0 };
+      }
+      return { stdout: JSON.stringify(tree), stderr: "", exitCode: 0 };
+    };
+
+    const result = await terminateProcessTree({
+      child: leader.child,
+      graceMs: 30,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+      onSkippedProcess: (event) => skipped.push(event),
+    });
+
+    expect(result.descendantsKilled).toEqual([]);
+    expect(result.descendantsSkipped).toEqual([]);
+    expect(skipped).toEqual([]);
   });
 
   it("skips and reports a descendant whose CreationDate changed", async () => {
@@ -174,7 +229,7 @@ describe("terminateProcessTree on win32", () => {
     expect(skipped).toEqual(result.descendantsSkipped);
   });
 
-  it("ignores a failing tree request and propagates enumeration failures", async () => {
+  it("ignores a failing tree request and reports enumeration failures instead of rejecting", async () => {
     const leader = createFakeChild(1000);
     const failingTaskkill: WindowsCommandRunner = async (request) =>
       isTaskkill(request)
@@ -192,22 +247,31 @@ describe("terminateProcessTree on win32", () => {
         runner: failingTaskkill,
         env: WINDOWS_ENV,
       }),
-    ).resolves.toMatchObject({ descendantsKilled: [] });
+    ).resolves.toMatchObject({ descendantsKilled: [], enumerationError: null });
 
-    const brokenEnumeration: WindowsCommandRunner = async () => ({
-      stdout: "",
-      stderr: "denied",
-      exitCode: 1,
+    const stranded = createFakeChild(1000);
+    const brokenRequests: WindowsCommandRequest[] = [];
+    const brokenEnumeration: WindowsCommandRunner = async (request) => {
+      brokenRequests.push(request);
+      return isTaskkill(request)
+        ? { stdout: "", stderr: "", exitCode: 0 }
+        : { stdout: "", stderr: "denied", exitCode: 1 };
+    };
+
+    const result = await terminateProcessTree({
+      child: stranded.child,
+      graceMs: 30,
+      platform: "win32",
+      runner: brokenEnumeration,
+      env: WINDOWS_ENV,
     });
-    await expect(
-      terminateProcessTree({
-        child: createFakeChild(1000).child,
-        graceMs: 30,
-        platform: "win32",
-        runner: brokenEnumeration,
-        env: WINDOWS_ENV,
-      }),
-    ).rejects.toMatchObject({ reason: "exit" });
+
+    expect(taskkillArgs(brokenRequests)).toEqual([["/PID", "1000", "/T"]]);
+    expect(stranded.signals).toEqual(["SIGKILL"]);
+    expect(result.leaderExited).toBe(true);
+    expect(result.descendantsKilled).toEqual([]);
+    expect(result.descendantsSkipped).toEqual([]);
+    expect(result.enumerationError?.reason).toBe("exit");
   });
 });
 
@@ -224,6 +288,7 @@ describe("terminateProcessTree on posix", () => {
       leaderExited: true,
       descendantsKilled: [],
       descendantsSkipped: [],
+      enumerationError: null,
     });
   });
 });
@@ -302,7 +367,43 @@ describe("listProcessesWithCwdUnder on win32", () => {
 });
 
 describe("killProcessesWithCwdUnder on win32", () => {
-  it("verifies CreationDate immediately before every force kill", async () => {
+  it("lists command-line matches but force-kills only path-anchored ones", async () => {
+    const tree = [
+      cimProcess(2000, 1, {
+        ExecutablePath: "C:\\tools\\editor.exe",
+        CommandLine: '"C:\\tools\\editor.exe" "C:\\work\\bb\\src"',
+      }),
+      cimProcess(2001, 2000, { ExecutablePath: "C:\\tools\\helper.exe" }),
+      cimProcess(3000, 1, { ExecutablePath: "C:\\work\\bb\\tools\\agent.exe" }),
+      cimProcess(3001, 3000, { ExecutablePath: "C:\\tools\\helper.exe" }),
+    ];
+
+    const listed = await listProcessesWithCwdUnder({
+      directory: SWEEP_DIRECTORY,
+      platform: "win32",
+      runner: createFakeRunner([tree]).runner,
+      env: WINDOWS_ENV,
+    });
+    expect(listed.map((entry) => entry.pid).sort()).toEqual([
+      2000, 2001, 3000, 3001,
+    ]);
+
+    const { requests, runner } = createFakeRunner([tree, tree, []]);
+    const killed = await killProcessesWithCwdUnder({
+      directory: SWEEP_DIRECTORY,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+    });
+
+    expect(killed.map((entry) => entry.pid).sort()).toEqual([3000, 3001]);
+    expect(taskkillArgs(requests)).toEqual([
+      ["/PID", "3000", "/F"],
+      ["/PID", "3001", "/F"],
+    ]);
+  });
+
+  it("verifies CreationDate against a fresh snapshot before each kill round", async () => {
     const skipped: SkippedProcessEvent[] = [];
     const first = [
       cimProcess(1234, 1, { ExecutablePath: "C:\\work\\bb\\tools\\agent.exe" }),

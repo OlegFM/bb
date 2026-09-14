@@ -4,6 +4,7 @@ import {
   matchWindowsProcessesUnderDirectory,
   takeWindowsProcessSnapshot,
   WINDOWS_PROCESS_ENUM_TIMEOUT_MS,
+  WindowsProcessEnumerationError,
   type WindowsCommandRequest,
   type WindowsCommandRunner,
   type WindowsProcessSnapshotEntry,
@@ -13,7 +14,6 @@ import { resolveWindowsSystemToolPath } from "./windows-system-tools.js";
 const CHILD_EXIT_POLL_MS = 25;
 const WINDOWS_SWEEP_MAX_ROUNDS = 5;
 const WINDOWS_SWEEP_SETTLE_MS = 50;
-const TASKKILL_NOT_FOUND_EXIT_CODE = 128;
 
 export interface SkippedProcessEvent {
   pid: number;
@@ -26,6 +26,7 @@ export interface TerminateProcessTreeResult {
   leaderExited: boolean;
   descendantsKilled: number[];
   descendantsSkipped: SkippedProcessEvent[];
+  enumerationError: WindowsProcessEnumerationError | null;
 }
 
 export interface TerminateProcessTreeChild {
@@ -107,6 +108,46 @@ function collectDescendantCreationDates(
   return descendants;
 }
 
+function parseCreationDate(value: string | null): number | null {
+  if (value === null) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function dropDescendantsPredatingLeader(args: {
+  descendants: Map<number, string | null>;
+  snapshot: WindowsProcessSnapshotEntry[];
+  leaderPid: number;
+}): Map<number, string | null> {
+  const leaderEntry = args.snapshot.find(
+    (entry) => entry.pid === args.leaderPid,
+  );
+  const leaderCreatedAt = parseCreationDate(leaderEntry?.creationDate ?? null);
+  if (leaderCreatedAt === null) {
+    return args.descendants;
+  }
+  const retained = new Map<number, string | null>();
+  for (const [pid, creationDate] of args.descendants) {
+    const createdAt = parseCreationDate(creationDate);
+    if (createdAt === null || createdAt >= leaderCreatedAt) {
+      retained.set(pid, creationDate);
+    }
+  }
+  return retained;
+}
+
+function toEnumerationError(error: unknown): WindowsProcessEnumerationError {
+  if (error instanceof WindowsProcessEnumerationError) {
+    return error;
+  }
+  return new WindowsProcessEnumerationError(
+    "spawn",
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
 async function runTaskkill(args: {
   runner: WindowsCommandRunner;
   pid: number;
@@ -119,9 +160,7 @@ async function runTaskkill(args: {
       buildTaskkillRequest(args.pid, args.mode, args.env),
       { timeoutMs: args.timeoutMs, env: args.env },
     );
-    return (
-      result.exitCode === 0 || result.exitCode === TASKKILL_NOT_FOUND_EXIT_CODE
-    );
+    return result.exitCode === 0;
   } catch {
     return false;
   }
@@ -137,6 +176,7 @@ export async function terminateProcessTree(
       leaderExited: await waitForChildExit(args.child, args.graceMs),
       descendantsKilled: [],
       descendantsSkipped: [],
+      enumerationError: null,
     };
   }
   const env = args.env ?? process.env;
@@ -148,45 +188,71 @@ export async function terminateProcessTree(
       leaderExited: hasChildExited(args.child),
       descendantsKilled: [],
       descendantsSkipped: [],
+      enumerationError: null,
     };
   }
-  const before = await takeWindowsProcessSnapshot({ runner, timeoutMs, env });
-  const descendants = collectDescendantCreationDates(before, leaderPid);
-  await runTaskkill({ runner, pid: leaderPid, mode: "tree", env, timeoutMs });
+  let enumerationError: WindowsProcessEnumerationError | null = null;
+  let descendants = new Map<number, string | null>();
+  try {
+    const before = await takeWindowsProcessSnapshot({ runner, timeoutMs, env });
+    descendants = dropDescendantsPredatingLeader({
+      descendants: collectDescendantCreationDates(before, leaderPid),
+      snapshot: before,
+      leaderPid,
+    });
+  } catch (error) {
+    enumerationError = toEnumerationError(error);
+  }
+  if (!hasChildExited(args.child)) {
+    await runTaskkill({ runner, pid: leaderPid, mode: "tree", env, timeoutMs });
+  }
   const leaderExited = await waitForChildExit(args.child, args.graceMs);
   if (!leaderExited) {
-    args.child.kill("SIGKILL");
+    try {
+      args.child.kill("SIGKILL");
+    } catch {}
   }
-  const after = await takeWindowsProcessSnapshot({ runner, timeoutMs, env });
-  const observedByPid = new Map(
-    after.map((entry) => [entry.pid, entry.creationDate]),
-  );
   const descendantsKilled: number[] = [];
   const descendantsSkipped: SkippedProcessEvent[] = [];
-  for (const [pid, expectedCreationDate] of descendants) {
-    if (!observedByPid.has(pid)) {
-      continue;
-    }
-    const observedCreationDate = observedByPid.get(pid) ?? null;
-    if (observedCreationDate !== expectedCreationDate) {
-      const event: SkippedProcessEvent = {
-        pid,
-        reason: "pid-reused",
-        expectedCreationDate,
-        observedCreationDate,
-      };
-      descendantsSkipped.push(event);
-      args.onSkippedProcess?.(event);
-      continue;
-    }
-    if (await runTaskkill({ runner, pid, mode: "force", env, timeoutMs })) {
-      descendantsKilled.push(pid);
+  if (enumerationError === null) {
+    try {
+      const after = await takeWindowsProcessSnapshot({
+        runner,
+        timeoutMs,
+        env,
+      });
+      const observedByPid = new Map(
+        after.map((entry) => [entry.pid, entry.creationDate]),
+      );
+      for (const [pid, expectedCreationDate] of descendants) {
+        if (!observedByPid.has(pid)) {
+          continue;
+        }
+        const observedCreationDate = observedByPid.get(pid) ?? null;
+        if (observedCreationDate !== expectedCreationDate) {
+          const event: SkippedProcessEvent = {
+            pid,
+            reason: "pid-reused",
+            expectedCreationDate,
+            observedCreationDate,
+          };
+          descendantsSkipped.push(event);
+          args.onSkippedProcess?.(event);
+          continue;
+        }
+        if (await runTaskkill({ runner, pid, mode: "force", env, timeoutMs })) {
+          descendantsKilled.push(pid);
+        }
+      }
+    } catch (error) {
+      enumerationError = toEnumerationError(error);
     }
   }
   return {
     leaderExited: hasChildExited(args.child),
     descendantsKilled,
     descendantsSkipped,
+    enumerationError,
   };
 }
 
@@ -232,6 +298,7 @@ export async function killWindowsProcessesWithCwdUnder(args: {
       snapshot,
       directory: args.directory,
       selfPid: args.selfPid,
+      includeCommandLineEvidence: false,
     });
     if (targets.length === 0) {
       break;

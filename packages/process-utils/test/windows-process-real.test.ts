@@ -145,7 +145,7 @@ describe("terminateProcessTree against real Windows processes", () => {
         );
         for (const entry of entries) {
           if (entry.ProcessId === grandchildPid) {
-            entry.CreationDate = "1999-01-01T00:00:00.0000000+00:00";
+            entry.CreationDate = "2099-01-01T00:00:00.0000000+00:00";
           }
         }
         return { ...result, stdout: JSON.stringify(entries) };
@@ -163,7 +163,7 @@ describe("terminateProcessTree against real Windows processes", () => {
         {
           pid: grandchildPid,
           reason: "pid-reused",
-          expectedCreationDate: "1999-01-01T00:00:00.0000000+00:00",
+          expectedCreationDate: "2099-01-01T00:00:00.0000000+00:00",
           observedCreationDate: expect.stringMatching(/^\d{4}-/u),
         },
       ]);

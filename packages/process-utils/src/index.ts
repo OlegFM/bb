@@ -191,7 +191,7 @@ export function spawnPortableProcess(
   const cwd = request.cwd;
   const pid = child.pid;
   if (platform === "win32" && cwd !== undefined && pid !== undefined) {
-    registerSweepRootProcess({ pid, cwd });
+    registerSweepRootProcess({ pid, cwd: resolve(cwd) });
     child.once("exit", () => unregisterSweepRootProcess(pid));
   }
   return child;

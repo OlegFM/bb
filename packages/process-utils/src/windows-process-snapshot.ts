@@ -47,6 +47,8 @@ export class WindowsProcessEnumerationError extends Error {
 
 export const WINDOWS_PROCESS_ENUM_TIMEOUT_MS = 10_000;
 
+const WINDOWS_COMMAND_TIMEOUT_GUARD_MS = 1_000;
+
 const WINDOWS_PROCESS_PROJECTION =
   "ProcessId,ParentProcessId,ExecutablePath,CommandLine,@{Name='CreationDate';Expression={if ($_.CreationDate) { $_.CreationDate.ToString('o') } else { $null }}}";
 
@@ -152,6 +154,7 @@ async function runWindowsCommand(args: {
 }): Promise<WindowsCommandResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let result: WindowsCommandResult;
+  const guardTimeoutMs = args.timeoutMs + WINDOWS_COMMAND_TIMEOUT_GUARD_MS;
   try {
     result = await Promise.race([
       args.runner(args.request, { timeoutMs: args.timeoutMs, env: args.env }),
@@ -160,10 +163,10 @@ async function runWindowsCommand(args: {
           rejectRace(
             new WindowsProcessEnumerationError(
               "timeout",
-              `${describeWindowsCommand(args.request)} timed out after ${args.timeoutMs}ms`,
+              `${describeWindowsCommand(args.request)} timed out after ${guardTimeoutMs}ms`,
             ),
           );
-        }, args.timeoutMs);
+        }, guardTimeoutMs);
       }),
     ]);
   } catch (error) {
@@ -400,12 +403,14 @@ export interface MatchWindowsProcessesUnderDirectoryArgs {
   trackedRoots?: ReadonlyMap<number, string>;
   selfPid?: number;
   canonicalizePath?: (value: string) => string;
+  includeCommandLineEvidence?: boolean;
 }
 
 function matchWindowsProcessPath(args: {
   entry: WindowsProcessSnapshotEntry;
   directory: string;
   canonicalize: (value: string) => string;
+  includeCommandLineEvidence: boolean;
 }): { path: string; evidence: WindowsSweepMatchEvidence } | null {
   if (
     args.entry.executablePath !== null &&
@@ -416,7 +421,7 @@ function matchWindowsProcessPath(args: {
   ) {
     return { path: args.entry.executablePath, evidence: "executable-path" };
   }
-  if (args.entry.commandLine !== null) {
+  if (args.includeCommandLineEvidence && args.entry.commandLine !== null) {
     for (const candidate of extractWindowsPathCandidates(
       args.entry.commandLine,
     )) {
@@ -438,6 +443,7 @@ export function matchWindowsProcessesUnderDirectory(
 ): WindowsProcessMatch[] {
   const trackedRoots = args.trackedRoots ?? trackedSweepRoots;
   const canonicalizePath = args.canonicalizePath ?? expandWindowsShortPath;
+  const includeCommandLineEvidence = args.includeCommandLineEvidence ?? true;
   const canonicalCache = new Map<string, string>();
   const canonicalize = (value: string): string => {
     const cached = canonicalCache.get(value);
@@ -473,7 +479,12 @@ export function matchWindowsProcessesUnderDirectory(
     if (entry.pid === args.selfPid || evidenceByPid.has(entry.pid)) {
       continue;
     }
-    const match = matchWindowsProcessPath({ entry, directory, canonicalize });
+    const match = matchWindowsProcessPath({
+      entry,
+      directory,
+      canonicalize,
+      includeCommandLineEvidence,
+    });
     if (match !== null) {
       evidenceByPid.set(entry.pid, {
         cwd: match.path,
@@ -501,7 +512,12 @@ export function matchWindowsProcessesUnderDirectory(
       const own =
         child === undefined
           ? null
-          : matchWindowsProcessPath({ entry: child, directory, canonicalize });
+          : matchWindowsProcessPath({
+              entry: child,
+              directory,
+              canonicalize,
+              includeCommandLineEvidence,
+            });
       evidenceByPid.set(
         childPid,
         own === null
