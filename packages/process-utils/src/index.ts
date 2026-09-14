@@ -1,5 +1,7 @@
 export * from "./plugin-process-paths.js";
 export * from "./resolve-executable.js";
+export * from "./windows-process-snapshot.js";
+export * from "./windows-process-stop.js";
 export * from "./windows-system-tools.js";
 import type { ChildProcess, StdioOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -16,6 +18,18 @@ import {
 } from "node:path";
 import type { Readable, Writable } from "node:stream";
 import crossSpawn from "cross-spawn";
+import {
+  registerSweepRootProcess,
+  unregisterSweepRootProcess,
+  type WindowsCommandRunner,
+  type WindowsSweepMatchEvidence,
+} from "./windows-process-snapshot.js";
+import {
+  killWindowsProcessesWithCwdUnder,
+  listWindowsProcessesWithCwdUnder,
+  terminateProcessTree,
+  type SkippedProcessEvent,
+} from "./windows-process-stop.js";
 
 interface PortableSpawnRequest {
   command: string;
@@ -64,20 +78,35 @@ interface StopProcessGroupLeaderFirstArgs {
   child: ChildProcess;
   timeoutMs: number;
   killGraceMs: number;
+  platform?: NodeJS.Platform;
+  runner?: WindowsCommandRunner;
+  env?: NodeJS.ProcessEnv;
+  onSkippedProcess?: (event: SkippedProcessEvent) => void;
 }
 
-interface ProcessWithCwd {
+export interface ProcessWithCwd {
   pid: number;
   cwd: string;
+  approximateCwd?: true;
+  matchEvidence?: WindowsSweepMatchEvidence;
 }
 
 interface ListProcessesWithCwdUnderArgs {
   directory: string;
+  platform?: NodeJS.Platform;
+  runner?: WindowsCommandRunner;
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
 }
 
 interface KillProcessesWithCwdUnderArgs {
   directory: string;
   graceMs?: number;
+  platform?: NodeJS.Platform;
+  runner?: WindowsCommandRunner;
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+  onSkippedProcess?: (event: SkippedProcessEvent) => void;
 }
 
 interface ResolveContainedPathArgs {
@@ -149,7 +178,7 @@ export function spawnPortableProcess(
   request: PortableSpawnRequest,
 ): PortableChildProcess {
   const platform = request.platform ?? process.platform;
-  return crossSpawn(request.command, request.args, {
+  const child = crossSpawn(request.command, request.args, {
     cwd: request.cwd,
     detached: request.detached,
     env: request.env,
@@ -159,6 +188,13 @@ export function spawnPortableProcess(
         ? (request.windowsHide ?? true)
         : request.windowsHide,
   });
+  const cwd = request.cwd;
+  const pid = child.pid;
+  if (platform === "win32" && cwd !== undefined && pid !== undefined) {
+    registerSweepRootProcess({ pid, cwd });
+    child.once("exit", () => unregisterSweepRootProcess(pid));
+  }
+  return child;
 }
 
 function assertPortablePipedProcess(
@@ -245,6 +281,18 @@ export function stopProcessGroupLeaderFirst(
   args: StopProcessGroupLeaderFirstArgs,
 ): Promise<void> {
   const { child, timeoutMs, killGraceMs } = args;
+  if ((args.platform ?? process.platform) === "win32") {
+    return terminateProcessTree({
+      child,
+      graceMs: timeoutMs,
+      platform: "win32",
+      ...(args.runner !== undefined ? { runner: args.runner } : {}),
+      ...(args.env !== undefined ? { env: args.env } : {}),
+      ...(args.onSkippedProcess !== undefined
+        ? { onSkippedProcess: args.onSkippedProcess }
+        : {}),
+    }).then(() => undefined);
+  }
   if (hasChildExited(child) && !isProcessGroupAlive(child)) {
     return Promise.resolve();
   }
@@ -373,8 +421,14 @@ async function resolveSweepDirectory(
 export async function listProcessesWithCwdUnder(
   args: ListProcessesWithCwdUnderArgs,
 ): Promise<ProcessWithCwd[]> {
-  if (process.platform === "win32") {
-    return [];
+  if ((args.platform ?? process.platform) === "win32") {
+    return listWindowsProcessesWithCwdUnder({
+      directory: args.directory,
+      runner: args.runner,
+      env: args.env,
+      timeoutMs: args.timeoutMs,
+      selfPid: process.pid,
+    });
   }
   const directory = await resolveSweepDirectory(args.directory);
   if (directory === null) {
@@ -421,6 +475,16 @@ function signalProcesses(
 export async function killProcessesWithCwdUnder(
   args: KillProcessesWithCwdUnderArgs,
 ): Promise<ProcessWithCwd[]> {
+  if ((args.platform ?? process.platform) === "win32") {
+    return killWindowsProcessesWithCwdUnder({
+      directory: args.directory,
+      runner: args.runner,
+      env: args.env,
+      timeoutMs: args.timeoutMs,
+      selfPid: process.pid,
+      onSkippedProcess: args.onSkippedProcess,
+    });
+  }
   const graceMs = args.graceMs ?? 2000;
   const signalled = new Map<number, ProcessWithCwd>();
   for (let round = 0; round < MAX_CWD_SWEEP_ROUNDS; round += 1) {

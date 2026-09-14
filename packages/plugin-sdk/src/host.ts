@@ -53,3 +53,4 @@ export {
   spawnPortableOutputProcess as experimental_spawnPortableOutputProcess,
 } from "@bb/process-utils";
 export type { SanitizeInheritedChildProcessEnvArgs as ExperimentalSanitizeInheritedChildProcessEnvArgs } from "@bb/process-utils";
+export type { ProcessWithCwd as ExperimentalProcessWithCwd } from "@bb/process-utils";
