@@ -287,6 +287,46 @@ describe("terminateProcessTree on win32", () => {
     expect(skipped).toEqual(result.descendantsSkipped);
   });
 
+  it("records the skip and keeps killing when the skip callback throws", async () => {
+    const leader = createFakeChild(1000);
+    const calls: number[] = [];
+    const { requests, runner } = createFakeRunner([
+      [cimProcess(1000, 1), cimProcess(1001, 1000), cimProcess(1002, 1000)],
+      [
+        cimProcess(1001, 1000, { CreationDate: REUSED_AT }),
+        cimProcess(1002, 1000),
+      ],
+    ]);
+
+    const result = await terminateProcessTree({
+      child: leader.child,
+      graceMs: 30,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+      onSkippedProcess: (event) => {
+        calls.push(event.pid);
+        throw new Error("progress sink is gone");
+      },
+    });
+
+    expect(calls).toEqual([1001]);
+    expect(result.descendantsSkipped).toEqual([
+      {
+        pid: 1001,
+        reason: "pid-reused",
+        expectedCreationDate: CREATED_AT,
+        observedCreationDate: REUSED_AT,
+      },
+    ]);
+    expect(result.descendantsKilled).toEqual([1002]);
+    expect(result.enumerationError).toBeNull();
+    expect(taskkillArgs(requests)).toEqual([
+      ["/PID", "1000", "/T"],
+      ["/PID", "1002", "/F"],
+    ]);
+  });
+
   it("ignores a failing tree request and reports enumeration failures instead of rejecting", async () => {
     const leader = createFakeChild(1000);
     const failingTaskkill: WindowsCommandRunner = async (request) =>
@@ -494,6 +534,37 @@ describe("killProcessesWithCwdUnder on win32", () => {
         observedCreationDate: REUSED_AT,
       },
     ]);
+  });
+
+  it("keeps sweeping when the skip callback throws", async () => {
+    const calls: number[] = [];
+    const first = [
+      cimProcess(1234, 1, { ExecutablePath: "C:\\work\\bb\\tools\\agent.exe" }),
+      cimProcess(1235, 1, { ExecutablePath: "C:\\work\\bb\\tools\\other.exe" }),
+    ];
+    const verification = [
+      cimProcess(1234, 1, {
+        ExecutablePath: "C:\\work\\bb\\tools\\agent.exe",
+        CreationDate: REUSED_AT,
+      }),
+      cimProcess(1235, 1, { ExecutablePath: "C:\\work\\bb\\tools\\other.exe" }),
+    ];
+    const { requests, runner } = createFakeRunner([first, verification, []]);
+
+    const killed = await killProcessesWithCwdUnder({
+      directory: SWEEP_DIRECTORY,
+      platform: "win32",
+      runner,
+      env: WINDOWS_ENV,
+      onSkippedProcess: (event) => {
+        calls.push(event.pid);
+        throw new Error("progress sink is gone");
+      },
+    });
+
+    expect(calls).toEqual([1234]);
+    expect(taskkillArgs(requests)).toEqual([["/PID", "1235", "/F"]]);
+    expect(killed.map((entry) => entry.pid)).toEqual([1235]);
   });
 
   it("stops once a round finds nothing and propagates enumeration failures", async () => {

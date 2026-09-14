@@ -160,6 +160,15 @@ function dropDescendantsPredatingLeader(args: {
   return retained;
 }
 
+function notifySkippedProcess(
+  onSkippedProcess: ((event: SkippedProcessEvent) => void) | undefined,
+  event: SkippedProcessEvent,
+): void {
+  try {
+    onSkippedProcess?.(event);
+  } catch {}
+}
+
 function toEnumerationError(error: unknown): WindowsProcessEnumerationError {
   if (error instanceof WindowsProcessEnumerationError) {
     return error;
@@ -259,7 +268,7 @@ export async function terminateProcessTree(
             observedCreationDate,
           };
           descendantsSkipped.push(event);
-          args.onSkippedProcess?.(event);
+          notifySkippedProcess(args.onSkippedProcess, event);
           continue;
         }
         if (await runTaskkill({ runner, pid, mode: "force", env, timeoutMs })) {
@@ -339,7 +348,7 @@ export async function killWindowsProcessesWithCwdUnder(args: {
       }
       const observedCreationDate = observedByPid.get(target.pid) ?? null;
       if (observedCreationDate !== target.creationDate) {
-        args.onSkippedProcess?.({
+        notifySkippedProcess(args.onSkippedProcess, {
           pid: target.pid,
           reason: "pid-reused",
           expectedCreationDate: target.creationDate,

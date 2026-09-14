@@ -1,7 +1,11 @@
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { queryWindowsProcess } from "@bb/process-utils";
+import {
+  queryWindowsProcess,
+  resolveWindowsSystemToolPath,
+  spawnPortableProcess,
+} from "@bb/process-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildSetupScriptCommand,
@@ -12,6 +16,36 @@ import {
 } from "./environment-lifecycle-script.js";
 
 const directories: string[] = [];
+const spawnedWindowsPids: number[] = [];
+
+function trackWindowsPid(pid: number): void {
+  if (Number.isSafeInteger(pid) && pid > 0) {
+    spawnedWindowsPids.push(pid);
+  }
+}
+
+function isWindowsPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function forceKillWindowsPid(pid: number): Promise<void> {
+  await new Promise((resolveKill) => {
+    const kill = spawnPortableProcess({
+      command: resolveWindowsSystemToolPath("taskkill.exe", process.env),
+      args: ["/PID", String(pid), "/F"],
+      platform: "win32",
+      stdio: "ignore",
+    });
+    kill.once("error", () => resolveKill(undefined));
+    kill.once("exit", () => resolveKill(undefined));
+  });
+}
+
 async function workspace(
   kind: "setup" | "teardown",
   script: string,
@@ -35,6 +69,14 @@ async function powerShellWorkspace(
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  const pids = spawnedWindowsPids.splice(0);
+  if (process.platform === "win32") {
+    for (const pid of pids) {
+      if (isWindowsPidAlive(pid)) {
+        await forceKillWindowsPid(pid);
+      }
+    }
+  }
   await Promise.all(
     directories
       .splice(0)
@@ -340,6 +382,7 @@ describe("windows environment scripts", () => {
       const workspacePath = await powerShellWorkspace(
         "setup",
         [
+          'Write-Output ("hook-pid=" + $PID)',
           `& '${process.execPath}' (Join-Path $PSScriptRoot 'spawn-descendant.mjs') (Join-Path $PSScriptRoot 'pids.txt')`,
           "",
         ].join("\r\n"),
@@ -363,19 +406,23 @@ describe("windows environment scripts", () => {
       const pidPath = join(workspacePath, "pids.txt");
       const controller = new AbortController();
       const descendants: number[] = [];
-      const recordDescendants = async (): Promise<void> => {
-        if (descendants.length > 0) {
-          return;
-        }
-        let recorded: string;
-        try {
-          recorded = await readFile(pidPath, "utf8");
-        } catch {
-          return;
-        }
-        for (const value of recorded.split(" ")) {
-          descendants.push(Number.parseInt(value, 10));
-        }
+      let recording: Promise<void> | null = null;
+      const recordDescendants = (): Promise<void> => {
+        recording ??= (async () => {
+          let recorded: string;
+          try {
+            recorded = await readFile(pidPath, "utf8");
+          } catch {
+            recording = null;
+            return;
+          }
+          for (const value of recorded.split(" ")) {
+            const pid = Number.parseInt(value, 10);
+            descendants.push(pid);
+            trackWindowsPid(pid);
+          }
+        })();
+        return recording;
       };
 
       try {
@@ -385,7 +432,12 @@ describe("windows environment scripts", () => {
             timeoutMs: 30_000,
             signal: controller.signal,
             onProgress: (entry) => {
+              const hookPid = /^hook-pid=(\d+)$/u.exec(entry.text)?.[1];
+              if (hookPid !== undefined) {
+                trackWindowsPid(Number.parseInt(hookPid, 10));
+              }
               if (entry.text === "descendants-ready") {
+                void recordDescendants();
                 controller.abort();
               }
             },
