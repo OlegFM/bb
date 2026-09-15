@@ -282,7 +282,7 @@ Packages Phase 1 ran: compared against `qa/windows/phase-1/31-test-results.md` *
 | bb-plugin-environment-git-worktree | 1 file / 8 tests | — | **pass** | no — **fixed** |
 | bb-plugin-environment-personal-workspace | 1 file / 1 test | — | **1 / 1** | no — same `host.test.ts` |
 | @bb/process-utils | never run | 1 file / 1 test | **pass** | no — **fixed** |
-| @bb/host-workspace | never run | (see below) | 5 files / 26 tests | no |
+| @bb/host-workspace | never run | **not measured** | 5 files / 26 tests | no evidence of one — see the caveat below |
 | @bb/local-open-targets | never run | 1 file / **7** tests | 1 file / **6** tests | no — **improved** |
 | @bb/secret-storage | never run | pass | **pass** | no |
 | bb-environment-provider-host | never run | pass | **pass** | no |
@@ -394,6 +394,15 @@ environment classes, with **no** Path/PATH or separator assertion among them:
 spelling, and `EBUSY` on temp-directory teardown is the standing Windows class. `@bb/host-workspace` passed
 in WSL at both controller POSIX runs (`40-posix-check.md`), which is the cross-check that these are
 environment, not logic.
+
+**Caveat, stated rather than papered over:** `@bb/host-workspace` is the one package in the filter list for
+which **no base measurement was taken** — it was not in the base worktree's batch, and Phase 1 never ran it,
+so there is no per-file baseline to diff against. The "no newly failing file" entry for it rests on three
+indirect arguments, not a direct comparison: (a) every failing reason is an environment class listed above,
+none of them a path, separator or `Path`/`PATH` assertion; (b) the package passes in WSL at this head; and
+(c) Phase 2's `packages/host-workspace/src/git.ts` changes are win32-gated arms. If the user wants this
+tightened, the direct check is `pnpm exec turbo run test --filter=@bb/host-workspace --force` in a worktree
+at `07fdce05b` and a `comm` of the two failing-test lists.
 
 ### Phase-2 seam packages: every `it.runIf(win32)` case added in Tasks 1–13 passes
 
