@@ -1438,6 +1438,7 @@ async function loadLogViewerWindow(
     onLines(lines) {
       appendLogViewerLines({ lines });
     },
+    platform: process.platform,
   });
   const lineBuffer = createLogLineBuffer({
     flushIntervalMs: LOG_VIEWER_IPC_BATCH_INTERVAL_MS,

@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { mkdir, open, readdir, stat } from "node:fs/promises";
 import { watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { escapeHtmlText } from "@bb/domain";
 import { z } from "zod";
 import {
@@ -15,6 +16,8 @@ export const LOG_VIEWER_IPC_BATCH_LINE_LIMIT = 250;
 
 const LOG_VIEWER_INITIAL_TAIL_LINES = 400;
 const LOG_VIEWER_ROTATION_POLL_INTERVAL_MS = 2_000;
+const LOG_VIEWER_TAIL_WINDOW_BYTES = 64 * 1024;
+const LOG_VIEWER_MAX_TAIL_WINDOW_BYTES = 4 * 1024 * 1024;
 const LOG_VIEWER_COMPONENTS: LogViewerComponent[] = ["server", "host-daemon"];
 const PINO_LEVEL_LABELS = new Map<number, string>([
   [10, "trace"],
@@ -99,6 +102,7 @@ interface ResolveCurrentLogFileArgs {
 interface CreateLogTailerArgs {
   logDir: string;
   onLines(lines: LogViewerLine[]): void;
+  platform?: NodeJS.Platform;
 }
 
 export interface LogTailer {
@@ -138,20 +142,52 @@ interface TailProcess {
   filePath: string;
 }
 
+interface FileFollow {
+  decoder: StringDecoder;
+  filePath: string;
+  mtimeMs: number;
+  offset: number;
+}
+
 interface ComponentTailState {
   component: LogViewerComponent;
   currentFilePath: string | null;
+  fileFollow: FileFollow | null;
   pendingText: string;
   tailProcess: TailProcess | null;
 }
 
-interface RestartTailProcessArgs {
+interface RestartFollowerArgs {
   filePath: string;
   state: ComponentTailState;
 }
 
 interface StopTailProcessArgs {
   state: ComponentTailState;
+}
+
+interface FollowAppendedBytesArgs {
+  state: ComponentTailState;
+}
+
+interface ReadLastLogLinesArgs {
+  filePath: string;
+  maxLines: number;
+}
+
+interface LastLogLines {
+  lines: string[];
+  mtimeMs: number;
+  size: number;
+}
+
+interface ReadAppendedLogBytesArgs {
+  fileFollow: FileFollow;
+}
+
+interface AppendedLogBytes {
+  rotated: boolean;
+  text: string;
 }
 
 interface HandleDirectoryWatchErrorArgs {
@@ -552,12 +588,94 @@ function createComponentTailState(
   return {
     component: args.component,
     currentFilePath: null,
+    fileFollow: null,
     pendingText: "",
     tailProcess: null,
   };
 }
 
+async function readLastLogLines(
+  args: ReadLastLogLinesArgs,
+): Promise<LastLogLines> {
+  const handle = await open(args.filePath, "r");
+  try {
+    const fileStats = await handle.stat();
+    const size = fileStats.size;
+    const mtimeMs = fileStats.mtimeMs;
+    let windowBytes = LOG_VIEWER_TAIL_WINDOW_BYTES;
+    for (;;) {
+      const start = Math.max(0, size - windowBytes);
+      const length = size - start;
+      const buffer = Buffer.alloc(length);
+      const bytesRead =
+        length === 0
+          ? 0
+          : (await handle.read(buffer, 0, length, start)).bytesRead;
+      const text = buffer.subarray(0, bytesRead).toString("utf8");
+      const newlineCount = text.split("\n").length - 1;
+      if (
+        start === 0 ||
+        newlineCount > args.maxLines ||
+        windowBytes >= LOG_VIEWER_MAX_TAIL_WINDOW_BYTES
+      ) {
+        const lines = text.split(/\r?\n/u);
+        if (lines[lines.length - 1] === "") {
+          lines.pop();
+        }
+        return {
+          lines: lines.slice(-args.maxLines),
+          mtimeMs,
+          size: start + bytesRead,
+        };
+      }
+      windowBytes *= 2;
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readAppendedLogBytes(
+  args: ReadAppendedLogBytesArgs,
+): Promise<AppendedLogBytes> {
+  const handle = await open(args.fileFollow.filePath, "r");
+  try {
+    const fileStats = await handle.stat();
+    const size = fileStats.size;
+    const rotated =
+      size < args.fileFollow.offset ||
+      (size === args.fileFollow.offset &&
+        fileStats.mtimeMs !== args.fileFollow.mtimeMs);
+    args.fileFollow.mtimeMs = fileStats.mtimeMs;
+    if (rotated) {
+      args.fileFollow.decoder = new StringDecoder("utf8");
+      args.fileFollow.offset = 0;
+    }
+
+    const length = size - args.fileFollow.offset;
+    if (length <= 0) {
+      return { rotated, text: "" };
+    }
+
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(
+      buffer,
+      0,
+      length,
+      args.fileFollow.offset,
+    );
+    args.fileFollow.offset += bytesRead;
+    return {
+      rotated,
+      text: args.fileFollow.decoder.write(buffer.subarray(0, bytesRead)),
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
 export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
+  const platform = args.platform ?? process.platform;
   const componentStates = LOG_VIEWER_COMPONENTS.map((component) =>
     createComponentTailState({ component }),
   );
@@ -603,6 +721,7 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
 
   function stopTailProcess(stopArgs: StopTailProcessArgs): void {
     const tailProcess = stopArgs.state.tailProcess;
+    stopArgs.state.fileFollow = null;
     stopArgs.state.tailProcess = null;
     stopArgs.state.currentFilePath = null;
     stopArgs.state.pendingText = "";
@@ -628,7 +747,87 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     });
   }
 
-  function restartTailProcess(restartArgs: RestartTailProcessArgs): void {
+  async function followAppendedBytes(
+    followArgs: FollowAppendedBytesArgs,
+  ): Promise<void> {
+    const fileFollow = followArgs.state.fileFollow;
+    if (fileFollow === null) {
+      return;
+    }
+
+    let appended: AppendedLogBytes;
+    try {
+      appended = await readAppendedLogBytes({ fileFollow });
+    } catch {
+      return;
+    }
+    if (stopped || followArgs.state.fileFollow !== fileFollow) {
+      return;
+    }
+    if (appended.rotated) {
+      followArgs.state.pendingText = "";
+    }
+    if (appended.text.length > 0) {
+      handleTailChunk({ chunk: appended.text, state: followArgs.state });
+    }
+  }
+
+  async function restartFileFollow(
+    restartArgs: RestartFollowerArgs,
+  ): Promise<void> {
+    stopTailProcess({ state: restartArgs.state });
+    restartArgs.state.currentFilePath = restartArgs.filePath;
+
+    const fileFollow: FileFollow = {
+      decoder: new StringDecoder("utf8"),
+      filePath: restartArgs.filePath,
+      mtimeMs: 0,
+      offset: 0,
+    };
+    restartArgs.state.fileFollow = fileFollow;
+
+    let initialLines: LastLogLines;
+    try {
+      initialLines = await readLastLogLines({
+        filePath: restartArgs.filePath,
+        maxLines: LOG_VIEWER_INITIAL_TAIL_LINES,
+      });
+    } catch (error) {
+      if (stopped || restartArgs.state.fileFollow !== fileFollow) {
+        return;
+      }
+      restartArgs.state.fileFollow = null;
+      restartArgs.state.currentFilePath = null;
+      const message = error instanceof Error ? error.message : String(error);
+      emitSystemLine({
+        text: `${restartArgs.state.component} log read failed: ${message}`,
+      });
+      return;
+    }
+
+    if (stopped || restartArgs.state.fileFollow !== fileFollow) {
+      return;
+    }
+    fileFollow.mtimeMs = initialLines.mtimeMs;
+    fileFollow.offset = initialLines.size;
+    emitComponentLines({
+      component: restartArgs.state.component,
+      lines: initialLines.lines,
+    });
+    await followAppendedBytes({ state: restartArgs.state });
+  }
+
+  async function restartFollower(
+    restartArgs: RestartFollowerArgs,
+  ): Promise<void> {
+    if (platform === "win32") {
+      await restartFileFollow(restartArgs);
+      return;
+    }
+    restartTailProcess(restartArgs);
+  }
+
+  function restartTailProcess(restartArgs: RestartFollowerArgs): void {
     stopTailProcess({ state: restartArgs.state });
     restartArgs.state.currentFilePath = restartArgs.filePath;
 
@@ -700,11 +899,13 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
         continue;
       }
       if (currentFilePath !== state.currentFilePath) {
-        restartTailProcess({
+        await restartFollower({
           filePath: currentFilePath,
           state,
         });
+        continue;
       }
+      await followAppendedBytes({ state });
     }
   }
 

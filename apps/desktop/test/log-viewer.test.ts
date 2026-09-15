@@ -164,81 +164,91 @@ describe("log viewer", () => {
     ).resolves.toBeNull();
   });
 
-  it("streams appended log lines from the active server log", async () => {
-    const tempDir = await createTempDir();
-    const lines: LogViewerLine[] = [];
-    await writeFile(join(tempDir.path, "server.1.log"), "");
-    const tailer = createLogTailer({
-      logDir: tempDir.path,
-      onLines(newLines) {
-        lines.push(...newLines);
-      },
-    });
-    tailers.push(tailer);
-    await tailer.start();
+  describe.skipIf(process.platform === "win32")(
+    "tail-backed follower (POSIX)",
+    () => {
+      it("streams appended log lines from the active server log", async () => {
+        const tempDir = await createTempDir();
+        const lines: LogViewerLine[] = [];
+        await writeFile(join(tempDir.path, "server.1.log"), "");
+        const tailer = createLogTailer({
+          logDir: tempDir.path,
+          onLines(newLines) {
+            lines.push(...newLines);
+          },
+          platform: "linux",
+        });
+        tailers.push(tailer);
+        await tailer.start();
 
-    await appendFile(join(tempDir.path, "server.1.log"), "streamed\n");
+        await appendFile(join(tempDir.path, "server.1.log"), "streamed\n");
 
-    await waitFor({
-      predicate() {
-        return lines.some((line) => line.text.includes("streamed"));
-      },
-    });
-    expect(lines.some((line) => line.text === "[server] streamed")).toBe(true);
-  });
+        await waitFor({
+          predicate() {
+            return lines.some((line) => line.text.includes("streamed"));
+          },
+        });
+        expect(lines.some((line) => line.text === "[server] streamed")).toBe(
+          true,
+        );
+      });
 
-  it("follows a newer rotated server log file", async () => {
-    const tempDir = await createTempDir();
-    const lines: LogViewerLine[] = [];
-    await writeFile(join(tempDir.path, "server.1.log"), "first\n");
-    const tailer = createLogTailer({
-      logDir: tempDir.path,
-      onLines(newLines) {
-        lines.push(...newLines);
-      },
-    });
-    tailers.push(tailer);
-    await tailer.start();
-    await waitFor({
-      predicate() {
-        return lines.some((line) => line.text === "[server] first");
-      },
-    });
+      it("follows a newer rotated server log file", async () => {
+        const tempDir = await createTempDir();
+        const lines: LogViewerLine[] = [];
+        await writeFile(join(tempDir.path, "server.1.log"), "first\n");
+        const tailer = createLogTailer({
+          logDir: tempDir.path,
+          onLines(newLines) {
+            lines.push(...newLines);
+          },
+          platform: "linux",
+        });
+        tailers.push(tailer);
+        await tailer.start();
+        await waitFor({
+          predicate() {
+            return lines.some((line) => line.text === "[server] first");
+          },
+        });
 
-    await new Promise((resolvePromise) => {
-      setTimeout(resolvePromise, 25);
-    });
-    await writeFile(join(tempDir.path, "server.2.log"), "second\n");
+        await new Promise((resolvePromise) => {
+          setTimeout(resolvePromise, 25);
+        });
+        await writeFile(join(tempDir.path, "server.2.log"), "second\n");
 
-    await waitFor({
-      predicate() {
-        return lines.some((line) => line.text === "[server] second");
-      },
-    });
-  });
+        await waitFor({
+          predicate() {
+            return lines.some((line) => line.text === "[server] second");
+          },
+        });
+      });
 
-  it("kills tail child processes when stopped", async () => {
-    const tempDir = await createTempDir();
-    await writeFile(join(tempDir.path, "server.1.log"), "");
-    await writeFile(join(tempDir.path, "host-daemon.1.log"), "");
-    const tailer = createLogTailer({
-      logDir: tempDir.path,
-      onLines() {},
-    });
-    tailers.push(tailer);
-    await tailer.start();
+      it("kills tail child processes when stopped", async () => {
+        const tempDir = await createTempDir();
+        await writeFile(join(tempDir.path, "server.1.log"), "");
+        await writeFile(join(tempDir.path, "host-daemon.1.log"), "");
+        const tailer = createLogTailer({
+          logDir: tempDir.path,
+          onLines() {},
+          platform: "linux",
+        });
+        tailers.push(tailer);
+        await tailer.start();
 
-    const processIds = tailer.processIds();
-    expect(processIds).toHaveLength(2);
-    expect(processIds.every(isProcessRunning)).toBe(true);
+        const processIds = tailer.processIds();
+        expect(processIds).toHaveLength(2);
+        expect(processIds.every(isProcessRunning)).toBe(true);
 
-    tailer.stop();
-    await waitFor({
-      predicate() {
-        return processIds.every((pid) => !isProcessRunning(pid));
-      },
-    });
-  });
+        tailer.stop();
+        await waitFor({
+          predicate() {
+            return processIds.every((pid) => !isProcessRunning(pid));
+          },
+        });
+      });
+    },
+  );
 
   it("caps the in-memory line buffer to the configured line limit", () => {
     const buffer = createLogLineBuffer({
@@ -285,4 +295,232 @@ describe("log viewer", () => {
     ]);
     buffer.stop();
   });
+});
+
+describe("file-backed follower (win32 arm)", () => {
+  function createWideTestLine(args: CreateTestLogLineArgs): string {
+    return `line-${args.index}`.padEnd(200, "x");
+  }
+
+  it("emits only the last tail window of a large existing log file", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logLines = Array.from({ length: 1_000 }, (_value, index) =>
+      createWideTestLine({ index }),
+    );
+    await writeFile(
+      join(tempDir.path, "server.1.log"),
+      `${logLines.join("\n")}\n`,
+    );
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines).toHaveLength(400);
+    expect(lines[0]?.text).toBe(
+      `[server] ${createWideTestLine({ index: 600 })}`,
+    );
+    expect(lines[399]?.text).toBe(
+      `[server] ${createWideTestLine({ index: 999 })}`,
+    );
+  });
+
+  it("emits every line when the log file is shorter than the tail window", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    await writeFile(join(tempDir.path, "server.1.log"), "alpha\nbeta\ngamma\n");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines.map((line) => line.text)).toEqual([
+      "[server] alpha",
+      "[server] beta",
+      "[server] gamma",
+    ]);
+  });
+
+  it("emits nothing for an empty log file and then streams appended lines", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    await writeFile(join(tempDir.path, "server.1.log"), "");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines).toHaveLength(0);
+
+    await appendFile(join(tempDir.path, "server.1.log"), "streamed\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] streamed");
+      },
+      timeoutMs: 10_000,
+    });
+  }, 20_000);
+
+  it("decodes a multi-byte character split across two appends", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    const character = Buffer.from("é", "utf8");
+    await appendFile(
+      logPath,
+      Buffer.concat([Buffer.from("first\n", "utf8"), character.subarray(0, 1)]),
+    );
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] first");
+      },
+      timeoutMs: 10_000,
+    });
+
+    await appendFile(
+      logPath,
+      Buffer.concat([character.subarray(1), Buffer.from("\n", "utf8")]),
+    );
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] é");
+      },
+      timeoutMs: 10_000,
+    });
+    expect(lines.some((line) => line.text.includes("�"))).toBe(false);
+  }, 30_000);
+
+  it("re-reads a truncated log file from the start", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "one\ntwo\n");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines.map((line) => line.text)).toEqual([
+      "[server] one",
+      "[server] two",
+    ]);
+
+    await writeFile(logPath, "three\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] three");
+      },
+      timeoutMs: 10_000,
+    });
+  }, 20_000);
+
+  it("follows a newer rotated server log file", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    await writeFile(join(tempDir.path, "server.1.log"), "first\n");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] first");
+      },
+      timeoutMs: 10_000,
+    });
+
+    await new Promise((resolvePromise) => {
+      setTimeout(resolvePromise, 25);
+    });
+    await writeFile(join(tempDir.path, "server.2.log"), "second\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] second");
+      },
+      timeoutMs: 10_000,
+    });
+  }, 30_000);
+
+  it("reports no tail child processes", async () => {
+    const tempDir = await createTempDir();
+    await writeFile(join(tempDir.path, "server.1.log"), "");
+    await writeFile(join(tempDir.path, "host-daemon.1.log"), "");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines() {},
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(tailer.processIds()).toEqual([]);
+  });
+
+  it.runIf(process.platform === "win32")(
+    "streams appended lines on this host without an explicit platform",
+    async () => {
+      const tempDir = await createTempDir();
+      const lines: LogViewerLine[] = [];
+      await writeFile(join(tempDir.path, "server.1.log"), "");
+      const tailer = createLogTailer({
+        logDir: tempDir.path,
+        onLines(newLines) {
+          lines.push(...newLines);
+        },
+      });
+      tailers.push(tailer);
+      await tailer.start();
+
+      await appendFile(join(tempDir.path, "server.1.log"), "native\n");
+
+      await waitFor({
+        predicate() {
+          return lines.some((line) => line.text === "[server] native");
+        },
+        timeoutMs: 10_000,
+      });
+      expect(tailer.processIds()).toEqual([]);
+    },
+    20_000,
+  );
 });
