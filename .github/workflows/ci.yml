@@ -308,8 +308,19 @@ jobs:
           --summarize
           --output-logs=new-only
 
+      # The runner's profile temp (C:\Users\RUNNER~1\AppData\Local\Temp) keeps
+      # SYSTEM and BUILTIN\Administrators on files created there even after
+      # `icacls /inheritance:r /grant:r`, so bb's private-secret check refuses
+      # to start a server whose data directory lives under it. Give the smoke a
+      # workspace-local temp root instead.
       - name: Smoke bb-app tarball
-        run: pnpm exec turbo run smoke:tarball --filter=bb-app --output-logs=new-only
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
+        run: |
+          New-Item -ItemType Directory -Force "$env:TEMP" | Out-Null
+          pnpm exec turbo run smoke:tarball --filter=bb-app --output-logs=new-only
+          exit $LASTEXITCODE
 
       - name: Upload Windows test run summaries
         if: ${{ always() }}
