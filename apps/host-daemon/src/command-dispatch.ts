@@ -224,8 +224,10 @@ async function runProviderInstallationOnHost(
   options: CommandDispatchOptions,
 ): Promise<HostDaemonOnlineRpcResult<"provider.installation.run">> {
   try {
+    const platform = process.platform;
     const env = providerCliEnvFromShellEnv(
       options.runtimeManager.getShellEnv(),
+      platform,
     );
     const bridgeLaunch = await resolveRuntimeBridgeLaunch(
       command.bridgeLaunch,
@@ -258,6 +260,7 @@ async function runProviderInstallationOnHost(
         providerId: command.providerId,
         plan: run.command,
         env,
+        platform,
       }),
     );
     if (events.some((event) => event.type === "completed" && event.success)) {

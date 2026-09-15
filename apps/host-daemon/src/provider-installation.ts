@@ -4,6 +4,11 @@ import {
   providerCliInstallEventSchema,
   type ProviderCliInstallEvent,
 } from "@bb/host-daemon-contract";
+import {
+  resolveSpawnPlanOrThrow,
+  terminateProcessTree,
+  type SpawnPlan,
+} from "@bb/process-utils";
 import { spawn as spawnPty } from "node-pty";
 import type { HostDaemonLogger } from "./logger.js";
 import { ensureNodePtySpawnHelperExecutable } from "./terminals/terminal-manager.js";
@@ -18,7 +23,7 @@ const nodePtyLogger: HostDaemonLogger = {
 export interface ProviderInstallationProcess {
   stdout: Readable;
   stderr: Readable;
-  kill(signal: NodeJS.Signals): boolean;
+  kill(signal?: NodeJS.Signals): boolean;
   onError(listener: (error: Error) => void): void;
   onClose(
     listener: (exitCode: number | null, signal: NodeJS.Signals | null) => void,
@@ -30,6 +35,7 @@ export interface ProviderInstallationProcessSpawner {
     command: string;
     args: string[];
     env?: NodeJS.ProcessEnv;
+    platform: NodeJS.Platform;
   }): ProviderInstallationProcess;
 }
 
@@ -58,8 +64,10 @@ function createPtyProviderInstallationProcessSpawner(): ProviderInstallationProc
         name: "xterm-256color",
         rows: 30,
       });
+      let exited = false;
       pty.onData((data) => stdout.write(data));
       pty.onExit(() => {
+        exited = true;
         stdout.end();
         stderr.end();
       });
@@ -67,7 +75,29 @@ function createPtyProviderInstallationProcessSpawner(): ProviderInstallationProc
         stdout,
         stderr,
         kill(signal) {
-          pty.kill(signal);
+          if (args.platform !== "win32") {
+            pty.kill(signal);
+            return true;
+          }
+          pty.kill();
+          const pid = pty.pid;
+          if (pid > 0) {
+            void terminateProcessTree({
+              child: {
+                pid,
+                get exitCode() {
+                  return exited ? 0 : null;
+                },
+                signalCode: null,
+                kill: () => {
+                  pty.kill();
+                  return true;
+                },
+              },
+              graceMs: 0,
+              platform: "win32",
+            });
+          }
           return true;
         },
         onError(listener) {
@@ -86,11 +116,14 @@ export function streamProviderInstallation(args: {
   plan: ProviderInstallationCommand;
   env?: NodeJS.ProcessEnv;
   processSpawner?: ProviderInstallationProcessSpawner;
+  platform?: NodeJS.Platform;
+  resolveSpawnPlan?: typeof resolveSpawnPlanOrThrow;
 }): ReadableStream<Uint8Array> {
   if (activeProviderId !== null) {
     throw new ProviderInstallationInProgressError(activeProviderId);
   }
   activeProviderId = args.providerId;
+  const platform = args.platform ?? process.platform;
   let closed = false;
   let child: ProviderInstallationProcess | null = null;
   const release = () => {
@@ -98,7 +131,7 @@ export function streamProviderInstallation(args: {
   };
 
   return new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       const encoder = new TextEncoder();
       const write = (event: ProviderCliInstallEvent) => {
         if (closed) return;
@@ -116,13 +149,37 @@ export function streamProviderInstallation(args: {
         provider: args.providerId,
         command: args.plan.displayCommand,
       });
+      let spawnPlan: SpawnPlan = {
+        command: args.plan.command,
+        args: [...args.plan.args],
+      };
+      if (platform === "win32") {
+        try {
+          spawnPlan = await (args.resolveSpawnPlan ?? resolveSpawnPlanOrThrow)({
+            command: args.plan.command,
+            args: args.plan.args,
+            env: args.env ?? process.env,
+            platform,
+          });
+        } catch (error) {
+          write({
+            type: "error",
+            provider: args.providerId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          close();
+          return;
+        }
+        if (closed) return;
+      }
       try {
         child = (
           args.processSpawner ?? createPtyProviderInstallationProcessSpawner()
         ).spawn({
-          command: args.plan.command,
-          args: [...args.plan.args],
+          command: spawnPlan.command,
+          args: spawnPlan.args,
           ...(args.env === undefined ? {} : { env: args.env }),
+          platform,
         });
       } catch (error) {
         write({
@@ -173,7 +230,7 @@ export function streamProviderInstallation(args: {
     cancel() {
       closed = true;
       release();
-      child?.kill("SIGTERM");
+      child?.kill(platform === "win32" ? undefined : "SIGTERM");
     },
   });
 }

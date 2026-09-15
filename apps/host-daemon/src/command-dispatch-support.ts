@@ -94,6 +94,7 @@ export interface CommandDispatchOptions {
     providerId: string;
     plan: ProviderInstallationCommand;
     env?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
   }) => ReadableStream<Uint8Array>;
   refreshShellEnv: () => Promise<void>;
   resolveInteractiveRequest?: (
