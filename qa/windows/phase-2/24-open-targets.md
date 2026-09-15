@@ -315,3 +315,161 @@ another process's window. **It was deliberately not opened.** Exact steps for th
 - The gated liveness case cannot pass under vitest's default 5 s timeout as written (finding above); it
   passes at `--testTimeout=30000`.
 - Folder picker: MANUAL, steps above; `supportsNativeFolderPicker: true` captured programmatically.
+
+---
+
+# Gate run 2 — at `3e077adff` (2026-09-15)
+
+Scope of this re-run: the one item run 1 left open — **Finding: an editor target does not return until the
+editor exits** — plus the gated liveness case whose 5 s budget run 1 recorded as a test defect. The Explorer
+reveal, the `wt.exe` terminal, the fallback console and the folder picker are unchanged and are not re-run.
+
+The dev instance was **not running** when run 2 began (`GET /status` on 31813 was refused), so it was started
+for this check and stopped again afterwards:
+
+```powershell
+pnpm dev:app current      # start
+pnpm dev:app stop         # afterwards -> "[dev-app] dev server: stopped"
+```
+```
+GET http://127.0.0.1:31813/status
+{"hostId":"host_45kqba73eq","connected":true,"protocolVersion":200,"serverUrl":"http://127.0.0.1:23813","supportsNativeFolderPicker":true,"platform":"win32"}
+```
+
+The spaced fixture directory run 1 used had been removed at the end of run 1, so it was recreated for this
+check and removed again afterwards:
+`C:\Users\olege\Work\phase2 open targets\a folder\note file.txt`.
+
+Targets discovered for that path are unchanged from run 1 — VS Code is still not installed on this desktop:
+
+```
+id           label        kind
+--           -----        ----
+zed          Zed          editor
+pycharm      PyCharm      editor
+rider        Rider        editor
+antigravity  Antigravity  editor
+default-app  Default App  default-app
+file-manager File Manager file-manager
+terminal     Terminal     terminal
+```
+
+## Editor open target through the daemon route — the finding is fixed
+
+```powershell
+POST http://127.0.0.1:31813/open-in-target
+{"columnNumber":null,"targetId":"zed","path":"C:\\Users\\olege\\Work\\phase2 open targets\\a folder","lineNumber":null}
+```
+```
+RETURNED after 343 ms
+RESPONSE: {}
+```
+
+Run 1, same route, same target, same spaced path:
+`NO RESPONSE after 20056 ms: The request was canceled due to the configured HttpClient.Timeout of 20 seconds elapsing.`
+
+**343 ms against a 20 s timeout that previously expired** — and the request now resolves because the process
+was spawned, not because the editor exited. `40c58854a` sets `detached: true` on both return paths of
+`buildWindowsExecutableInvocation` in `packages/local-open-targets/src/windows-launch.ts`, which is the macOS
+`open -a` semantics the docs bullet now describes.
+
+Zed was genuinely launched and **kept running** after the request returned. Immediately after the POST, the
+CLI shim had been spawned:
+
+```
+ProcessId    : 21024
+CreationDate : 15.09.2026 10:22:50
+ExecutablePath : C:\Users\olege\AppData\Local\Programs\Zed\bin\zed.exe
+```
+
+and after an 8 s settle the shim had handed off and the editor itself was up:
+
+```
+ProcessId      : 30568
+CreationDate   : 15.09.2026 10:22:52
+ExecutablePath : C:\Users\olege\AppData\Local\Programs\Zed\Zed.exe
+CommandLine    : "\\?\C:\Users\olege\AppData\Local\Programs\Zed\Zed.exe" zed-cli://95321dae-8046-40e2-9fde-4e0995580d64
+
+ProcessId      : 31452
+ExecutablePath : C:\Users\olege\AppData\Local\Programs\Zed\Zed.exe
+CommandLine    : "…\Zed.exe" --crash-handler "C:\Users\olege\AppData\Local\Zed\zed-crash-handler-30568"
+```
+
+That is the whole of the gate bullet for this item: the request returns in well under a second **while** the
+editor keeps running.
+
+### A qualification on the new docs bullet, measured rather than assumed
+
+`docs/platform-windows.md` now says an editor started through a `.cmd` shim keeps a hidden, detached
+`cmd.exe` alive for the editor's lifetime. On this desktop **Zed is not such an editor** — it is found
+through the App Paths probe as a real `zed.exe`, so the `nodeShim`/`cmd.exe` branch is not taken and no
+`cmd.exe` shim was created for it. A `Get-CimInstance Win32_Process -Filter "Name='cmd.exe'"` sweep taken
+while Zed was open lists only the dev-app supervisor tree, unrelated system processes and the agent's own
+shell — no `start ""` shim of any kind. The docs bullet is therefore **not contradicted** by this evidence,
+but it is also **not demonstrated** by it; demonstrating it needs an editor whose launcher is a `.cmd`, and
+none of the four editors installed here is.
+
+### Closed via `taskkill`, desktop restored
+
+```powershell
+C:\Windows\System32\taskkill.exe /PID 30568 /F
+```
+```
+SUCCESS: The process with PID 30568 has been terminated.
+```
+
+One process survived the kill for a few seconds — **Zed's own silent auto-updater**, which Zed had spawned
+itself:
+
+```
+ProcessId       : 22080
+ParentProcessId : 30568
+CreationDate    : 15.09.2026 10:23:13
+CommandLine     : "C:\Users\olege\AppData\Local\Programs\Zed\updates\Zed.exe" /verysilent /update=true /MERGETASKS=!desktopicon
+```
+
+It is an installer, so it was **not** killed mid-write; it finished on its own within 10 s and the final
+sweep is clean:
+
+```
+tasklist /FI "IMAGENAME eq Zed.exe" /NH
+INFO: No tasks are running which match the specified criteria.
+```
+
+## Gated liveness case — the 5 s budget defect is fixed
+
+Run 1 recorded this case passing only when given `--testTimeout=30000` on the command line, and failing on
+vitest's default 5 s. `40c58854a` gives the case its own 30 s timeout. Re-run with **no** timeout override:
+
+```powershell
+$env:BB_QA_REAL_LAUNCH='1'
+pnpm --filter @bb/local-open-targets exec vitest run test/workspace-open-targets.test.ts --reporter=verbose -t "leaves a live interactive console behind"
+```
+```
+ ✓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > leaves a live interactive console behind for the terminal fallback 5508ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 87 skipped (88)
+   Duration  7.91s (transform 847ms, setup 0ms, import 2.18s, tests 5.51s, environment 0ms)
+LIVENESS_EXIT=0
+```
+
+5508 ms of case time — comfortably over the old 5000 ms budget and comfortably under the new 30 s one, which
+is why run 1 saw it fail and run 2 sees it pass.
+
+**No console was left behind.** Counts taken immediately before and after the run:
+
+```
+conhost.exe   before 8   after 8
+pwsh.exe      before 2   after 2
+cmd.exe matching 'start ""'   after: none
+```
+
+## Step 8 run-2 verdict
+
+**PASS.** The editor open target returns in 343 ms through the daemon route while Zed stays up, closed
+afterwards with `taskkill` at its absolute System32 path and confirmed to zero processes; the gated liveness
+case passes at the default configuration and leaves no console. The dev instance and the spaced fixture
+directory were both removed, restoring the state run 2 started from. The only reservation is recorded above:
+the `.cmd`-shim half of the new known-limitation bullet cannot be demonstrated on this desktop, because none
+of its installed editors launches through a `.cmd`.

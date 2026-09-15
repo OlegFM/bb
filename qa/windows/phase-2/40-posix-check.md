@@ -212,3 +212,175 @@ Everything else about the POSIX leg is clean and is worth stating plainly, becau
   index), not a change in runtime behaviour.
 
 Per the gate's standing instruction, this is recorded and **not fixed**.
+
+---
+
+# Gate run 2 — POSIX at `3e077adff` (2026-09-15)
+
+Everything above measures gate run 1 (its own runs 1–3, at `604934bb1` and `7d0603bb4`). This section
+measures the head after the three fix commits.
+
+## Why this is a fresh run rather than a reading of the controller's log
+
+The controller's post-fix POSIX log was named as `/tmp/bb-p2-posix-postgate.log` in the WSL guest. **It could
+not be read, and it no longer exists.** WSL was in a failed state when gate run 2 started — every
+`wsl.exe` invocation returned `Wsl/Service/E_UNEXPECTED` (a boot failure), which is also what hung
+`@bb/scripts` for 24 minutes during Step 3 (`31-test-results.md`, "Method note"). Recovering it required
+`wsl.exe --shutdown`, and the guest's `systemd` clears `/tmp` on boot, so all three earlier logs
+(`bb-p2-posix.log`, `bb-p2-posix-final.log`, `bb-p2-posix-postgate.log`) were gone by the time the guest came
+back:
+
+```
+$ ls -la /tmp/bb-p2-posix*.log
+ls: cannot access '/tmp/bb-p2-posix*.log': No such file or directory
+```
+
+Rather than restate numbers from a log that cannot be produced, the whole check was re-run here from
+scratch. The clone was fast-forwarded from the controller's `40c58854a` to the gate head first:
+
+```bash
+cd ~/bb-posix-check && git fetch origin windows-native/phase-2 && git checkout -q FETCH_HEAD
+   40c58854a..3e077adff  windows-native/phase-2 -> origin/windows-native/phase-2
+```
+
+## Environment
+
+Same guest and the same two caveats as gate run 1 (Node 24 in the guest vs 22 on the host; `/mnt/c` stripped
+from `PATH`). Recorded at the top of the run:
+
+```
+HEAD 3e077adff799c5e54663bc1a9af0b51d2a97c51e
+node v24.20.0 pnpm 9.15.0 Linux 6.18.33.2-microsoft-standard-WSL2
+```
+
+## Typecheck
+
+```bash
+corepack pnpm exec turbo run typecheck --output-logs=errors-only
+```
+```
+ Tasks:    94 successful, 94 total
+Cached:    94 cached, 94 total
+  Time:    140ms >>> FULL TURBO
+typecheck exit 0
+```
+
+**94/94, exit 0.**
+
+## Tests — the five packages the fixes touch
+
+```bash
+corepack pnpm exec turbo run test --continue --force --output-logs=errors-only \
+  --filter=@bb/server --filter=@bb/host-daemon --filter=@bb/local-open-targets \
+  --filter=bb-plugin-bb-guide --filter=@bb/templates
+```
+```
+@bb/server:test:  Test Files  2 failed | 236 passed | 2 skipped (240)
+@bb/server:test:       Tests  2 failed | 2452 passed | 2 skipped (2456)
+@bb/server:test:    Duration  145.66s
+ Tasks:    11 successful, 12 total
+Cached:    0 cached, 12 total
+   Time:    3m9.479s
+ Failed:    @bb/server#test
+tests exit 1
+```
+
+**11 of 12 tasks green**, everything forced (`Cached: 0`). `@bb/host-daemon`, `@bb/local-open-targets`,
+`bb-plugin-bb-guide` and `@bb/templates` all pass on POSIX at this head. `@bb/server` fails **2 files**,
+down from gate run 1's **6**.
+
+## The two Phase 2 regressions on Linux
+
+Both files were run directly, not inferred from the package total:
+
+```bash
+corepack pnpm --filter @bb/server exec vitest run test/services/plugins/plugin-authoring-docs.test.ts
+corepack pnpm --filter @bb/host-daemon exec vitest run src/plugin-host-manager.test.ts
+```
+```
+ Test Files  1 passed (1)    Tests  22 passed (22)    Duration  314ms     authoring-docs exit 0
+ Test Files  1 passed (1)    Tests  20 passed (20)    Duration  5.22s     plugin-host-manager exit 0
+```
+
+- `plugin-authoring-docs.test.ts` was the **platform-independent** regression; gate run 1 measured it failing
+  on Linux as well. It is **22/22 green on Linux** here — the same count the Windows host reports.
+- `plugin-host-manager.test.ts` was the **Windows-only** regression; it was green on Linux at 19 tests before
+  and is green at **20** now. The extra case (`builds a single Path key for the login-shell PATH on Windows`)
+  is not `runIf`-gated — it passes an explicit `platform: "win32"` to
+  `sanitizeInheritedChildProcessEnv`, so it runs and passes on **both** platforms. That is the stronger
+  arrangement: the win32 arm now has POSIX coverage too, and the POSIX arm is pinned rather than
+  platform-dependent.
+
+## The remaining two `@bb/server` files, and the flake classification
+
+```
+FAIL  @bb/server  test/services/plugin-catalog/bb-official-generator.test.ts > bb-official marketplace generator > uses the first and last committer dates from plugin history
+FAIL  @bb/server  test/services/threads/timeline-event-budget.test.ts > timeline event budget > preserves canonical rows through the client merge with tiny event windows
+```
+
+**Both were already failing in gate run 1's POSIX run 3** — they are two of the six files listed above, so
+neither is new and neither can be attributed to the fix commits. Gate run 1's other four
+(`install-machine-script.test.ts`, `timeline-perf.test.ts`, `timeline-in-turn-window.test.ts` and
+`plugin-authoring-docs.test.ts`) are green here; only the last of those is a fix, the other three are the
+same load-sensitive class described below.
+
+### `bb-official-generator.test.ts` — a git-version rendering difference in the guest
+
+```
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+  {
+-   "publishedAt": "2026-01-02T03:04:05Z",
+-   "updatedAt": "2026-02-03T04:05:06Z",
++   "publishedAt": "2026-01-02T03:04:05+00:00",
++   "updatedAt": "2026-02-03T04:05:06+00:00",
+  }
+```
+
+The test expects git to render a committer date with a `Z` suffix; the guest's git renders the numeric
+offset form:
+
+```bash
+$ git --version
+git version 2.43.0
+$ git log -1 --date=iso-strict --format='%cd'
+2026-09-15T09:28:14+03:00
+```
+
+An ISO-8601 spelling difference produced by the guest's git, in a package nothing in Phase 2 touches. Not a
+Phase 2 effect and not a Windows effect; recorded, not fixed.
+
+### `timeline-event-budget.test.ts` — parallel-load flake, classified by isolation re-runs
+
+Run twice, back to back, with nothing else running:
+
+```bash
+corepack pnpm --filter @bb/server exec vitest run test/services/threads/timeline-event-budget.test.ts   # x2
+```
+```
+ Test Files  1 passed (1)    Tests  17 passed (17)    Duration  14.66s    teb-1 exit 0
+ Test Files  1 passed (1)    Tests  17 passed (17)    Duration  15.57s    teb-2 exit 0
+```
+
+**17/17 both times, exit 0 both times**, against a failure inside a 240-file package run. The file is a
+budget/ordering assertion over a synthetic event stream, its sibling `timeline-perf.test.ts` is an explicit
+`under 1500 ms` micro-benchmark, and `timeline-in-turn-window.test.ts` is the third of the same family — all
+three flip with scheduling pressure and all three are in gate run 1's POSIX list. Classification:
+**parallel-load flake, unrelated to Phase 2.** This matches the same call made on the Windows side for
+`builtin-plugins.test.ts` and `file-list.test.ts` (`31-test-results.md`), and it is made on the same
+evidence — a timeout or budget failure under load, green on repeat in isolation.
+
+## Step 11 run-2 verdict
+
+**PASS.** Typecheck 94/94 exit 0; 11 of 12 test tasks green with nothing cached; `@bb/server`'s POSIX
+failures down from 6 files to 2; both Phase 2 regressions confirmed fixed on Linux at their own files
+(22/22 and 20/20); and the two files that remain were both already failing before the fixes — one a git
+rendering difference in the guest, one a parallel-load flake that passes twice in isolation.
+
+Method caveat, stated plainly: the controller's post-fix POSIX log was destroyed by the `wsl --shutdown`
+needed to recover the guest, so nothing in this section is quoted from it. Every number above was produced
+by the re-run recorded here, at `3e077adff`, and the raw log is
+`/tmp/bb-p2-posix-run2.log` in the guest (copied to the agent scratchpad as `r2-posix.log`).

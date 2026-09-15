@@ -198,3 +198,206 @@ Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JKrwwED587vxSvZcNRW04gnnSh.json
 
  ERROR  run failed: command  exited (1)
 EXIT=1
+
+
+=== Gate run 2 (HEAD 3e077adff), last 200 lines of the full-load turbo run ===
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/archive-codex-tmp-bb-sessions.test.ts > archive-codex-tmp-bb-sessions > parses explicit cleanup options
+@bb/scripts:test: AssertionError: expected { …(6) } to deeply equal { …(6) }
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test: @@ -1,8 +1,8 @@
+@bb/scripts:test:   {
+@bb/scripts:test:     "codexBin": "\\Users\\tester\\bin\\codex",
+@bb/scripts:test: -   "codexHome": "\\Users\\tester\\custom-codex",
+@bb/scripts:test: +   "codexHome": "C:\\Users\\tester\\custom-codex",
+@bb/scripts:test:     "concurrency": 7,
+@bb/scripts:test:     "dryRun": true,
+@bb/scripts:test:     "patterns": [
+@bb/scripts:test:       "/tmp/custom-bb-*",
+@bb/scripts:test:     ],
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/archive-codex-tmp-bb-sessions.test.ts:76:32
+@bb/scripts:test:      74|     );
+@bb/scripts:test:      75|
+@bb/scripts:test:      76|     expect(parsedArgs.options).toEqual({
+@bb/scripts:test:        |                                ^
+@bb/scripts:test:      77|       codexBin: path.join("/Users/tester", "bin", "codex"),
+@bb/scripts:test:      78|       codexHome: path.join("/Users/tester", "custom-codex"),
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/ci-workflow.test.ts > rejects a pnpm version that disagrees with the root manifest
+@bb/scripts:test: AssertionError: expected 127 to be 1 // Object.is equality
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test: - 1
+@bb/scripts:test: + 127
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/ci-workflow.test.ts:55:25
+@bb/scripts:test:      53|   );
+@bb/scripts:test:      54|
+@bb/scripts:test:      55|   expect(result.status).toBe(1);
+@bb/scripts:test:        |                         ^
+@bb/scripts:test:      56|   expect(result.stdout).toContain(
+@bb/scripts:test:      57|     "pnpm version mismatch: package.json declares 9.15.1, but the acti…
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/ci-workflow.test.ts > rejects a pnpm version that disagrees with the root manifest
+@bb/scripts:test: Error: EBUSY: resource busy or locked, rmdir 'C:\Users\olege\AppData\Local\Temp\bb-pnpm-version-mLKOCy'
+@bb/scripts:test:  ❯ test/ci-workflow.test.ts:30:24
+@bb/scripts:test:      28| it("rejects a pnpm version that disagrees with the root manifest", () …
+@bb/scripts:test:      29|   const fixture = mkdtempSync(join(tmpdir(), "bb-pnpm-version-"));
+@bb/scripts:test:      30|   onTestFinished(() => rmSync(fixture, { force: true, recursive: true …
+@bb/scripts:test:        |                        ^
+@bb/scripts:test:      31|   const fakeBin = resolve(fixture, "bin");
+@bb/scripts:test:      32|   mkdirSync(fakeBin);
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/pr-approval-workflows.test.ts > keeps trusted automation pull requests open
+@bb/scripts:test: AssertionError: expected 1 to be +0 // Object.is equality
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test: - 0
+@bb/scripts:test: + 1
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/pr-approval-workflows.test.ts:47:27
+@bb/scripts:test:      45|   for (const author of ["bb-slop-cop[bot]", "dependabot[bot]"]) {
+@bb/scripts:test:      46|     const result = gate(author);
+@bb/scripts:test:      47|     expect(result.status).toBe(0);
+@bb/scripts:test:        |                           ^
+@bb/scripts:test:      48|     expect(result.stdout).toContain("--remove-label needs-approval");
+@bb/scripts:test:      49|     expect(result.stdout).not.toContain("pr close");
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/pr-approval-workflows.test.ts > parses only complete GitHub user and bot approval commands
+@bb/scripts:test: AssertionError: expected 1 to be +0 // Object.is equality
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test: - 0
+@bb/scripts:test: + 1
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/pr-approval-workflows.test.ts:62:27
+@bb/scripts:test:      60|   ]) {
+@bb/scripts:test:      61|     const result = run(parser, { COMMENT_BODY: comment });
+@bb/scripts:test:      62|     expect(result.status).toBe(0);
+@bb/scripts:test:        |                           ^
+@bb/scripts:test:      63|     expect(result.stdout).toBe(target);
+@bb/scripts:test:      64|   }
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/run-dev.test.ts > run-dev > inherits parent bb skills for managed worktree dev apps
+@bb/scripts:test: AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test:   [
+@bb/scripts:test: -   "/Users/tester/.bb-dev/code-bb-abc123/skills",
+@bb/scripts:test: -   "/Users/tester/.bb/skills",
+@bb/scripts:test: +   "C:\\Users\\tester\\.bb-dev\\code-bb-abc123\\skills",
+@bb/scripts:test: +   "\\Users\\tester\\.bb\\skills",
+@bb/scripts:test:   ]
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/run-dev.test.ts:155:71
+@bb/scripts:test:     153|       "/Users/tester/.bb/skills",
+@bb/scripts:test:     154|     ];
+@bb/scripts:test:     155|     expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).…
+@bb/scripts:test:        |                                                                       ^
+@bb/scripts:test:     156|       inheritedSkillsRootPaths,
+@bb/scripts:test:     157|     );
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/run-dev.test.ts > run-dev > dedupes inherited bb skills for prod-managed worktree dev apps
+@bb/scripts:test: AssertionError: expected [ 'C:\Users\tester\.bb\skills', …(1) ] to deeply equal [ '/Users/tester/.bb/skills' ]
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test:   [
+@bb/scripts:test: -   "/Users/tester/.bb/skills",
+@bb/scripts:test: +   "C:\\Users\\tester\\.bb\\skills",
+@bb/scripts:test: +   "\\Users\\tester\\.bb\\skills",
+@bb/scripts:test:   ]
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/run-dev.test.ts:207:71
+@bb/scripts:test:     205|     });
+@bb/scripts:test:     206|
+@bb/scripts:test:     207|     expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).…
+@bb/scripts:test:        |                                                                       ^
+@bb/scripts:test:     208|       "/Users/tester/.bb/skills",
+@bb/scripts:test:     209|     ]);
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/run-dev.test.ts > run-dev > inherits prod bb skills for ordinary checkout dev apps
+@bb/scripts:test: AssertionError: expected [ '\Users\tester\.bb\skills' ] to deeply equal [ '/Users/tester/.bb/skills' ]
+@bb/scripts:test: 
+@bb/scripts:test: - Expected
+@bb/scripts:test: + Received
+@bb/scripts:test: 
+@bb/scripts:test:   [
+@bb/scripts:test: -   "/Users/tester/.bb/skills",
+@bb/scripts:test: +   "\\Users\\tester\\.bb\\skills",
+@bb/scripts:test:   ]
+@bb/scripts:test: 
+@bb/scripts:test:  ❯ test/run-dev.test.ts:223:71
+@bb/scripts:test:     221|     });
+@bb/scripts:test:     222|
+@bb/scripts:test:     223|     expect(resolveInheritedDevSkillsRootPaths({ homeDir, repoRoot })).…
+@bb/scripts:test:        |                                                                       ^
+@bb/scripts:test:     224|       "/Users/tester/.bb/skills",
+@bb/scripts:test:     225|     ]);
+@bb/scripts:test: 
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test:  FAIL  |@bb/scripts| test/source-cli-wrapper.test.ts > source CLI wrapper > keeps --json stdout parseable when the prepare build writes progress
+@bb/scripts:test: Error: spawn pnpm ENOENT
+@bb/scripts:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+@bb/scripts:test: 
+@bb/scripts:test: 
+@bb/scripts:test:  Test Files  5 failed | 21 passed (26)
+@bb/scripts:test:       Tests  10 failed | 156 passed | 2 skipped (168)
+@bb/scripts:test:    Start at  09:33:44
+@bb/scripts:test:    Duration  1722.33s (transform 163.15s, setup 0ms, import 195.08s, tests 1833.60s, environment 6ms)
+@bb/scripts:test: 
+@bb/scripts:test:  ELIFECYCLE  Test failed. See above for more details.
+@bb/scripts#test:  WARNING  command finished with error, but continuing...
+bb-plugin-environment-personal-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\environment-personal-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-app#test:  ERROR  command (C:\Users\olege\Work\bb\packages\bb-app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-github#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\github) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/local-open-targets#test:  ERROR  command (C:\Users\olege\Work\bb\packages\local-open-targets) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/config#test:  ERROR  command (C:\Users\olege\Work\bb\packages\config) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-automations#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\automations) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/desktop#test:  ERROR  command (C:\Users\olege\Work\bb\apps\desktop) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-daemon#test:  ERROR  command (C:\Users\olege\Work\bb\apps\host-daemon) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/cli#test:  ERROR  command (C:\Users\olege\Work\bb\apps\cli) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\packages\host-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-claude-code#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-claude-code) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/server#test:  ERROR  command (C:\Users\olege\Work\bb\apps\server) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/app#test:  ERROR  command (C:\Users\olege\Work\bb\apps\app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/scripts#test:  ERROR  command (C:\Users\olege\Work\bb\packages\scripts) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+
+  Tasks:    17 successful, 31 total
+ Cached:    15 cached, 31 total
+   Time:    29m34.486s 
+Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JM0hK81CoEuD2ZWRV2xTYn9sC3.json
+ Failed:    @bb/app#test, @bb/cli#test, @bb/config#test, @bb/desktop#test, @bb/host-daemon#test, @bb/host-workspace#test, @bb/local-open-targets#test, @bb/scripts#test, @bb/server#test, bb-app#test, bb-plugin-automations#test, bb-plugin-environment-personal-workspace#test, bb-plugin-github#test, bb-plugin-provider-claude-code#test
+
+ ERROR  run failed: command  exited (1)
+EXIT=1
