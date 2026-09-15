@@ -22,8 +22,11 @@ import {
 import {
   buildTerminalEnv,
   ensureNodePtySpawnHelpersExecutableInPackage,
+  PRIMARY_DEVICE_ATTRIBUTES_RESPONSE,
   resolveDefaultTerminalShell,
   resolveNodePtySpawnHelperPaths,
+  TERMINAL_SWEEP_REGISTER_RETRIES,
+  TERMINAL_SWEEP_REGISTER_RETRY_MS,
   TerminalManager,
   TerminalShellUnavailableError,
   terminalCloseSupportsForceKill,
@@ -41,8 +44,6 @@ import {
 const tempDirs: string[] = [];
 const DEFAULT_TERMINAL_START = { mode: "shell" } as const;
 const FAKE_TERMINAL_PID = 4242;
-const SWEEP_REGISTER_RETRY_MS = 250;
-const PRIMARY_DEVICE_ATTRIBUTES_RESPONSE = "\u001b[?1;2c";
 const WINDOWS_TEST_SHELL = "C:\\Windows\\System32\\cmd.exe";
 
 interface ResizeCall {
@@ -57,6 +58,7 @@ interface SpawnedTerminal {
 
 interface TerminalManagerHarness {
   adapter: FakeTerminalPtyAdapter;
+  logger: HostDaemonLogger;
   manager: TerminalManager;
   messages: HostDaemonDaemonWsMessage[];
   runtime: AgentRuntime;
@@ -73,6 +75,7 @@ type TerminalMessageObserver = (message: HostDaemonDaemonWsMessage) => void;
 
 interface CreateHarnessOptions {
   closeGracePeriodMs?: number;
+  logger?: HostDaemonLogger;
   markTerminalActiveError?: Error;
   onSendMessage: TerminalMessageObserver;
   platform?: NodeJS.Platform;
@@ -350,6 +353,7 @@ function createHarnessWithOptions(
   const messages: HostDaemonDaemonWsMessage[] = [];
   const runtime = createFakeRuntime();
   const workspace = createFakeWorkspace("/tmp/terminal-workspace");
+  const logger = args.logger ?? createFakeLogger();
   const runtimeManagerOptions: RuntimeManagerOptions = {
     createRuntime: () => runtime,
     provisionWorkspace: async () => workspace,
@@ -366,7 +370,7 @@ function createHarnessWithOptions(
         );
   const manager = new TerminalManager({
     closeGracePeriodMs: args.closeGracePeriodMs,
-    logger: createFakeLogger(),
+    logger,
     platform: args.platform ?? "linux",
     ptyAdapter: adapter,
     resolveShell: args.resolveShell,
@@ -380,6 +384,7 @@ function createHarnessWithOptions(
 
   return {
     adapter,
+    logger,
     manager,
     messages,
     runtime,
@@ -964,91 +969,97 @@ describe("TerminalManager", () => {
     expect(env?.NODE_ENV).toBeUndefined();
   });
 
-  it("makes every available node-pty spawn-helper executable", async () => {
-    const logger = createFakeLogger();
-    const packageDirectory = await makeTempDir("bb-node-pty-package-");
-    const buildNativePath = path.join(
-      packageDirectory,
-      "build",
-      "Release",
-      "pty.node",
-    );
-    const buildHelperPath = path.join(
-      packageDirectory,
-      "build",
-      "Release",
-      "spawn-helper",
-    );
-    const prebuildHelperPath = path.join(
-      packageDirectory,
-      "prebuilds",
-      `${process.platform}-${process.arch}`,
-      "spawn-helper",
-    );
-    await writeEmptyFile(buildNativePath);
-    await writeEmptyFile(buildHelperPath);
-    await fs.chmod(buildHelperPath, 0o644);
-    await writeEmptyFile(
-      path.join(
+  it.skipIf(process.platform === "win32")(
+    "makes every available node-pty spawn-helper executable (NTFS has no POSIX mode bits)",
+    async () => {
+      const logger = createFakeLogger();
+      const packageDirectory = await makeTempDir("bb-node-pty-package-");
+      const buildNativePath = path.join(
+        packageDirectory,
+        "build",
+        "Release",
+        "pty.node",
+      );
+      const buildHelperPath = path.join(
+        packageDirectory,
+        "build",
+        "Release",
+        "spawn-helper",
+      );
+      const prebuildHelperPath = path.join(
         packageDirectory,
         "prebuilds",
         `${process.platform}-${process.arch}`,
-        "pty.node",
-      ),
-    );
-    await writeEmptyFile(prebuildHelperPath);
-    await fs.chmod(prebuildHelperPath, 0o644);
+        "spawn-helper",
+      );
+      await writeEmptyFile(buildNativePath);
+      await writeEmptyFile(buildHelperPath);
+      await fs.chmod(buildHelperPath, 0o644);
+      await writeEmptyFile(
+        path.join(
+          packageDirectory,
+          "prebuilds",
+          `${process.platform}-${process.arch}`,
+          "pty.node",
+        ),
+      );
+      await writeEmptyFile(prebuildHelperPath);
+      await fs.chmod(prebuildHelperPath, 0o644);
 
-    expect(resolveNodePtySpawnHelperPaths({ packageDirectory })).toEqual([
-      buildHelperPath,
-      prebuildHelperPath,
-    ]);
+      expect(resolveNodePtySpawnHelperPaths({ packageDirectory })).toEqual([
+        buildHelperPath,
+        prebuildHelperPath,
+      ]);
 
-    ensureNodePtySpawnHelpersExecutableInPackage({
-      logger,
-      packageDirectory,
-    });
+      ensureNodePtySpawnHelpersExecutableInPackage({
+        logger,
+        packageDirectory,
+      });
 
-    const buildHelperMode = (await fs.stat(buildHelperPath)).mode;
-    const prebuildHelperMode = (await fs.stat(prebuildHelperPath)).mode;
-    expect(buildHelperMode & 0o111).not.toBe(0);
-    expect(prebuildHelperMode & 0o111).not.toBe(0);
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
+      const buildHelperMode = (await fs.stat(buildHelperPath)).mode;
+      const prebuildHelperMode = (await fs.stat(prebuildHelperPath)).mode;
+      expect(buildHelperMode & 0o111).not.toBe(0);
+      expect(prebuildHelperMode & 0o111).not.toBe(0);
+      expect(logger.warn).not.toHaveBeenCalled();
+    },
+  );
 
-  it("makes an available prebuild-only node-pty spawn-helper executable", async () => {
-    const logger = createFakeLogger();
-    const packageDirectory = await makeTempDir("bb-node-pty-package-");
-    const prebuildHelperPath = path.join(
-      packageDirectory,
-      "prebuilds",
-      `${process.platform}-${process.arch}`,
-      "spawn-helper",
-    );
-    await writeEmptyFile(
-      path.join(
+  it.skipIf(process.platform === "win32")(
+    "makes an available prebuild-only node-pty spawn-helper executable (NTFS has no POSIX mode bits)",
+    async () => {
+      const logger = createFakeLogger();
+      const packageDirectory = await makeTempDir("bb-node-pty-package-");
+      const prebuildHelperPath = path.join(
         packageDirectory,
         "prebuilds",
         `${process.platform}-${process.arch}`,
-        "pty.node",
-      ),
-    );
-    await writeEmptyFile(prebuildHelperPath);
-    await fs.chmod(prebuildHelperPath, 0o644);
+        "spawn-helper",
+      );
+      await writeEmptyFile(
+        path.join(
+          packageDirectory,
+          "prebuilds",
+          `${process.platform}-${process.arch}`,
+          "pty.node",
+        ),
+      );
+      await writeEmptyFile(prebuildHelperPath);
+      await fs.chmod(prebuildHelperPath, 0o644);
 
-    expect(resolveNodePtySpawnHelperPaths({ packageDirectory })).toEqual([
-      prebuildHelperPath,
-    ]);
+      expect(resolveNodePtySpawnHelperPaths({ packageDirectory })).toEqual([
+        prebuildHelperPath,
+      ]);
 
-    ensureNodePtySpawnHelpersExecutableInPackage({
-      logger,
-      packageDirectory,
-    });
+      ensureNodePtySpawnHelpersExecutableInPackage({
+        logger,
+        packageDirectory,
+      });
 
-    const prebuildHelperMode = (await fs.stat(prebuildHelperPath)).mode;
-    expect(prebuildHelperMode & 0o111).not.toBe(0);
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
+      const prebuildHelperMode = (await fs.stat(prebuildHelperPath)).mode;
+      expect(prebuildHelperMode & 0o111).not.toBe(0);
+      expect(logger.warn).not.toHaveBeenCalled();
+    },
+  );
 
   it("logs and skips when no node-pty spawn-helper is present", async () => {
     const logger = createFakeLogger();
@@ -1516,7 +1527,7 @@ describe("TerminalManager", () => {
     const pty = await openTerminal(harness);
 
     expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
-    await vi.advanceTimersByTimeAsync(2 * SWEEP_REGISTER_RETRY_MS);
+    await vi.advanceTimersByTimeAsync(2 * TERMINAL_SWEEP_REGISTER_RETRY_MS);
     expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(true);
 
     await harness.manager.handleMessage({
@@ -1530,16 +1541,42 @@ describe("TerminalManager", () => {
     expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
   });
 
+  it("gives up registering the sweep root once the pid never arrives", async () => {
+    vi.useFakeTimers();
+    const logger = createFakeLogger();
+    const harness = createHarnessWithOptions({
+      logger,
+      onSendMessage: () => undefined,
+      platform: "win32",
+      ptyPids: [0],
+      resolveShell: async () => WINDOWS_TEST_SHELL,
+    });
+    await openTerminal(harness);
+
+    await vi.advanceTimersByTimeAsync(
+      TERMINAL_SWEEP_REGISTER_RETRIES * TERMINAL_SWEEP_REGISTER_RETRY_MS,
+    );
+
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { terminalId: "term-1" },
+      "Terminal pty never reported a pid; sweep root not registered",
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not register sweep roots on POSIX", async () => {
+    vi.useFakeTimers();
     const harness = createHarnessWithOptions({
       onSendMessage: () => undefined,
       platform: "linux",
+      ptyPids: [0, 0, FAKE_TERMINAL_PID],
       resolveShell: async () => "/bin/zsh",
     });
     await openTerminal(harness);
 
-    expect(harness.manager.listOpenTerminalPids()).toEqual([FAKE_TERMINAL_PID]);
     expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("writes the device attributes reply as UTF-8 bytes on Windows", async () => {

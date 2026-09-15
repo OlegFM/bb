@@ -114,7 +114,7 @@ async function openWin32Terminal(): Promise<Win32TerminalHarness> {
     requestId: "open-conpty",
     terminalId: harness.terminalId,
     target: { kind: "host_path", cwd },
-    cols: 100,
+    cols: 200,
     rows: 30,
     start: { mode: "shell" },
   });
@@ -185,9 +185,14 @@ afterEach(async () => {
     await closeWin32Terminal(harness);
   }
   await Promise.all(
-    tempDirs
-      .splice(0)
-      .map((tempDir) => fs.rm(tempDir, { force: true, recursive: true })),
+    tempDirs.splice(0).map((tempDir) =>
+      fs.rm(tempDir, {
+        force: true,
+        maxRetries: 5,
+        recursive: true,
+        retryDelay: 100,
+      }),
+    ),
   );
 });
 
