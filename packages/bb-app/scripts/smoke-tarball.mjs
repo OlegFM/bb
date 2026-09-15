@@ -226,7 +226,7 @@ async function reserveFreePorts(count) {
   }
 }
 
-async function readPortCollisionDetails(processRef, logPaths) {
+async function readProcessDiagnostics(processRef, logPaths) {
   const sections = [formatProcessOutput(processRef.output)];
   for (const logPath of logPaths) {
     try {
@@ -238,7 +238,11 @@ async function readPortCollisionDetails(processRef, logPaths) {
       if (error.code !== "ENOENT") throw error;
     }
   }
-  const details = sections.filter(Boolean).join("\n\n");
+  return sections.filter(Boolean).join("\n\n");
+}
+
+async function readPortCollisionDetails(processRef, logPaths) {
+  const details = await readProcessDiagnostics(processRef, logPaths);
   return PORT_COLLISION_PATTERN.test(details) ? details : null;
 }
 
@@ -283,7 +287,10 @@ async function waitForHttp({
       processRef.childProcess.signalCode !== null
     ) {
       throw new Error(
-        `${label} exited before ${url} became healthy\n${formatProcessOutput(processRef.output)}`,
+        `${label} exited before ${url} became healthy\n${await readProcessDiagnostics(
+          processRef,
+          portCollisionLogPaths,
+        )}`,
       );
     }
     try {
@@ -297,7 +304,10 @@ async function waitForHttp({
     await delay(HTTP_WAIT_INTERVAL_MS);
   }
   throw new Error(
-    `Timed out waiting for ${label} at ${url}\n${formatProcessOutput(processRef.output)}`,
+    `Timed out waiting for ${label} at ${url}\n${await readProcessDiagnostics(
+      processRef,
+      portCollisionLogPaths,
+    )}`,
   );
 }
 
@@ -1274,5 +1284,10 @@ try {
     `bb-app tarball smoke passed in ${formatElapsed(smokeStartedAt)}\n`,
   );
 } finally {
-  await rm(tempRoot, { force: true, recursive: true });
+  await rm(tempRoot, {
+    force: true,
+    maxRetries: 10,
+    recursive: true,
+    retryDelay: 200,
+  });
 }
