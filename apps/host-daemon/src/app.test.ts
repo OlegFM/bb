@@ -69,6 +69,8 @@ type StartIdleProviderSessionReaperArgsForTest = Parameters<
   typeof startIdleProviderSessionReaper
 >[0];
 
+const providerPathEnvKey = process.platform === "win32" ? "Path" : "PATH";
+
 const tempDirs: string[] = [];
 
 function createLogger() {
@@ -479,7 +481,7 @@ describe("createHostDaemonApp", () => {
       expect(runtimeOptions.current).toEqual(
         expect.objectContaining({
           env: {
-            PATH: "/shell/bin:/usr/bin",
+            [providerPathEnvKey]: "/shell/bin:/usr/bin",
           },
           shellEnv: {
             PATH: "/shell/bin:/usr/bin",
@@ -581,7 +583,7 @@ describe("createHostDaemonApp", () => {
       expect(runtimeOptions.current).toEqual(
         expect.objectContaining({
           env: {
-            PATH: "/startup/bin:/usr/bin",
+            [providerPathEnvKey]: "/startup/bin:/usr/bin",
           },
         }),
       );
