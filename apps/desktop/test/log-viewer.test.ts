@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const openControl = vi.hoisted(() => ({
-  failingPath: null as string | null,
+const openControl = vi.hoisted((): { failingPath: string | null } => ({
+  failingPath: null,
 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -598,6 +598,50 @@ describe("file-backed follower (win32 arm)", () => {
     });
     expect(lines.some((line) => line.text === "[server] before")).toBe(true);
   }, 20_000);
+
+  it("reports a failing log attach once while the failure persists", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "before\n");
+    openControl.failingPath = logPath;
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines.map((line) => line.text)).toEqual([
+      "[system] server log read failed: EBUSY: resource busy or locked, open",
+    ]);
+
+    for (let index = 0; index < 3; index += 1) {
+      await appendFile(logPath, `ignored-${index}\n`);
+      await new Promise((resolvePromise) => {
+        setTimeout(resolvePromise, 50);
+      });
+    }
+    expect(
+      lines.filter((line) =>
+        line.text.startsWith("[system] server log read failed:"),
+      ),
+    ).toHaveLength(1);
+
+    openControl.failingPath = null;
+    await appendFile(logPath, "after\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] after");
+      },
+      timeoutMs: 10_000,
+    });
+    expect(lines.some((line) => line.text === "[server] before")).toBe(true);
+  }, 30_000);
 
   it("reports a failing follow once and resumes after it recovers", async () => {
     const tempDir = await createTempDir();

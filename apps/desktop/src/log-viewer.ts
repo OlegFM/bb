@@ -150,6 +150,7 @@ interface FileFollow {
 }
 
 interface ComponentTailState {
+  attachFailed: boolean;
   component: LogViewerComponent;
   currentFilePath: string | null;
   fileFollow: FileFollow | null;
@@ -587,6 +588,7 @@ function createComponentTailState(
   args: CreateComponentTailStateArgs,
 ): ComponentTailState {
   return {
+    attachFailed: false,
     component: args.component,
     currentFilePath: null,
     fileFollow: null,
@@ -811,16 +813,20 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
         return;
       }
       restartArgs.state.currentFilePath = null;
-      const message = error instanceof Error ? error.message : String(error);
-      emitSystemLine({
-        text: `${restartArgs.state.component} log read failed: ${message}`,
-      });
+      if (!restartArgs.state.attachFailed) {
+        restartArgs.state.attachFailed = true;
+        const message = error instanceof Error ? error.message : String(error);
+        emitSystemLine({
+          text: `${restartArgs.state.component} log read failed: ${message}`,
+        });
+      }
       return;
     }
 
     if (stopped || restartArgs.state.currentFilePath !== restartArgs.filePath) {
       return;
     }
+    restartArgs.state.attachFailed = false;
     restartArgs.state.fileFollow = {
       decoder: new StringDecoder("utf8"),
       filePath: restartArgs.filePath,
@@ -994,7 +1000,11 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
         scheduleRefresh,
         LOG_VIEWER_ROTATION_POLL_INTERVAL_MS,
       );
-      await runGatedRefresh();
+      if (platform === "win32") {
+        await runGatedRefresh();
+        return;
+      }
+      await refreshTailProcesses();
     },
     stop() {
       stopped = true;
