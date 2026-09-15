@@ -287,6 +287,7 @@ jobs:
           --filter=@bb/host-daemon
           --filter=@bb/desktop
           --filter=@bb/scripts
+          --filter=bb-app
           --output-logs=new-only
 
       # continue-on-error, not `|| true`: the step still renders as failed in
@@ -302,9 +303,13 @@ jobs:
           --filter=@bb/host-daemon
           --filter=@bb/desktop
           --filter=@bb/scripts
+          --filter=bb-app
           --continue
           --summarize
           --output-logs=new-only
+
+      - name: Smoke bb-app tarball
+        run: pnpm exec turbo run smoke:tarball --filter=bb-app --output-logs=new-only
 
       - name: Upload Windows test run summaries
         if: ${{ always() }}

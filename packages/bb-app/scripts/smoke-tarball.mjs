@@ -1,6 +1,6 @@
 import { fork, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -13,6 +13,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveNpmLaunch } from "./npm-launch.mjs";
 
 const HTTP_WAIT_TIMEOUT_MS = 60_000;
 const HTTP_WAIT_INTERVAL_MS = 250;
@@ -119,8 +120,21 @@ function waitForProcessExit(childProcess) {
   });
 }
 
+function resolveLaunch(command, args) {
+  if (command !== "npm" && command !== "npx") {
+    return { args, command };
+  }
+  return resolveNpmLaunch({
+    args,
+    command,
+    execPath: process.execPath,
+    platform: process.platform,
+  });
+}
+
 async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
-  const childProcess = spawn(command, args, {
+  const launch = resolveLaunch(command, args);
+  const childProcess = spawn(launch.command, launch.args, {
     cwd,
     env: {
       ...process.env,
@@ -141,7 +155,8 @@ async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
 
 function spawnManagedProcess({ args, command, env = {}, label }) {
   const detached = process.platform !== "win32";
-  const childProcess = spawn(command, args, {
+  const launch = resolveLaunch(command, args);
+  const childProcess = spawn(launch.command, launch.args, {
     cwd: tempRoot,
     detached,
     env: {
@@ -385,10 +400,30 @@ async function stopManagedProcess(processRef) {
   }
 }
 
+function resolveInstalledBinEntry(binDir, bin) {
+  const packageDir = join(binDir, "..", "bb-app");
+  const packageJson = JSON.parse(
+    readFileSync(join(packageDir, "package.json"), "utf8"),
+  );
+  const entry = packageJson.bin?.[bin];
+  if (typeof entry !== "string") {
+    throw new Error(
+      `Installed bb-app package.json has no bin entry for ${bin}`,
+    );
+  }
+  return join(packageDir, entry);
+}
+
 function createInstalledBinInvocation(binDir, bin, args) {
   // The tarball is installed once below. Run its npm-created bin links
   // directly so package resolution and installation cannot consume a
   // managed process's readiness budget before that process even starts.
+  if (process.platform === "win32") {
+    return {
+      args: [resolveInstalledBinEntry(binDir, bin), ...args],
+      command: process.execPath,
+    };
+  }
   return {
     args,
     command: join(binDir, bin),
