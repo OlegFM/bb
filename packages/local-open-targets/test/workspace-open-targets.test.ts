@@ -2623,11 +2623,92 @@ describe("workspace open targets", () => {
           {
             file: path.join(pathDirectory, "code.exe"),
             args: ["-g", `${filePath}:15:6`],
-            options: { env: { Path: pathDirectory } },
+            options: { detached: true, env: { Path: pathDirectory } },
           },
         ]);
       } finally {
         await rm(pathDirectory, { force: true, recursive: true });
+        await rm(workspacePath, { force: true, recursive: true });
+      }
+    });
+
+    it("detaches editor launches but not Explorer or Windows Terminal", async () => {
+      const pathDirectory = await createWindowsPathDirectory([
+        "code.exe",
+        "wt.exe",
+      ]);
+      const workspacePath = await mkdtemp(path.join(tmpdir(), "bb-workspace-"));
+      const calls: WindowsExecFileCall[] = [];
+
+      try {
+        const runtime = createWindowsRuntime({
+          calls,
+          env: { Path: pathDirectory },
+        });
+        for (const targetId of ["vscode", "file-manager", "terminal"]) {
+          await openPathInTargetWithRuntime(
+            {
+              context: { kind: "local" },
+              columnNumber: null,
+              lineNumber: null,
+              path: workspacePath,
+              targetId,
+            },
+            runtime,
+          );
+        }
+
+        expect(
+          calls.map((call) => [
+            windowsExecutableName(call.file),
+            call.options?.detached,
+          ]),
+        ).toEqual([
+          ["code.exe", true],
+          ["explorer.exe", undefined],
+          ["wt.exe", undefined],
+        ]);
+      } finally {
+        await rm(pathDirectory, { force: true, recursive: true });
+        await rm(workspacePath, { force: true, recursive: true });
+      }
+    });
+
+    it("detaches editor launches that go through the cmd shim", async () => {
+      const localAppData = await mkdtemp(path.join(tmpdir(), "bb-localapp-"));
+      const codeCmd = path.join(
+        localAppData,
+        "Programs",
+        "Microsoft VS Code",
+        "bin",
+        "code.cmd",
+      );
+      const workspacePath = await mkdtemp(path.join(tmpdir(), "bb-workspace-"));
+      const calls: WindowsExecFileCall[] = [];
+
+      try {
+        await mkdir(path.dirname(codeCmd), { recursive: true });
+        await writeFile(codeCmd, "@echo off\r\n");
+
+        await openPathInTargetWithRuntime(
+          {
+            context: { kind: "local" },
+            columnNumber: null,
+            lineNumber: null,
+            path: workspacePath,
+            targetId: "vscode",
+          },
+          createWindowsRuntime({ calls, env: { LOCALAPPDATA: localAppData } }),
+        );
+
+        const call = calls.find(
+          (candidate) => windowsExecutableName(candidate.file) === "cmd.exe",
+        );
+        expect(call?.options?.detached).toBe(true);
+        expect(call?.options?.env?.BBOPENTARGETARG0).toBe(codeCmd);
+        expect(call?.options?.env?.BBOPENTARGETARG1).toBe(workspacePath);
+      } finally {
+        await rm(localAppData, { force: true, recursive: true });
         await rm(workspacePath, { force: true, recursive: true });
       }
     });
@@ -2708,7 +2789,7 @@ describe("workspace open targets", () => {
         expect(calls.find((call) => call.file === process.execPath)).toEqual({
           file: process.execPath,
           args: [path.join(binDirectory, "code"), workspacePath],
-          options: { env: { LOCALAPPDATA: localAppData } },
+          options: { detached: true, env: { LOCALAPPDATA: localAppData } },
         });
       } finally {
         await rm(localAppData, { force: true, recursive: true });
@@ -3072,6 +3153,7 @@ describe("workspace open targets", () => {
           );
         }
       },
+      30_000,
     );
 
     it("treats an Explorer exit code of 1 on an existing path as success", async () => {
@@ -3519,14 +3601,129 @@ describe("workspace open targets", () => {
             call?.options,
           );
 
-          expect((await readFile(argvOutput, "utf8")).trim()).toBe(
-            workspacePath,
-          );
+          const deadline = Date.now() + 10_000;
+          let argv = "";
+          while (argv.trim() === "" && Date.now() < deadline) {
+            argv = await readFile(argvOutput, "utf8").catch(() => "");
+            if (argv.trim() === "") {
+              await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+            }
+          }
+
+          expect(argv.trim()).toBe(workspacePath);
         } finally {
           await rm(localAppData, { force: true, recursive: true });
           await rm(workspaceRoot, { force: true, recursive: true });
         }
       },
+      30_000,
+    );
+
+    it.runIf(process.platform === "win32")(
+      "returns from a long-running editor launch without waiting for the app",
+      async () => {
+        const localAppData = await mkdtemp(path.join(tmpdir(), "bb-localapp-"));
+        const codeCmd = path.join(
+          localAppData,
+          "Programs",
+          "Microsoft VS Code",
+          "bin",
+          "code.cmd",
+        );
+        const workspacePath = await mkdtemp(
+          path.join(tmpdir(), "bb-workspace-"),
+        );
+        const pidFile = path.join(localAppData, "launched-pid.txt");
+        const runtimeEnv: NodeJS.ProcessEnv = {
+          LOCALAPPDATA: localAppData,
+          SystemRoot: process.env.SystemRoot ?? "C:\\Windows",
+        };
+        const runtime: WorkspaceOpenTargetRuntime = {
+          ...createWorkspaceOpenTargetRuntime(),
+          env: runtimeEnv,
+        };
+
+        const readLaunchedPid = async (): Promise<number | null> => {
+          const raw = (await readFile(pidFile, "utf8").catch(() => "")).trim();
+          return /^\d+$/u.test(raw) ? Number(raw) : null;
+        };
+
+        const killLaunchedTree = async (pid: number): Promise<void> => {
+          await new Promise((resolveKill) => {
+            const kill = spawn(
+              resolveWindowsSystemToolPath("taskkill.exe", process.env),
+              ["/PID", String(pid), "/T", "/F"],
+              { stdio: "ignore", windowsHide: true },
+            );
+            kill.once("error", () => resolveKill(undefined));
+            kill.once("exit", () => resolveKill(undefined));
+          });
+        };
+
+        let leftRunningPid: number | null = null;
+
+        try {
+          await mkdir(path.dirname(codeCmd), { recursive: true });
+          await writeFile(
+            codeCmd,
+            [
+              "@echo off",
+              `"${process.execPath}" -e "require('fs').writeFileSync(process.argv[1], String(process.pid)); setTimeout(function () {}, 60000)" "${pidFile}"`,
+              "",
+            ].join("\r\n"),
+          );
+
+          const startedAtMs = Date.now();
+          await openPathInTargetWithRuntime(
+            {
+              context: { kind: "local" },
+              columnNumber: null,
+              lineNumber: null,
+              path: workspacePath,
+              targetId: "vscode",
+            },
+            runtime,
+          );
+          const openMs = Date.now() - startedAtMs;
+          console.log(`detached editor launch returned in ${openMs}ms`);
+          expect(openMs).toBeLessThan(5000);
+
+          const pidDeadline = Date.now() + 15_000;
+          let launchedPid = await readLaunchedPid();
+          while (launchedPid === null && Date.now() < pidDeadline) {
+            await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+            launchedPid = await readLaunchedPid();
+          }
+          if (launchedPid === null) {
+            throw new Error("the launched process never reported its pid");
+          }
+          leftRunningPid = launchedPid;
+          console.log(`launched long-running process pid=${launchedPid}`);
+          expect(await queryWindowsProcess(launchedPid)).not.toBeNull();
+
+          await killLaunchedTree(launchedPid);
+          const goneDeadline = Date.now() + 10_000;
+          let survivor = await queryWindowsProcess(launchedPid);
+          while (survivor !== null && Date.now() < goneDeadline) {
+            await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+            survivor = await queryWindowsProcess(launchedPid);
+          }
+          console.log(
+            `after taskkill /T /F pid=${launchedPid}: ${
+              survivor === null ? "gone" : "still running"
+            }`,
+          );
+          expect(survivor).toBeNull();
+          leftRunningPid = null;
+        } finally {
+          if (leftRunningPid !== null) {
+            await killLaunchedTree(leftRunningPid);
+          }
+          await rm(localAppData, { force: true, recursive: true });
+          await rm(workspacePath, { force: true, recursive: true });
+        }
+      },
+      45_000,
     );
 
     it("rejects a detached launch whose executable cannot be spawned", async () => {

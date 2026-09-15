@@ -399,6 +399,7 @@ async function buildWindowsExecutableInvocation(
     return {
       file: nodeShim.command,
       args: [...nodeShim.args, ...args],
+      detached: true,
       env: runtime.env,
     };
   }
@@ -406,6 +407,7 @@ async function buildWindowsExecutableInvocation(
   return {
     file: resolveWindowsSystemToolPath("cmd.exe", runtime.env),
     args: ["/d", "/s", "/c", shim.commandLine],
+    detached: true,
     env: { ...(runtime.env ?? process.env), ...shim.env },
     windowsVerbatimArguments: true,
   };

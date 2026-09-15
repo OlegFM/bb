@@ -639,11 +639,36 @@ describe("host plugin worker env", () => {
           BB_CONNECT_MACHINE_CREDENTIAL: "daemon-secret",
           BB_SERVER_URL: "http://daemon.internal",
         },
+        platform: "linux",
         shellPath: "/Users/test/bin:/usr/bin",
       }),
     ).toEqual({
       HOME: "/Users/test",
       PATH: "/Users/test/bin:/usr/bin",
+      GH_TOKEN: "user-token",
+    });
+  });
+
+  it("builds a single Path key for the login-shell PATH on Windows", () => {
+    const env = sanitizeInheritedChildProcessEnv({
+      env: {
+        USERPROFILE: "C:\\Users\\test",
+        PATH: "C:\\Windows\\System32",
+        Path: "C:\\Windows",
+        GH_TOKEN: "user-token",
+        BB_CONNECT_MACHINE_CREDENTIAL: "daemon-secret",
+        BB_SERVER_URL: "http://daemon.internal",
+      },
+      platform: "win32",
+      shellPath: "C:\\Users\\test\\bin;C:\\Windows\\System32",
+    });
+
+    expect(Object.keys(env).filter((key) => /^path$/iu.test(key))).toEqual([
+      "Path",
+    ]);
+    expect(env).toEqual({
+      USERPROFILE: "C:\\Users\\test",
+      Path: "C:\\Users\\test\\bin;C:\\Windows\\System32",
       GH_TOKEN: "user-token",
     });
   });
