@@ -63,7 +63,9 @@ export async function runCommandCapture(
 
     function stop(): void {
       if (platform === "win32") {
-        void terminateProcessTree({ child, graceMs: 0, platform });
+        void terminateProcessTree({ child, graceMs: 0, platform }).catch(
+          () => {},
+        );
       } else {
         child.kill("SIGKILL");
       }
@@ -77,12 +79,15 @@ export async function runCommandCapture(
     function collect(chunk: Buffer, chunks: Buffer[], bytes: number): number {
       if (bytes >= maxBytes) {
         truncated = true;
+        stop();
         return bytes;
       }
       const remaining = maxBytes - bytes;
-      if (chunk.length > remaining) {
+      if (chunk.length >= remaining) {
         chunks.push(chunk.subarray(0, remaining));
-        truncated = true;
+        if (chunk.length > remaining) {
+          truncated = true;
+        }
         stop();
         return maxBytes;
       }
@@ -96,6 +101,8 @@ export async function runCommandCapture(
     child.stderr?.on("data", (chunk: Buffer) => {
       stderrBytes = collect(chunk, stderrChunks, stderrBytes);
     });
+    child.stdout?.on("error", () => {});
+    child.stderr?.on("error", () => {});
 
     function settle(result: SettleArgs): void {
       if (settled) {

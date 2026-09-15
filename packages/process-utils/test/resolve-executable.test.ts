@@ -1,5 +1,5 @@
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import {
   resolveNodeShimSpawnPlan,
   resolvePowerShellExecutable,
   resolveSpawnPlan,
+  resolveSpawnPlanOrThrow,
   resolveWindowsSystemToolPath,
   SpawnPlanUnavailableError,
   spawnPlanUnavailableMessage,
@@ -325,7 +326,7 @@ describe("resolveExecutableSync", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "returns the executable file on posix, matching the async walk",
+    "returns the executable file on posix, matching the async walk (skipped on win32: the posix PATH delimiter splits a drive letter)",
     async () => {
       const root = makeRootSync();
       const target = `${root}/git`;
@@ -344,7 +345,7 @@ describe("resolveExecutableSync", () => {
   );
 
   it.skipIf(process.platform === "win32")(
-    "returns null for a non-executable file on posix, matching the async walk",
+    "returns null for a non-executable file on posix, matching the async walk (skipped on win32: NTFS has no mode bits)",
     async () => {
       const root = makeRootSync();
       const target = join(root, "data");
@@ -567,11 +568,16 @@ describe("resolveSpawnPlan", () => {
   });
 
   it("plans a node run for a Node shim found on Path", async () => {
-    const root = await makeRoot();
+    const parent = await makeRoot();
+    const root = join(parent, "shim");
+    await mkdir(root, { recursive: true });
     await writeFile(
       join(root, "tool.cmd"),
       '@node "%~dp0\\..\\lib\\cli.js" %*\r\n',
     );
+    const libDir = join(parent, "lib");
+    await mkdir(libDir, { recursive: true });
+    await writeFile(join(libDir, "cli.js"), "");
     await expect(
       resolveSpawnPlan({
         command: "tool",
@@ -581,7 +587,7 @@ describe("resolveSpawnPlan", () => {
       }),
     ).resolves.toEqual({
       command: process.execPath,
-      args: [join(root, "..", "lib", "cli.js"), "--x"],
+      args: [join(libDir, "cli.js"), "--x"],
     });
   });
 
@@ -643,7 +649,23 @@ describe("resolveSpawnPlan", () => {
     ).resolves.toBeNull();
   });
 
-  it("builds the not-found and not-a-Node-shim refusal messages", () => {
+  it("returns null for a resolved .ps1 and rejects with reason not_executable", async () => {
+    const root = await makeRoot();
+    await writeFile(join(root, "tool.ps1"), "");
+    const args = {
+      command: "tool",
+      args: [],
+      platform: "win32" as const,
+      env: { Path: root, PATHEXT: ".COM;.EXE;.BAT;.CMD;.PS1" },
+    };
+    await expect(resolveSpawnPlan(args)).resolves.toBeNull();
+    await expect(resolveSpawnPlanOrThrow(args)).rejects.toMatchObject({
+      reason: "not_executable",
+      message: `Windows launcher ${join(root, "tool.ps1")} cannot be started directly`,
+    });
+  });
+
+  it("builds the not-found, not-a-Node-shim and not-executable refusal messages", () => {
     expect(
       spawnPlanUnavailableMessage({ command: "npm", resolvedPath: null }),
     ).toBe("Command npm was not found on Path");
@@ -653,6 +675,12 @@ describe("resolveSpawnPlan", () => {
         resolvedPath: "C:\\x\\t.cmd",
       }),
     ).toBe(nodeShimRefusalMessage("C:\\x\\t.cmd"));
+    expect(
+      spawnPlanUnavailableMessage({
+        command: "tool",
+        resolvedPath: "C:\\x\\tool.ps1",
+      }),
+    ).toBe("Windows launcher C:\\x\\tool.ps1 cannot be started directly");
   });
 
   it("carries the reason and resolved path on SpawnPlanUnavailableError", () => {
@@ -670,5 +698,14 @@ describe("resolveSpawnPlan", () => {
     });
     expect(notNodeShim.reason).toBe("not_node_shim");
     expect(notNodeShim.message).toBe(nodeShimRefusalMessage("C:\\x\\t.cmd"));
+
+    const notExecutable = new SpawnPlanUnavailableError({
+      command: "tool",
+      resolvedPath: "C:\\x\\tool.ps1",
+    });
+    expect(notExecutable.reason).toBe("not_executable");
+    expect(notExecutable.message).toBe(
+      "Windows launcher C:\\x\\tool.ps1 cannot be started directly",
+    );
   });
 });

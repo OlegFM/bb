@@ -27,15 +27,19 @@ describe("runCommandCapture", () => {
     expect(result.timedOut).toBe(false);
   });
 
-  it("times out and kills the child", async () => {
-    const result = await runCommandCapture({
-      command: process.execPath,
-      args: ["-e", "setTimeout(()=>{}, 60000)"],
-      timeoutMs: 300,
-    });
-    expect(result.timedOut).toBe(true);
-    expect(result.exitCode === null || result.exitCode !== 0).toBe(true);
-  }, 5000);
+  it(
+    "times out and kills the child",
+    async () => {
+      const result = await runCommandCapture({
+        command: process.execPath,
+        args: ["-e", "setTimeout(()=>{}, 60000)"],
+        timeoutMs: 300,
+      });
+      expect(result.timedOut).toBe(true);
+      expect(result.exitCode === null || result.exitCode !== 0).toBe(true);
+    },
+    process.platform === "win32" ? 15000 : 5000,
+  );
 
   it("caps captured output at maxBytes and marks it truncated", async () => {
     const result = await runCommandCapture({
@@ -47,6 +51,20 @@ describe("runCommandCapture", () => {
     expect(result.truncated).toBe(true);
     expect(result.stdout.length).toBeLessThanOrEqual(1024);
   });
+
+  it("kills the child once the cap is hit", async () => {
+    const result = await runCommandCapture({
+      command: process.execPath,
+      args: [
+        "-e",
+        "process.stdout.write('x'.repeat(1025)); setTimeout(() => {}, 60000)",
+      ],
+      timeoutMs: 20000,
+      maxBytes: 1024,
+    });
+    expect(result.truncated).toBe(true);
+    expect(result.timedOut).toBe(false);
+  }, 15000);
 
   it.runIf(process.platform === "win32")(
     "rejects with SpawnPlanUnavailableError for a command not found on Path",

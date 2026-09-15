@@ -25,6 +25,11 @@ const NON_SCRIPT_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([
 
 const WINDOWS_SHIM_EXTENSIONS: ReadonlySet<string> = new Set([".bat", ".cmd"]);
 
+const DIRECTLY_EXECUTABLE_EXTENSIONS: ReadonlySet<string> = new Set([
+  ".exe",
+  ".com",
+]);
+
 const NODE_CMD_SHIM_PATTERNS: readonly RegExp[] = [
   /^\s*@?node(?:\.exe)?\s+"%~dp0\\?([^"\r\n]+)"/imu,
   /"%~dp0\\?node\.exe"\s+"%~dp0\\?([^"\r\n]+)"/iu,
@@ -324,20 +329,28 @@ export function spawnPlanUnavailableMessage(args: {
   command: string;
   resolvedPath: string | null;
 }): string {
-  return args.resolvedPath === null
-    ? `Command ${args.command} was not found on Path`
-    : nodeShimRefusalMessage(args.resolvedPath);
+  if (args.resolvedPath === null) {
+    return `Command ${args.command} was not found on Path`;
+  }
+  return WINDOWS_SHIM_EXTENSIONS.has(extname(args.resolvedPath).toLowerCase())
+    ? nodeShimRefusalMessage(args.resolvedPath)
+    : `Windows launcher ${args.resolvedPath} cannot be started directly`;
 }
 
 export class SpawnPlanUnavailableError extends Error {
-  readonly reason: "not_found" | "not_node_shim";
+  readonly reason: "not_found" | "not_node_shim" | "not_executable";
   readonly command: string;
   readonly resolvedPath: string | null;
 
   constructor(args: { command: string; resolvedPath: string | null }) {
     super(spawnPlanUnavailableMessage(args));
     this.name = "SpawnPlanUnavailableError";
-    this.reason = args.resolvedPath === null ? "not_found" : "not_node_shim";
+    this.reason =
+      args.resolvedPath === null
+        ? "not_found"
+        : WINDOWS_SHIM_EXTENSIONS.has(extname(args.resolvedPath).toLowerCase())
+          ? "not_node_shim"
+          : "not_executable";
     this.command = args.command;
     this.resolvedPath = args.resolvedPath;
   }
@@ -366,6 +379,13 @@ async function resolveSpawnPlanDetailed(
   });
   if (resolved === null) {
     return { plan: null, resolvedPath: null };
+  }
+  const resolvedExtension = extname(resolved).toLowerCase();
+  if (
+    !DIRECTLY_EXECUTABLE_EXTENSIONS.has(resolvedExtension) &&
+    !WINDOWS_SHIM_EXTENSIONS.has(resolvedExtension)
+  ) {
+    return { plan: null, resolvedPath: resolved };
   }
   const shimPlan = await resolveNodeShimSpawnPlan(resolved);
   if (shimPlan === null) {
