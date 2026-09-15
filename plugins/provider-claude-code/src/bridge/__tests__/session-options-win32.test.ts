@@ -207,14 +207,17 @@ describe("resolveClaudeCodeExecutable on win32", () => {
     const home = makeDirectory();
     const localBin = join(home, ".local", "bin");
     mkdirSync(localBin, { recursive: true });
-    writeExecutable(localBin, "claude", "#!/bin/sh\nexit 0\n");
+    const shimPath = writeExecutable(localBin, "claude", "#!/bin/sh\nexit 0\n");
 
+    expect(
+      resolveClaudeCodeExecutable({ env: { HOME: home }, platform: "linux" }),
+    ).toBe(shimPath);
     expect(
       resolveClaudeCodeExecutable({
         env: { USERPROFILE: home },
         platform: "linux",
       }),
-    ).not.toBe(join(localBin, "claude"));
+    ).not.toBe(shimPath);
   });
 
   it.runIf(onWindows)(

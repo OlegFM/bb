@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { acpAgentProbeSchema, probeAcpAgent } from "./probe.js";
 
+const MISSING_AGENT_REASON =
+  process.platform === "win32"
+    ? "Command bb-acp-agent-that-does-not-exist was not found on Path"
+    : "ENOENT";
+
 describe("probeAcpAgent", () => {
   it("reports a missing agent instead of throwing", async () => {
     const probe = await probeAcpAgent({
@@ -11,8 +16,8 @@ describe("probeAcpAgent", () => {
     });
 
     expect(probe.reachable).toBe(false);
-    expect(probe.reachable === false && probe.reason).toMatch(
-      /ENOENT|bb-acp-agent-that-does-not-exist was not found on Path/u,
+    expect(probe.reachable === false && probe.reason).toContain(
+      MISSING_AGENT_REASON,
     );
     expect(acpAgentProbeSchema.safeParse(probe).success).toBe(true);
   });

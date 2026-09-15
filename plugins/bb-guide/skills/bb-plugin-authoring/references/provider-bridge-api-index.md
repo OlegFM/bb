@@ -90,8 +90,11 @@ Read the installed declarations for exact current signatures.
 - `experimental_probeNpmGlobalPackage`
 - `experimental_readBoundedLines`
 - `experimental_readCliVersion`
+- `experimental_readWindowsEnvValue`
 - `experimental_recordProviderChildIo`
 - `experimental_resolveExecutablePath`
+- `experimental_resolveExecutableSync`
+- `experimental_resolveSpawnPlanOrThrow`
 - `experimental_searchPresentation`
 - `experimental_toolPresentation`
 - `experimental_versionFrom`

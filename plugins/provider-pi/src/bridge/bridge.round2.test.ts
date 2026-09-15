@@ -78,6 +78,11 @@ it("a child that dies mid-run does not take the bridge down: the next write is a
   );
 }, 90_000);
 
+const MISSING_PI_MESSAGE =
+  process.platform === "win32"
+    ? /no-such-pi was not found on Path/u
+    : /ENOENT/u;
+
 it("a missing executable fails thread/start fast with the spawn error", async () => {
   vi.stubEnv(PI_BRIDGE_COMMAND_ENV, join(harness.workspaceDir, "no-such-pi"));
   vi.stubEnv(PI_BRIDGE_ARGS_ENV, "[]");
@@ -85,7 +90,7 @@ it("a missing executable fails thread/start fast with the spawn error", async ()
   const response = await harness.startThread("thr_r2_enoent");
   expect(Date.now() - startedAt).toBeLessThan(5_000);
   expect(response.error).toMatchObject({
-    message: expect.stringMatching(/ENOENT|no-such-pi was not found on Path/u),
+    message: expect.stringMatching(MISSING_PI_MESSAGE),
   });
 }, 90_000);
 

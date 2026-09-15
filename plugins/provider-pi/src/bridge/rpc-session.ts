@@ -263,6 +263,9 @@ export class PiRpcSession {
             if (child === this.child) onExtensionUiRequest(request);
           }
         : undefined,
+    }).catch((error: unknown) => {
+      for (const file of scratchFiles) rmSync(file, { force: true });
+      throw error;
     });
     this.child = child;
 

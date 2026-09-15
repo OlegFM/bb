@@ -139,6 +139,11 @@ function bbThreadIdFor(providerThreadId: string): string {
 
 const CLIENT_REQUEST_ID = "creq_abcdefghjk";
 
+const MISSING_MODEL_LISTER_MESSAGE =
+  process.platform === "win32"
+    ? /\/nonexistent\/acp-model-lister was not found on Path/u
+    : /spawn \/nonexistent\/acp-model-lister ENOENT/;
+
 function executionOptions(args: {
   permissionMode?: "accept-edits" | "full";
   permissionEscalation?: "ask" | "deny" | null;
@@ -1129,7 +1134,7 @@ describe("acp bridge", () => {
     });
     const failingResponse = await waitForResponse(failingId);
     expect(failingResponse.error?.message).toMatch(
-      /\/nonexistent\/acp-model-lister (ENOENT|was not found on Path)/u,
+      MISSING_MODEL_LISTER_MESSAGE,
     );
   });
 

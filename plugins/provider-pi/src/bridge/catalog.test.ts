@@ -51,4 +51,32 @@ describe("pi catalog child generations", () => {
     expect(second.models[0]?.isDefault).toBe(true);
     expect(readFileSync(spawnCounterPath, "utf8")).toBe("2");
   }, 60_000);
+
+  it("spawns one replacement child when two model lists race after the child is gone", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "bb-pi-catalog-race-"));
+    tempDirs.push(workspace);
+    const extensionPath = join(workspace, "bb-extension.mjs");
+    const spawnCounterPath = join(workspace, "spawns.txt");
+    writeFileSync(extensionPath, BB_PI_EXTENSION_SOURCE);
+
+    process.env[PI_BRIDGE_COMMAND_ENV] = process.execPath;
+    process.env[PI_BRIDGE_ARGS_ENV] = JSON.stringify([fakePiPath]);
+    process.env.FAKE_PI_SPAWN_COUNTER_FILE = spawnCounterPath;
+
+    const catalog = await getPiCatalog(workspace, extensionPath);
+    await catalog.listModels();
+    expect(readFileSync(spawnCounterPath, "utf8")).toBe("1");
+
+    await catalog.close();
+
+    const [first, second] = await Promise.all([
+      catalog.listModels(),
+      catalog.listModels(),
+    ]);
+
+    expect(readFileSync(spawnCounterPath, "utf8")).toBe("2");
+    expect(first.models.map((model) => model.id)).toEqual(
+      second.models.map((model) => model.id),
+    );
+  }, 60_000);
 });

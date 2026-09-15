@@ -30,7 +30,11 @@ import {
   withoutBridgeRuntimeEnv,
 } from "@bb/provider-bridge-protocol/bridge-kit";
 import type { BridgeJsonRpcResponse } from "@bb/provider-bridge-protocol/bridge-kit";
-import { execFile } from "node:child_process";
+import {
+  execFile,
+  type ExecFileException,
+  type ExecFileOptions,
+} from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { promises as fs, readFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
@@ -724,9 +728,27 @@ function acpClientCapabilities(
   };
 }
 
-async function loadAgentModelCatalog(
+export type AgentModelListExecFile = (
+  command: string,
+  args: readonly string[],
+  options: ExecFileOptions,
+  callback: (
+    error: ExecFileException | null,
+    stdout: string,
+    stderr: string,
+  ) => void,
+) => void;
+
+export interface LoadAgentModelCatalogOptions {
+  platform?: NodeJS.Platform;
+  execFileImpl?: AgentModelListExecFile;
+}
+
+export async function loadAgentModelCatalog(
   listCommand: AcpAgentCommandParam,
+  options: LoadAgentModelCatalogOptions = {},
 ): Promise<AgentModelCatalog | null> {
+  const platform = options.platform ?? process.platform;
   const listEnv = {
     ...withoutBridgeRuntimeEnv(process.env),
     ...(listCommand.envVars ?? {}),
@@ -735,17 +757,18 @@ async function loadAgentModelCatalog(
     command: listCommand.command,
     args: listCommand.args,
     env: listEnv,
+    platform,
     ...(listCommand.cwd === undefined ? {} : { cwd: listCommand.cwd }),
   });
   const stdout = await new Promise<string | null>((resolveExec, rejectExec) => {
-    execFile(
+    (options.execFileImpl ?? execFile)(
       launch.command,
       launch.args,
       {
         ...(listCommand.cwd !== undefined ? { cwd: listCommand.cwd } : {}),
         env: listEnv,
         timeout: MODEL_LIST_TIMEOUT_MS,
-        ...(process.platform === "win32" ? { windowsHide: true } : {}),
+        ...(platform === "win32" ? { windowsHide: true } : {}),
       },
       (error, out, stderr) => {
         if (!error) {
