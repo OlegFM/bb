@@ -83,6 +83,13 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
   Updates. `bb updates apply [--machine <id-or-name>]` runs every available
   provider CLI install/update sequentially; update bb-app itself with the
   printed upgrade command or the desktop relaunch.
+- A provider CLI status with no action bb can run carries
+  `installUnavailableReason`, one sentence naming what the user must do
+  instead (for example a shell-only installer on native Windows, or a Pi
+  install with neither bun nor npm on `Path`). `bb updates status` prints it
+  under the table as `<machine> · <provider>: <reason>` and `bb machine
+  provider-cli status` prints it after the JSON; `--json` carries the field on
+  both.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
   to bind a new project's local path to a connected enrolled machine. Use
   `--host` as an alias. Without a selector, the CLI asks its local host daemon.

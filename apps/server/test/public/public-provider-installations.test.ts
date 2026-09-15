@@ -89,6 +89,7 @@ function installationStatus(providerId: string) {
       label: "Update" as const,
       command: `${executableName} update`,
     },
+    installUnavailableReason: null,
     needsUpdate: true,
     versionUnsupported: false,
   };

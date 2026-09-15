@@ -143,6 +143,15 @@ function printUpdatesTable(args: {
       rows,
     ),
   );
+  for (const entry of args.entries) {
+    for (const status of Object.values(entry.providerStatus ?? {})) {
+      if (status.installUnavailableReason !== null) {
+        console.log(
+          `${entry.host.name} · ${status.displayName}: ${status.installUnavailableReason}`,
+        );
+      }
+    }
+  }
   console.log("");
 }
 

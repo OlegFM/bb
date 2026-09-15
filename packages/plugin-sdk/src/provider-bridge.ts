@@ -198,6 +198,7 @@ export {
   getRecordProperty,
   getStringProperty,
   installationVerification as experimental_installationVerification,
+  installerUnavailableReason as experimental_installerUnavailableReason,
   isRecord,
   jsonRpcEnvelopeSchema,
   mimeTypeFromExtension,

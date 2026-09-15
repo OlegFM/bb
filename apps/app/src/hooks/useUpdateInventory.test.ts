@@ -21,6 +21,7 @@ function providerStatus(
     npmPackageName: null,
     npmGlobalPackageVersion: null,
     installAction: null,
+    installUnavailableReason: null,
     needsUpdate: false,
     versionUnsupported: false,
     ...overrides,

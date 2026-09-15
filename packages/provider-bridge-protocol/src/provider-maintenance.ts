@@ -152,6 +152,7 @@ export const providerInstallationStatusSchema = z
     npmPackageName: z.string().min(1).nullable(),
     npmGlobalPackageVersion: z.string().min(1).nullable(),
     installAction: providerInstallationActionSchema.nullable(),
+    installUnavailableReason: z.string().min(1).nullable(),
     needsUpdate: z.boolean(),
     versionUnsupported: z.boolean(),
   })

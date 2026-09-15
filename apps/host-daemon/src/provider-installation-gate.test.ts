@@ -40,6 +40,7 @@ function status(
     npmPackageName: "@openai/codex",
     npmGlobalPackageVersion: "0.146.0",
     installAction: null,
+    installUnavailableReason: null,
     needsUpdate: false,
     versionUnsupported: false,
     ...overrides,

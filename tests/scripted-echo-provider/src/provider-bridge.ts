@@ -917,6 +917,7 @@ const handlers: Record<string, RequestHandler> = {
       npmPackageName: null,
       npmGlobalPackageVersion: null,
       installAction: null,
+      installUnavailableReason: null,
       needsUpdate: false,
       versionUnsupported: false,
     });

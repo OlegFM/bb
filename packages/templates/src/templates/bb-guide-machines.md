@@ -76,6 +76,13 @@ CLI counterpart of Settings → Updates and the sidebar Updates badge.
 printed upgrade command (`npx bb-app@latest`) or the desktop app's relaunch;
 connected daemons then follow the server version automatically.
 
+When bb has no install or update command that would work on a machine — a
+provider that ships only a shell installer on native Windows, or a Pi install
+with neither bun nor npm on `Path` — the status carries an
+`installUnavailableReason` instead of an action. `bb updates status` prints it
+under the table as `<machine> · <provider>: <reason>`, `bb machine provider-cli
+status` prints it after the JSON, and both `--json` forms carry the field.
+
 Machine selectors accept either an exact machine ID or an unambiguous machine
 name. `--host` is an alias for `--machine`.
 

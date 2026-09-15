@@ -77,6 +77,7 @@ Read the installed declarations for exact current signatures.
 - `experimental_fileReadPresentation`
 - `experimental_formatCommand`
 - `experimental_installationVerification`
+- `experimental_installerUnavailableReason`
 - `experimental_isProviderBridgeRecording`
 - `experimental_npmCommand`
 - `experimental_npmGlobalInstallCommand`

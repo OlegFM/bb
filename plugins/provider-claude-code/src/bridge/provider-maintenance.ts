@@ -16,6 +16,7 @@ import {
   experimental_downloadedInstallerCommand as downloadedInstallerCommand,
   experimental_formatCommand as formatCommand,
   experimental_installationVerification as installationVerification,
+  experimental_installerUnavailableReason as installerUnavailableReason,
   experimental_npmCommand as npmCommand,
   experimental_npmGlobalInstallSource as npmGlobalInstallSource,
   experimental_probeNpmGlobalPackage as probeNpmGlobalPackage,
@@ -31,6 +32,12 @@ const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
 const CLAUDE_NPM_PACKAGE = "@anthropic-ai/claude-code";
 const CLAUDE_INSTALL_SCRIPT_URL = "https://claude.ai/install.sh";
+const CLAUDE_CODE_DOWNLOAD_URL = "https://claude.com/claude-code";
+
+interface ClaudeMaintenanceOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+}
 
 const claudeCredentialsSchema = z.object({
   claudeAiOauth: z.object({
@@ -50,8 +57,8 @@ const claudeAccountSchema = z.object({
     .nullish(),
 });
 
-function claudeExecutable(): string {
-  return process.env.BB_CLAUDE_CODE_EXECUTABLE?.trim() || "claude";
+function claudeExecutable(env: NodeJS.ProcessEnv = process.env): string {
+  return env.BB_CLAUDE_CODE_EXECUTABLE?.trim() || "claude";
 }
 
 function claudeDistTags(value: string | null): {
@@ -105,26 +112,25 @@ function claudeDoctor(value: string | null): {
   };
 }
 
-function claudeDownloadedInstallerCommand() {
-  const installer = downloadedInstallerCommand(CLAUDE_INSTALL_SCRIPT_URL);
-  if (installer === null) {
-    throw new Error("Claude Code installer is unavailable on this platform");
-  }
-  return installer;
-}
-
-function isDefaultNativeClaudePath(executablePath: string | null): boolean {
+function isDefaultNativeClaudePath(
+  executablePath: string | null,
+  platform: NodeJS.Platform,
+): boolean {
   if (executablePath === null) return false;
   const normalized = executablePath.replace(/\\/gu, "/");
   return (
     normalized.endsWith("/.local/bin/claude") ||
-    (process.platform === "win32" &&
-      normalized.endsWith("/.local/bin/claude.exe"))
+    (platform === "win32" && normalized.endsWith("/.local/bin/claude.exe"))
   );
 }
 
-export async function getClaudeProviderInstallationStatus(): Promise<ProviderInstallationStatus> {
-  const command = claudeExecutable();
+export async function getClaudeProviderInstallationStatus(
+  options: ClaudeMaintenanceOptions = {},
+): Promise<ProviderInstallationStatus> {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const probeOptions = { platform, env };
+  const command = claudeExecutable(env);
   const [
     resolvedExecutable,
     versionOutput,
@@ -132,16 +138,15 @@ export async function getClaudeProviderInstallationStatus(): Promise<ProviderIns
     npmGlobal,
     doctorOutput,
   ] = await Promise.all([
-    resolveExecutablePath(command),
-    commandOutput(command, ["--version"]),
-    commandOutput(npmCommand(), [
-      "view",
-      CLAUDE_NPM_PACKAGE,
-      "dist-tags",
-      "--json",
-    ]),
-    probeNpmGlobalPackage(CLAUDE_NPM_PACKAGE),
-    commandOutput(command, ["doctor"]),
+    resolveExecutablePath(command, probeOptions),
+    commandOutput(command, ["--version"], probeOptions),
+    commandOutput(
+      npmCommand(platform),
+      ["view", CLAUDE_NPM_PACKAGE, "dist-tags", "--json"],
+      probeOptions,
+    ),
+    probeNpmGlobalPackage(CLAUDE_NPM_PACKAGE, probeOptions),
+    commandOutput(command, ["doctor"], probeOptions),
   ]);
   const installed = resolvedExecutable !== null || versionOutput !== null;
   const currentVersion = versionFrom(versionOutput);
@@ -166,24 +171,31 @@ export async function getClaudeProviderInstallationStatus(): Promise<ProviderIns
     installed,
     executablePath: resolvedExecutable,
     npmBin: npmGlobal.npmBin,
+    platform,
   });
   const nativeFallback =
     doctor.installMethod === null &&
     installSource === "external" &&
-    isDefaultNativeClaudePath(resolvedExecutable);
+    isDefaultNativeClaudePath(resolvedExecutable, platform);
   const canRunUpdate =
     doctor.installMethod === "native" ||
     nativeFallback ||
     (installSource === "npmGlobal" &&
       (doctor.installMethod === null || doctor.installMethod === "npm-global"));
+  const installer = downloadedInstallerCommand(
+    CLAUDE_INSTALL_SCRIPT_URL,
+    platform,
+  );
   const actionKind = !installed
-    ? "install"
+    ? installer === null
+      ? null
+      : "install"
     : needsUpdate && canRunUpdate
       ? "update"
       : null;
   const displayCommand =
-    actionKind === "install"
-      ? claudeDownloadedInstallerCommand().displayCommand
+    actionKind === "install" && installer !== null
+      ? installer.displayCommand
       : formatCommand(command, ["update"]);
   return {
     executableName: command,
@@ -203,6 +215,10 @@ export async function getClaudeProviderInstallationStatus(): Promise<ProviderIns
             label: actionKind === "install" ? "Install" : "Update",
             command: displayCommand,
           },
+    installUnavailableReason:
+      !installed && installer === null
+        ? installerUnavailableReason("Claude Code", CLAUDE_CODE_DOWNLOAD_URL)
+        : null,
     needsUpdate,
     versionUnsupported: false,
   };
@@ -210,25 +226,41 @@ export async function getClaudeProviderInstallationStatus(): Promise<ProviderIns
 
 export async function getClaudeProviderInstallationRun(
   action: "install" | "update",
+  options: ClaudeMaintenanceOptions = {},
 ): Promise<ProviderInstallationRunResult> {
-  const status = await getClaudeProviderInstallationStatus();
-  return buildClaudeProviderInstallationRun(status, action);
+  const status = await getClaudeProviderInstallationStatus(options);
+  return buildClaudeProviderInstallationRun(status, action, options);
 }
 
 function buildClaudeProviderInstallationRun(
   status: ProviderInstallationStatus,
   action: "install" | "update",
+  options: ClaudeMaintenanceOptions = {},
 ): ProviderInstallationRunResult {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const installer = downloadedInstallerCommand(
+    CLAUDE_INSTALL_SCRIPT_URL,
+    platform,
+  );
+  if (action === "install" && installer === null) {
+    return {
+      available: false,
+      message:
+        status.installUnavailableReason ??
+        installerUnavailableReason("Claude Code", CLAUDE_CODE_DOWNLOAD_URL),
+    };
+  }
   if (status.installAction?.kind !== action) {
     return {
       available: false,
       message: `Claude Code ${action} is no longer available on this host.`,
     };
   }
-  const command = claudeExecutable();
+  const command = claudeExecutable(env);
   const execution =
-    action === "install"
-      ? claudeDownloadedInstallerCommand()
+    action === "install" && installer !== null
+      ? installer
       : {
           command,
           args: ["update"],

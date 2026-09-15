@@ -235,6 +235,13 @@ export function registerMachineCommands(
         const result = await sdk.hosts.providerCliStatus({ hostId });
         if (outputJson(opts, result)) return;
         console.log(JSON.stringify(result, null, 2));
+        for (const status of Object.values(result)) {
+          if (status.installUnavailableReason !== null) {
+            console.log(
+              `${status.displayName}: ${status.installUnavailableReason}`,
+            );
+          }
+        }
       }),
     );
   providerCli

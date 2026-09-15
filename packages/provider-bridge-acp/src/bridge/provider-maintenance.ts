@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 import type {
   ProviderHealthResult,
+  ProviderInstallationCommand,
   ProviderInstallationRunResult,
   ProviderInstallationStatus,
   ProviderUsage,
@@ -16,6 +17,7 @@ import type {
 import {
   clampPercent,
   downloadedInstallerCommand,
+  installerUnavailableReason,
   readCliVersion,
   resolveExecutablePath,
 } from "@bb/provider-bridge-protocol/bridge-kit";
@@ -130,9 +132,15 @@ function readAccountEmail(): string | null {
 
 export interface AcpMaintenanceDialect {
   loginCommand: string;
-  installer(): { command: string; args: string[]; displayCommand: string };
+  installUnavailableReason: string;
+  installer(platform: NodeJS.Platform): ProviderInstallationCommand | null;
   readAccount(): Promise<{ email: string | null } | null>;
   readUsage(): Promise<ProviderUsageResult>;
+}
+
+interface AcpMaintenancePlatformOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
 }
 
 function healthResult(args: {
@@ -200,25 +208,27 @@ export async function getAcpProviderHealth(args: {
   }
 }
 
-export async function getAcpProviderInstallationStatus(args: {
-  maintenance: AcpMaintenanceDialect | undefined;
-  command: string | null;
-}): Promise<ProviderInstallationStatus> {
+export async function getAcpProviderInstallationStatus(
+  args: {
+    maintenance: AcpMaintenanceDialect | undefined;
+    command: string | null;
+  } & AcpMaintenancePlatformOptions,
+): Promise<ProviderInstallationStatus> {
+  const platform = args.platform ?? process.platform;
+  const probeOptions = { platform, env: args.env ?? process.env };
   const executableName = args.command ?? "";
   const resolvedExecutable =
-    args.command === null ? null : await resolveExecutablePath(args.command);
+    args.command === null
+      ? null
+      : await resolveExecutablePath(args.command, probeOptions);
   const installed = resolvedExecutable !== null;
   const currentVersion =
     installed && args.command !== null
-      ? await readCliVersion(args.command)
+      ? await readCliVersion(args.command, probeOptions)
       : null;
-  const installAction =
+  const installer =
     args.maintenance !== undefined && !installed
-      ? {
-          kind: "install" as const,
-          label: "Install" as const,
-          command: args.maintenance.installer().displayCommand,
-        }
+      ? args.maintenance.installer(platform)
       : null;
   return {
     executableName,
@@ -230,17 +240,30 @@ export async function getAcpProviderInstallationStatus(args: {
     minimumSupportedVersion: null,
     npmPackageName: null,
     npmGlobalPackageVersion: null,
-    installAction,
+    installAction:
+      installer === null
+        ? null
+        : {
+            kind: "install",
+            label: "Install",
+            command: installer.displayCommand,
+          },
+    installUnavailableReason:
+      args.maintenance !== undefined && !installed && installer === null
+        ? args.maintenance.installUnavailableReason
+        : null,
     needsUpdate: false,
     versionUnsupported: false,
   };
 }
 
-export async function getAcpProviderInstallationRun(args: {
-  maintenance: AcpMaintenanceDialect | undefined;
-  command: string | null;
-  action: "install" | "update";
-}): Promise<ProviderInstallationRunResult> {
+export async function getAcpProviderInstallationRun(
+  args: {
+    maintenance: AcpMaintenanceDialect | undefined;
+    command: string | null;
+    action: "install" | "update";
+  } & AcpMaintenancePlatformOptions,
+): Promise<ProviderInstallationRunResult> {
   const status = await getAcpProviderInstallationStatus(args);
   return buildAcpProviderInstallationRun(status, args);
 }
@@ -251,20 +274,25 @@ function buildAcpProviderInstallationRun(
     maintenance: AcpMaintenanceDialect | undefined;
     command: string | null;
     action: "install" | "update";
-  },
+  } & AcpMaintenancePlatformOptions,
 ): ProviderInstallationRunResult {
+  const installer =
+    args.maintenance?.installer(args.platform ?? process.platform) ?? null;
   if (
     status.installAction?.kind !== args.action ||
-    args.maintenance === undefined
+    args.maintenance === undefined ||
+    installer === null
   ) {
     return {
       available: false,
-      message: `${args.command ?? "This ACP agent"} ${args.action} is not available on this host.`,
+      message:
+        status.installUnavailableReason ??
+        `${args.command ?? "This ACP agent"} ${args.action} is not available on this host.`,
     };
   }
   return {
     available: true,
-    command: args.maintenance.installer(),
+    command: installer,
     verification: { kind: "installed" },
   };
 }
@@ -386,16 +414,18 @@ export async function getAcpProviderUsage(args: {
   return args.maintenance.readUsage();
 }
 
-function cursorDownloadedInstallerCommand() {
-  const installer = downloadedInstallerCommand(CURSOR_INSTALL_SCRIPT_URL);
-  if (installer === null) {
-    throw new Error("Cursor installer is unavailable on this platform");
-  }
-  return installer;
+function cursorDownloadedInstallerCommand(
+  platform: NodeJS.Platform,
+): ProviderInstallationCommand | null {
+  return downloadedInstallerCommand(CURSOR_INSTALL_SCRIPT_URL, platform);
 }
 
 export const CURSOR_ACP_MAINTENANCE: AcpMaintenanceDialect = {
   loginCommand: "cursor-agent login",
+  installUnavailableReason: installerUnavailableReason(
+    "Cursor Agent",
+    CURSOR_INSTALL_SCRIPT_URL,
+  ),
   installer: cursorDownloadedInstallerCommand,
   readAccount: async () => {
     const accessToken = await readAccessToken();

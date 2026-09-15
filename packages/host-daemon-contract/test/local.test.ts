@@ -13,7 +13,13 @@ import {
 
 describe("hostPlatformSchema", () => {
   it("accepts the supported platform values", () => {
-    for (const value of ["darwin", "linux", "wsl", "win32", "unknown"] as const) {
+    for (const value of [
+      "darwin",
+      "linux",
+      "wsl",
+      "win32",
+      "unknown",
+    ] as const) {
       expect(hostPlatformSchema.parse(value)).toBe(value);
     }
   });
@@ -112,6 +118,7 @@ describe("provider CLI schemas", () => {
             label: "Install",
             command: "npm install -g @openai/codex@latest",
           },
+          installUnavailableReason: null,
           needsUpdate: false,
           versionUnsupported: false,
         },
@@ -131,6 +138,7 @@ describe("provider CLI schemas", () => {
             label: "Update",
             command: "claude update",
           },
+          installUnavailableReason: null,
           needsUpdate: true,
           versionUnsupported: false,
         },
@@ -151,6 +159,7 @@ describe("provider CLI schemas", () => {
             command:
               'tmp=$(mktemp "${TMPDIR:-/tmp}/provider-cli-install.XXXXXX") && trap \'rm -f "$tmp"\' EXIT && curl -fsSL https://cursor.com/install -o "$tmp" && bash "$tmp"',
           },
+          installUnavailableReason: null,
           needsUpdate: false,
           versionUnsupported: false,
         },
@@ -175,6 +184,7 @@ describe("provider CLI schemas", () => {
             label: "Update",
             command: "codex update",
           },
+          installUnavailableReason: null,
           needsUpdate: false,
           versionUnsupported: true,
         },
@@ -195,6 +205,7 @@ describe("provider CLI schemas", () => {
             command:
               'tmp=$(mktemp "${TMPDIR:-/tmp}/provider-cli-install.XXXXXX") && trap \'rm -f "$tmp"\' EXIT && curl -fsSL https://claude.ai/install.sh -o "$tmp" && bash "$tmp"',
           },
+          installUnavailableReason: null,
           needsUpdate: false,
           versionUnsupported: false,
         },
@@ -210,6 +221,7 @@ describe("provider CLI schemas", () => {
           npmPackageName: null,
           npmGlobalPackageVersion: null,
           installAction: null,
+          installUnavailableReason: null,
           needsUpdate: false,
           versionUnsupported: false,
         },

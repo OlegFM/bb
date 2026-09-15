@@ -287,6 +287,7 @@ function claudeCodeStatus(args: {
       label: "Update",
       command: "claude update",
     },
+    installUnavailableReason: null,
     needsUpdate:
       args.latestVersion === null || args.currentVersion !== args.latestVersion,
     versionUnsupported: false,
@@ -306,6 +307,7 @@ function supportedCodexInstallationStatus(): ProviderCliStatus {
     npmPackageName: "@openai/codex",
     npmGlobalPackageVersion: "0.146.0",
     installAction: null,
+    installUnavailableReason: null,
     needsUpdate: false,
     versionUnsupported: false,
   };
@@ -1346,6 +1348,7 @@ describe("dispatchCommand", () => {
         label: "Update",
         command: "example-agent update",
       },
+      installUnavailableReason: null,
       needsUpdate: false,
       versionUnsupported: true,
     };
@@ -1487,6 +1490,7 @@ describe("dispatchCommand", () => {
       npmPackageName: "@openai/codex",
       npmGlobalPackageVersion: "0.146.0",
       installAction: null,
+      installUnavailableReason: null,
       needsUpdate: false,
       versionUnsupported: false,
     };
@@ -1975,6 +1979,7 @@ describe("dispatchCommand", () => {
         npmPackageName: null,
         npmGlobalPackageVersion: null,
         installAction: null,
+        installUnavailableReason: null,
         needsUpdate: false,
         versionUnsupported: false,
       }),

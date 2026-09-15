@@ -54,6 +54,7 @@ function providerStatus(args: {
     minimumSupportedVersion: null,
     npmPackageName: null,
     npmGlobalPackageVersion: null,
+    installUnavailableReason: null,
     versionUnsupported: false,
   };
   return {
@@ -215,5 +216,25 @@ describe("bb updates command output", () => {
     expect(collectLogPayloads(vi.mocked(console.log))).toEqual([
       "No updates bb can apply. Run bb updates status for manual updates.",
     ]);
+  });
+
+  it("bb updates prints why an install is unavailable on a machine", async () => {
+    const status = providerStatus({ codexNeedsUpdate: false });
+    status["claude-code"].installed = false;
+    status["claude-code"].currentVersion = null;
+    status["claude-code"].latestVersion = null;
+    status["claude-code"].installUnavailableReason =
+      "bb cannot run the Claude Code shell installer on Windows. Install Claude Code from https://claude.com/claude-code, then reload.";
+    stubServerApi({
+      "v1.system.version.$get": vi.fn(async () => version),
+      "v1.hosts.$get": vi.fn(async () => hosts),
+      "v1.hosts.:id.provider-clis.status.$get": vi.fn(async () => status),
+    });
+
+    await runCommand(["updates"], register);
+
+    expect(collectLogPayloads(vi.mocked(console.log))).toContain(
+      "workstation · Claude Code: bb cannot run the Claude Code shell installer on Windows. Install Claude Code from https://claude.com/claude-code, then reload.",
+    );
   });
 });

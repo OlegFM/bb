@@ -81,6 +81,43 @@ describe("bb machine command output", () => {
       "Machine host-remote update retry requested",
     ]);
   });
+
+  it("bb machine provider-cli status prints an unavailable install reason", async () => {
+    const reason =
+      "bb needs bun or npm on Path to install Pi on Windows. Install Node.js or Bun, then reload.";
+    stubServerApi({
+      "v1.hosts.$get": vi.fn(async () => hosts),
+      "v1.hosts.:id.provider-clis.status.$get": vi.fn(async () => ({
+        pi: {
+          displayName: "Pi",
+          executableName: "pi",
+          executablePath: null,
+          installed: false,
+          installSource: "notInstalled" as const,
+          currentVersion: null,
+          latestVersion: "0.85.0",
+          minimumSupportedVersion: "0.84.0",
+          npmPackageName: "@earendil-works/pi-coding-agent",
+          npmGlobalPackageVersion: null,
+          installAction: null,
+          installUnavailableReason: reason,
+          needsUpdate: false,
+          versionUnsupported: false,
+        },
+      })),
+    });
+
+    await runCommand(
+      ["machine", "provider-cli", "status", "workstation"],
+      register,
+    );
+
+    const payloads = collectLogPayloads(vi.mocked(console.log));
+    expect(payloads.at(-1)).toBe(`Pi: ${reason}`);
+    expect(JSON.parse(String(payloads[0])).pi.installUnavailableReason).toBe(
+      reason,
+    );
+  });
 });
 
 describe("machine selection", () => {

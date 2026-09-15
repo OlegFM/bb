@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CURSOR_ACP_MAINTENANCE, __testing } from "./provider-maintenance.js";
+import {
+  CURSOR_ACP_MAINTENANCE,
+  __testing,
+  getAcpProviderInstallationStatus,
+} from "./provider-maintenance.js";
 
 function cursorMissingInstallationStatus() {
   return {
@@ -17,10 +21,14 @@ function cursorMissingInstallationStatus() {
       label: "Install" as const,
       command: "install Cursor",
     },
+    installUnavailableReason: null,
     needsUpdate: false,
     versionUnsupported: false,
   };
 }
+
+const CURSOR_WINDOWS_REASON =
+  "bb cannot run the Cursor Agent shell installer on Windows. Install Cursor Agent from https://cursor.com/install, then reload.";
 
 describe("ACP provider maintenance", () => {
   it("normalizes Cursor plan and spend limits without reading daemon state", () => {
@@ -57,41 +65,61 @@ describe("ACP provider maintenance", () => {
     });
   });
 
-  it.skipIf(process.platform === "win32")(
-    "offers the installer only through a fresh matching action",
-    () => {
-      expect(
-        __testing.buildProviderInstallationRun(
-          cursorMissingInstallationStatus(),
-          {
-            maintenance: CURSOR_ACP_MAINTENANCE,
-            command: "cursor-agent",
-            action: "install",
-          },
-        ),
-      ).toMatchObject({
-        available: true,
-        command: { command: "sh" },
-        verification: { kind: "installed" },
-      });
-    },
-  );
+  it("offers the installer only through a fresh matching action", () => {
+    expect(
+      __testing.buildProviderInstallationRun(
+        cursorMissingInstallationStatus(),
+        {
+          maintenance: CURSOR_ACP_MAINTENANCE,
+          command: "cursor-agent",
+          action: "install",
+          platform: "linux",
+          env: {},
+        },
+      ),
+    ).toMatchObject({
+      available: true,
+      command: { command: "sh" },
+      verification: { kind: "installed" },
+    });
+  });
 
-  it.runIf(process.platform === "win32")(
-    "throws for the shell installer on win32, pending the reason flow",
-    () => {
-      expect(() =>
-        __testing.buildProviderInstallationRun(
-          cursorMissingInstallationStatus(),
-          {
-            maintenance: CURSOR_ACP_MAINTENANCE,
-            command: "cursor-agent",
-            action: "install",
-          },
-        ),
-      ).toThrow("Cursor installer is unavailable on this platform");
-    },
-  );
+  it("reports why the shell installer cannot run on win32", async () => {
+    const status = await getAcpProviderInstallationStatus({
+      maintenance: CURSOR_ACP_MAINTENANCE,
+      command: "cursor-agent",
+      platform: "win32",
+      env: {},
+    });
+
+    expect(status.installed).toBe(false);
+    expect(status.installAction).toBeNull();
+    expect(status.installUnavailableReason).toBe(CURSOR_WINDOWS_REASON);
+    expect(
+      __testing.buildProviderInstallationRun(status, {
+        maintenance: CURSOR_ACP_MAINTENANCE,
+        command: "cursor-agent",
+        action: "install",
+        platform: "win32",
+        env: {},
+      }),
+    ).toEqual({ available: false, message: CURSOR_WINDOWS_REASON });
+  });
+
+  it("keeps the posix install action and no reason", async () => {
+    const status = await getAcpProviderInstallationStatus({
+      maintenance: CURSOR_ACP_MAINTENANCE,
+      command: "bb-absent-cursor-agent",
+      platform: "linux",
+      env: {},
+    });
+
+    expect(status.installAction).toMatchObject({
+      kind: "install",
+      label: "Install",
+    });
+    expect(status.installUnavailableReason).toBeNull();
+  });
 
   it("refuses an install for an unmatched or unmaintained command", () => {
     expect(

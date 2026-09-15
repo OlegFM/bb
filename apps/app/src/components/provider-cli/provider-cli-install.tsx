@@ -54,7 +54,9 @@ export function buildProviderCliIssue(
       status,
       action: status.installAction,
       title: `${status.displayName} CLI not installed`,
-      description: `Install ${status.displayName} so bb can start ${status.displayName} sessions.`,
+      description:
+        status.installUnavailableReason ??
+        `Install ${status.displayName} so bb can start ${status.displayName} sessions.`,
       fingerprint: `${provider}:missing:${status.latestVersion ?? "latest"}`,
     };
   }
@@ -84,10 +86,14 @@ export function buildProviderCliIssue(
 
   if (status.needsUpdate) {
     const currentVersion = status.currentVersion ?? "Installed version unknown";
-    const description =
+    const versions =
       status.latestVersion === null
         ? `${currentVersion}; newer release available`
         : `${currentVersion} -> ${status.latestVersion}`;
+    const description =
+      status.installUnavailableReason === null
+        ? versions
+        : `${versions}; ${status.installUnavailableReason}`;
     const fingerprint = [
       provider,
       "outdated",

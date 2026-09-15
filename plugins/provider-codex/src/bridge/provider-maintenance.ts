@@ -137,6 +137,7 @@ export async function getCodexProviderInstallationStatus(
                 ? npmGlobalInstallCommand(CODEX_NPM_PACKAGE).displayCommand
                 : codexUpdateCommand().displayCommand,
           },
+    installUnavailableReason: null,
     needsUpdate,
     versionUnsupported,
   };

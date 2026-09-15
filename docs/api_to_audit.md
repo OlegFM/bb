@@ -966,7 +966,7 @@ whether `retryable` should be per kind (only `sessionArchived` and
 `rateLimited` read it today) and whether the runtime should bound the
 `rateLimited` ladder from the hint rather than from a constant.
 
-## Provider maintenance toolkit (`experimental_resolveExecutablePath`, `experimental_readCliVersion`, `experimental_commandOutput`, `experimental_versionFrom`, `experimental_compareVersions`, `experimental_formatCommand`, `experimental_npmCommand`, `experimental_npmGlobalInstallCommand`, `experimental_npmLatestVersion`, `experimental_probeNpmGlobalPackage`, `experimental_npmGlobalInstallSource`, `experimental_installationVerification`, `experimental_downloadedInstallerCommand`, `experimental_clampPercent`) (`@get-bb/plugin-sdk/provider-bridge`)
+## Provider maintenance toolkit (`experimental_resolveExecutablePath`, `experimental_readCliVersion`, `experimental_commandOutput`, `experimental_versionFrom`, `experimental_compareVersions`, `experimental_formatCommand`, `experimental_npmCommand`, `experimental_npmGlobalInstallCommand`, `experimental_npmLatestVersion`, `experimental_probeNpmGlobalPackage`, `experimental_npmGlobalInstallSource`, `experimental_installationVerification`, `experimental_downloadedInstallerCommand`, `experimental_installerUnavailableReason`, `experimental_clampPercent`) (`@get-bb/plugin-sdk/provider-bridge`)
 
 **What it does.** The host-local probes and install-action plumbing behind a
 bridge's `provider/health`, `provider/usage` and `provider/installation/*`
@@ -992,7 +992,13 @@ actions: `experimental_npmGlobalInstallCommand` (`npm install -g
 (a vendor's `curl | bash` script run from a temp file),
 `experimental_npmCommand` (`npm`, every platform) and
 `experimental_formatCommand` (a display command line with shell-unsafe
-arguments single-quoted). `experimental_clampPercent` rounds a usage
+arguments single-quoted). `experimental_installerUnavailableReason` writes
+the one sentence a bridge puts in
+`ProviderInstallationStatus.installUnavailableReason` when it has no runnable
+installer for the host — "bb cannot run the `<name>` shell installer on
+Windows. Install `<name>` from `<url>`, then reload." — so the app, the CLI
+and the SDK can show why there is no install button instead of offering one
+that cannot work. `experimental_clampPercent` rounds a usage
 percentage into 0–100. The codex, claude-code and pi bridges and the ACP kit
 build their maintenance answers from these; each keeps its own policy (the
 minimum supported version, the login command, credential and usage readers,
@@ -1031,6 +1037,14 @@ a script that cannot run there.
    `installUnavailableReason`. Stabilisation: decide whether a native
    Windows installer (winget/MSI) should be modelled as a second command
    kind.
+5. **`installerUnavailableReason` fixes one sentence and one cause.** It
+   names a shell installer bb cannot run on Windows; a bridge whose install
+   is blocked for another reason (no package manager on `Path`, an
+   unsupported architecture, a managed host) writes its own sentence into
+   `installUnavailableReason` instead, as the pi bridge does. Stabilisation:
+   decide whether the reason becomes a typed cause plus a URL the app can
+   render as a link, rather than a prose sentence every caller must print
+   verbatim.
 
 ## Presentation builders (`experimental_presentationTitle`, `experimental_presentationDetail`, `experimental_withTitle`, `experimental_presentationFileName`, `experimental_COMPACTION_PRESENTATION`, `experimental_REASONING_PRESENTATION`, `experimental_fileReadPresentation`, `experimental_searchPresentation`, `experimental_webSearchPresentation`, `experimental_webFetchPresentation`, `experimental_planStepsPresentation`, `experimental_toolPresentation`) (`@get-bb/plugin-sdk/provider-bridge`)
 

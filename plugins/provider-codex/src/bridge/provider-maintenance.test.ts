@@ -25,6 +25,7 @@ function installationStatus() {
       label: "Update" as const,
       command: "codex update",
     },
+    installUnavailableReason: null,
     needsUpdate: true,
     versionUnsupported: false,
   };

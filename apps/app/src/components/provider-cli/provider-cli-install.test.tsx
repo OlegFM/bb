@@ -95,6 +95,7 @@ function issueForProvider(
       npmPackageName: null,
       npmGlobalPackageVersion: null,
       installAction: action,
+      installUnavailableReason: null,
       needsUpdate: true,
       versionUnsupported: false,
     },
@@ -172,6 +173,66 @@ describe("buildProviderCliIssue", () => {
     expect(issue).toMatchObject({
       description: "1.0.0; newer release available",
       title: "Claude Code update available",
+    });
+  });
+
+  it("explains a missing install bb cannot run instead of offering it", () => {
+    const actionable = issueForProvider("claude-code");
+    const issue = buildProviderCliIssue({
+      provider: "claude-code",
+      status: {
+        ...actionable.status,
+        installed: false,
+        installSource: "notInstalled",
+        currentVersion: null,
+        needsUpdate: false,
+        installAction: null,
+        installUnavailableReason:
+          "bb cannot run the Claude Code shell installer on Windows. Install Claude Code from https://claude.com/claude-code, then reload.",
+      },
+    });
+
+    expect(issue).toMatchObject({
+      action: null,
+      title: "Claude Code CLI not installed",
+      description:
+        "bb cannot run the Claude Code shell installer on Windows. Install Claude Code from https://claude.com/claude-code, then reload.",
+    });
+  });
+
+  it("keeps the default missing-install description without a reason", () => {
+    const actionable = issueForProvider("claude-code");
+    const issue = buildProviderCliIssue({
+      provider: "claude-code",
+      status: {
+        ...actionable.status,
+        installed: false,
+        installSource: "notInstalled",
+        currentVersion: null,
+        needsUpdate: false,
+      },
+    });
+
+    expect(issue).toMatchObject({
+      description: "Install Claude Code so bb can start Claude Code sessions.",
+    });
+  });
+
+  it("appends the reason to an update bb cannot apply", () => {
+    const actionable = issueForProvider("claude-code");
+    const issue = buildProviderCliIssue({
+      provider: "claude-code",
+      status: {
+        ...actionable.status,
+        installSource: "external",
+        installAction: null,
+        installUnavailableReason: "bb needs bun or npm on Path.",
+      },
+    });
+
+    expect(issue).toMatchObject({
+      action: null,
+      description: "1.0.0 -> 1.0.1; bb needs bun or npm on Path.",
     });
   });
 });

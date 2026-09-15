@@ -400,10 +400,12 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Supply a small icon that appears next to its name",
           "Receive every message in a thread started with it, through a bridge process the plugin ships",
           "Contribute validated environment variables to any provider for each session and turn",
+          "Report why an install cannot run on a machine, so bb shows the reason instead of an install button that would fail",
         ],
         apiSymbols: [
           "PluginProviderDeclaration",
           "PluginProviderIconRegistration",
+          "experimental_installerUnavailableReason",
           "ExperimentalPluginProviderEnvContext",
           "ExperimentalPluginProviderEnvEntry",
           "ExperimentalPluginProviderEnvHealthContext",

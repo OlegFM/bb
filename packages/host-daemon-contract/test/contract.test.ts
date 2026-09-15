@@ -448,6 +448,7 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
       label: "Install",
       command: "npm install -g @openai/codex@latest",
     },
+    installUnavailableReason: null,
     needsUpdate: false,
     versionUnsupported: false,
   },
@@ -1004,7 +1005,7 @@ const CONTRIBUTED_ENV = [
 
 describe("host-daemon command schemas", () => {
   it("uses the current host-daemon protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(200);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(201);
     expect(HOST_ARTIFACT_MAX_BYTES).toBe(256 * 1024 * 1024);
   });
 

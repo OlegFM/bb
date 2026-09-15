@@ -160,6 +160,7 @@ function makeUpdateIssue(args: {
       npmPackageName: null,
       npmGlobalPackageVersion: null,
       installAction: action,
+      installUnavailableReason: null,
       needsUpdate: true,
       versionUnsupported: false,
     },

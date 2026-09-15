@@ -109,7 +109,14 @@ likewise contain an empty `windows` array.
 Installation has a deliberately split execution boundary. The bridge owns
 provider-specific discovery, version/source comparison, and the install/update
 decision. `provider/installation/status` returns that state plus a display-only
-command. A status request may include a typed operation requirement such as
+command. A bridge that can see what is missing but has no command that would
+fix it on this host returns `installAction: null` together with
+`installUnavailableReason`, one sentence telling the user what to do instead;
+the field is required and every other status sets it to `null`, so a client
+never has to guess whether a missing action means "nothing to do" or "bb
+cannot do it here". The app shows the sentence in place of the install button,
+and `bb updates status` and `bb machine provider-cli status` print it.
+A status request may include a typed operation requirement such as
 `thread_rewind`; the bridge owns the minimum provider version needed for that
 operation and reports it through the ordinary installation status. When the
 host daemon gates a thread start or rewind on that status, it remembers the
