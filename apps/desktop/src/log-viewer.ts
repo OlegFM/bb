@@ -153,6 +153,7 @@ interface ComponentTailState {
   component: LogViewerComponent;
   currentFilePath: string | null;
   fileFollow: FileFollow | null;
+  followFailed: boolean;
   pendingText: string;
   tailProcess: TailProcess | null;
 }
@@ -589,6 +590,7 @@ function createComponentTailState(
     component: args.component,
     currentFilePath: null,
     fileFollow: null,
+    followFailed: false,
     pendingText: "",
     tailProcess: null,
   };
@@ -611,21 +613,26 @@ async function readLastLogLines(
         length === 0
           ? 0
           : (await handle.read(buffer, 0, length, start)).bytesRead;
-      const text = buffer.subarray(0, bytesRead).toString("utf8");
-      const newlineCount = text.split("\n").length - 1;
+      const windowBuffer = buffer.subarray(0, bytesRead);
+      const newlineCount = windowBuffer.toString("utf8").split("\n").length - 1;
       if (
         start === 0 ||
         newlineCount > args.maxLines ||
         windowBytes >= LOG_VIEWER_MAX_TAIL_WINDOW_BYTES
       ) {
-        const lines = text.split(/\r?\n/u);
+        const lastNewlineIndex = windowBuffer.lastIndexOf(0x0a);
+        const completeBytes = lastNewlineIndex + 1;
+        const lines = windowBuffer
+          .subarray(0, completeBytes)
+          .toString("utf8")
+          .split(/\r?\n/u);
         if (lines[lines.length - 1] === "") {
           lines.pop();
         }
         return {
           lines: lines.slice(-args.maxLines),
           mtimeMs,
-          size: start + bytesRead,
+          size: start + completeBytes,
         };
       }
       windowBytes *= 2;
@@ -722,6 +729,7 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
   function stopTailProcess(stopArgs: StopTailProcessArgs): void {
     const tailProcess = stopArgs.state.tailProcess;
     stopArgs.state.fileFollow = null;
+    stopArgs.state.followFailed = false;
     stopArgs.state.tailProcess = null;
     stopArgs.state.currentFilePath = null;
     stopArgs.state.pendingText = "";
@@ -758,12 +766,23 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     let appended: AppendedLogBytes;
     try {
       appended = await readAppendedLogBytes({ fileFollow });
-    } catch {
+    } catch (error) {
+      if (stopped || followArgs.state.fileFollow !== fileFollow) {
+        return;
+      }
+      if (!followArgs.state.followFailed) {
+        followArgs.state.followFailed = true;
+        const message = error instanceof Error ? error.message : String(error);
+        emitSystemLine({
+          text: `${followArgs.state.component} follow: ${message}`,
+        });
+      }
       return;
     }
     if (stopped || followArgs.state.fileFollow !== fileFollow) {
       return;
     }
+    followArgs.state.followFailed = false;
     if (appended.rotated) {
       followArgs.state.pendingText = "";
     }
@@ -778,14 +797,6 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     stopTailProcess({ state: restartArgs.state });
     restartArgs.state.currentFilePath = restartArgs.filePath;
 
-    const fileFollow: FileFollow = {
-      decoder: new StringDecoder("utf8"),
-      filePath: restartArgs.filePath,
-      mtimeMs: 0,
-      offset: 0,
-    };
-    restartArgs.state.fileFollow = fileFollow;
-
     let initialLines: LastLogLines;
     try {
       initialLines = await readLastLogLines({
@@ -793,10 +804,12 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
         maxLines: LOG_VIEWER_INITIAL_TAIL_LINES,
       });
     } catch (error) {
-      if (stopped || restartArgs.state.fileFollow !== fileFollow) {
+      if (
+        stopped ||
+        restartArgs.state.currentFilePath !== restartArgs.filePath
+      ) {
         return;
       }
-      restartArgs.state.fileFollow = null;
       restartArgs.state.currentFilePath = null;
       const message = error instanceof Error ? error.message : String(error);
       emitSystemLine({
@@ -805,11 +818,15 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
       return;
     }
 
-    if (stopped || restartArgs.state.fileFollow !== fileFollow) {
+    if (stopped || restartArgs.state.currentFilePath !== restartArgs.filePath) {
       return;
     }
-    fileFollow.mtimeMs = initialLines.mtimeMs;
-    fileFollow.offset = initialLines.size;
+    restartArgs.state.fileFollow = {
+      decoder: new StringDecoder("utf8"),
+      filePath: restartArgs.filePath,
+      mtimeMs: initialLines.mtimeMs,
+      offset: initialLines.size,
+    };
     emitComponentLines({
       component: restartArgs.state.component,
       lines: initialLines.lines,
@@ -909,6 +926,24 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     }
   }
 
+  async function runGatedRefresh(): Promise<void> {
+    if (refreshInProgress) {
+      refreshAgain = true;
+      return;
+    }
+
+    refreshInProgress = true;
+    try {
+      await refreshTailProcesses();
+    } finally {
+      refreshInProgress = false;
+      if (refreshAgain) {
+        refreshAgain = false;
+        scheduleRefresh();
+      }
+    }
+  }
+
   function scheduleRefresh(): void {
     if (stopped) {
       return;
@@ -959,7 +994,7 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
         scheduleRefresh,
         LOG_VIEWER_ROTATION_POLL_INTERVAL_MS,
       );
-      await refreshTailProcesses();
+      await runGatedRefresh();
     },
     stop() {
       stopped = true;

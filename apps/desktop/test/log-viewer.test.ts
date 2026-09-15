@@ -1,7 +1,30 @@
 import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const openControl = vi.hoisted(() => ({
+  failingPath: null as string | null,
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...original,
+    open: async (...args: Parameters<typeof original.open>) => {
+      if (
+        openControl.failingPath !== null &&
+        String(args[0]) === openControl.failingPath
+      ) {
+        throw Object.assign(new Error("EBUSY: resource busy or locked, open"), {
+          code: "EBUSY",
+        });
+      }
+      return original.open(...args);
+    },
+  };
+});
+
 import {
   createLogLineBuffer,
   createLogTailer,
@@ -35,6 +58,7 @@ async function createTempDir(): Promise<TempDir> {
 }
 
 afterEach(async () => {
+  openControl.failingPath = null;
   while (tailers.length > 0) {
     tailers.pop()?.stop();
   }
@@ -479,6 +503,152 @@ describe("file-backed follower (win32 arm)", () => {
       },
       timeoutMs: 10_000,
     });
+  }, 30_000);
+
+  it("emits only the tail window when the log grows while the follower attaches", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    const existingLines = Array.from({ length: 3_000 }, (_value, index) =>
+      createWideTestLine({ index }),
+    );
+    await writeFile(logPath, `${existingLines.join("\n")}\n`);
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+
+    const concurrentAppends = (async () => {
+      for (let index = 0; index < 50; index += 1) {
+        await appendFile(logPath, `extra-${index}\n`);
+      }
+    })();
+    await tailer.start();
+    await concurrentAppends;
+
+    const texts = lines.map((line) => line.text);
+    expect(texts[0]).toMatch(/^\[server\] line-2[6-9]\d\dx*$/u);
+    expect(texts.length).toBeLessThanOrEqual(500);
+    expect(new Set(texts).size).toBe(texts.length);
+  }, 30_000);
+
+  it("holds a partial final line until the rest of it arrives", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "complete\npart");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines.map((line) => line.text)).toEqual(["[server] complete"]);
+
+    await appendFile(logPath, "ial\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] partial");
+      },
+      timeoutMs: 10_000,
+    });
+    expect(lines.map((line) => line.text)).toEqual([
+      "[server] complete",
+      "[server] partial",
+    ]);
+  }, 20_000);
+
+  it("recovers on the next tick when the initial log read fails", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "before\n");
+    openControl.failingPath = logPath;
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+
+    expect(lines.map((line) => line.text)).toEqual([
+      "[system] server log read failed: EBUSY: resource busy or locked, open",
+    ]);
+
+    openControl.failingPath = null;
+    await appendFile(logPath, "after\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] after");
+      },
+      timeoutMs: 10_000,
+    });
+    expect(lines.some((line) => line.text === "[server] before")).toBe(true);
+  }, 20_000);
+
+  it("reports a failing follow once and resumes after it recovers", async () => {
+    const tempDir = await createTempDir();
+    const lines: LogViewerLine[] = [];
+    const logPath = join(tempDir.path, "server.1.log");
+    await writeFile(logPath, "start\n");
+    const tailer = createLogTailer({
+      logDir: tempDir.path,
+      onLines(newLines) {
+        lines.push(...newLines);
+      },
+      platform: "win32",
+    });
+    tailers.push(tailer);
+    await tailer.start();
+    expect(lines.map((line) => line.text)).toEqual(["[server] start"]);
+
+    openControl.failingPath = logPath;
+    await appendFile(logPath, "during\n");
+    await waitFor({
+      predicate() {
+        return lines.some((line) =>
+          line.text.startsWith("[system] server follow:"),
+        );
+      },
+      timeoutMs: 10_000,
+    });
+    expect(
+      lines.filter((line) => line.text.startsWith("[system] server follow:")),
+    ).toHaveLength(1);
+
+    for (let index = 0; index < 3; index += 1) {
+      await appendFile(logPath, `ignored-${index}\n`);
+      await new Promise((resolvePromise) => {
+        setTimeout(resolvePromise, 50);
+      });
+    }
+    expect(
+      lines.filter((line) => line.text.startsWith("[system] server follow:")),
+    ).toHaveLength(1);
+
+    openControl.failingPath = null;
+    await appendFile(logPath, "after\n");
+
+    await waitFor({
+      predicate() {
+        return lines.some((line) => line.text === "[server] after");
+      },
+      timeoutMs: 10_000,
+    });
+    expect(lines.some((line) => line.text === "[server] during")).toBe(true);
   }, 30_000);
 
   it("reports no tail child processes", async () => {
