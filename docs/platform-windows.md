@@ -186,11 +186,15 @@ bb runs .bb-env-teardown.ps1 instead (pwsh.exe or powershell.exe)`) without
   the leader was signalled; a mismatch is skipped and offered to an optional
   `onSkippedProcess({ pid, reason: "pid-reused", expectedCreationDate,
 observedCreationDate })` callback. The skip is reported only where a caller
-  wires that callback — today only the environment hook runner
+  wires that callback — the environment hook runner
   (`apps/host-daemon/src/environment-lifecycle-script.ts`), which writes it to
-  the provisioning transcript. The worktree and personal-workspace sweeps and
-  the provider runtime stop do not wire it, so their skips are silent and the
-  later `EBUSY` on the directory is the visible symptom. No forced
+  the provisioning transcript, and, since Phase 3, the worktree and
+  personal-workspace sweeps, which write it to the plugin host's stderr. The
+  callers that still do not wire it — provider installation cancel
+  (`apps/host-daemon/src/provider-installation.ts`), the shell-environment
+  probe (`runtime-shell-env.ts`), the automations script runner and
+  `stopVerifiedProcess` — skip silently, and on a sweep path the later `EBUSY`
+  on the directory is the visible symptom. No forced
   kill ever targets a bare PID whose identity was not re-verified. On win32,
   `killProcessGroup` stays `child.kill(signal)` and is leader-only there — it
   does not walk descendants; callers that need the full tree use
@@ -218,9 +222,11 @@ Win32_Process` (measured cost about 0.55 s here; cold PowerShell start about
   (a child of an already-matched process). Each kill candidate's
   `CreationDate` is re-verified against a fresh snapshot immediately before
   its own `taskkill /PID <pid> /F`; a mismatch is skipped rather than killed
-  blind and offered to the same optional `onSkippedProcess` callback, which no
-  sweep caller wires today, so a recycled-PID skip on this path is silent and
-  the later `EBUSY` is the visible symptom. There is no graceful signal step
+  blind and offered to the same optional `onSkippedProcess` callback, which
+  both sweep callers wire since Phase 3 (see "Sweep skip reporting" below), so
+  a recycled-PID skip on this path is printed to the plugin host's stderr
+  rather than leaving the later `EBUSY` as the only symptom. There is no
+  graceful signal step
   on this path, unlike POSIX's SIGTERM-then-SIGKILL. A 10-second
   enumeration timeout is an error (`WindowsProcessEnumerationError`), never an
   empty list — an empty list would look like "nothing to kill" and leave a
@@ -445,13 +451,14 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 - **Watcher.** `@parcel/watcher@2.5.6` resolves its `win32-x64` prebuild and
   delivers event paths with backslashes, so `normalizeWatchEventPath`
   (`packages/host-watcher/src/watch-event-path.ts`) resolves a relative event
-  against its root with `path.win32`. Containment
-  (`isWatchPathWithinRoot`), the root-relative key
-  (`toWatchRootRelativeKey`) and `dedupeWatchPathChanges` all fold case on
-  win32, which also collapses the duplicate events an NTFS case-only rename
-  produces. An event path that arrives extended-length (`\\?\`, `\\.\`) is
-  passed through unchanged and its prefix is stripped only for containment
-  comparisons. Glob ignore handling is the POSIX behaviour unchanged. The
+  against its root with `path.win32`. Containment (`isWatchPathWithinRoot`)
+  and the root-relative key (`toWatchRootRelativeKey`) match the root
+  case-insensitively, and `dedupeWatchPathChanges` folds case outright, which
+  collapses the duplicate events an NTFS case-only rename produces. An event
+  path that arrives extended-length (`\\?\`, `\\.\`) is passed through
+  unchanged; the prefix is stripped only when comparing against or relativizing
+  to a root, never in the path bb reports. Glob ignore handling is the POSIX
+  behaviour unchanged. The
   watch-count ceiling test reads `/proc/self/fdinfo` for `inotify wd:` entries
   and is Linux-only by design.
 - **Desktop log viewer.** On Windows `createLogTailer`
@@ -636,8 +643,9 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `onSkippedProcess` callback, which through Phase 2 was the environment hook
   runner alone. Phase 3 wired the worktree and personal-workspace sweeps to
   write `bb sweep left pid <pid> alone: process id reused` to the plugin
-  host's stderr; the provider runtime stop still does not wire it, so its
-  skips stay silent and the later `EBUSY` is the only signal there.
+  host's stderr; provider installation cancel, the shell-environment probe,
+  the automations script runner and `stopVerifiedProcess` still do not wire
+  it, so their skips stay silent.
 - `providerProcessEnvFromShellEnv` in `apps/host-daemon/src/runtime-manager.ts`
   overlaid a bare `PATH` for provider processes instead of going through
   `assignPathEnv`, so on Windows a provider child could receive both `Path`
@@ -670,9 +678,14 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   to python, bun or a native wrapper is refused rather than run through
   `cmd.exe`; that refusal is deliberate, since `cmd.exe /c` re-parses
   arguments.
-- Extended-length watch **roots** are not supported: `watchPathRoot` resolves
-  the root with `path.resolve`, which does not preserve a `\\?\` prefix.
-  Extended-length event paths under an ordinary root are handled.
+- Extended-length watch **roots** (`\\?\C:\...`) are not a supported path:
+  nothing in bb passes one to `watchPathRoot` today, and the one NTFS
+  subscription measured against such a root reached `@parcel/watcher` without
+  going through `watchPathRoot`. It is missing coverage rather than a known
+  defect — `path.resolve` does preserve a genuine `\\?\` prefix on Node
+  22.19.0, and `normalizeWatchEventPath` has an explicit extended-length-root
+  arm. Extended-length paths in event data under an ordinary root are handled
+  and tested.
 - The manual Windows QA checklist that spec §10 names, `qa/windows/CHECKLIST.md`,
   does not exist yet; it is a Phase 5 deliverable.
 - The secrets limitations from Phase 2 stand unchanged:
