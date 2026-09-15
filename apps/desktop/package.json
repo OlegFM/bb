@@ -24,6 +24,7 @@
     "smoke:appimage-lifecycle": "node scripts/smoke-linux-appimage-lifecycle.mjs",
     "smoke:packaged": "node scripts/smoke-packaged-app.mjs",
     "smoke:browser-cdp": "node scripts/smoke-browser-cdp.mjs",
+    "smoke:windows-conpty": "node scripts/smoke-windows-conpty.mjs",
     "start": "pnpm run package && node scripts/run-packaged-app.mjs",
     "start:linux": "pnpm run package:linux && node scripts/run-packaged-app.mjs",
     "test": "vitest run --config vitest.config.ts",

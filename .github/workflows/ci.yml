@@ -273,6 +273,12 @@ jobs:
       - name: Load native add-ons
         run: node qa/windows/scripts/conpty-load-check.mjs
 
+      - name: Smoke ConPTY
+        run: |
+          New-Item -ItemType Directory -Force qa-artifacts | Out-Null
+          pnpm exec turbo run smoke:windows-conpty --filter=@bb/desktop --output-logs=new-only 2>&1 | Tee-Object -FilePath qa-artifacts/conpty-smoke.txt
+          exit $LASTEXITCODE
+
       - name: Typecheck and build
         run: >-
           pnpm exec turbo run typecheck build
@@ -305,5 +311,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-x64-test-results
-          path: .turbo/runs/*.json
+          path: |
+            .turbo/runs/*.json
+            qa-artifacts/conpty-smoke.txt
           if-no-files-found: warn
