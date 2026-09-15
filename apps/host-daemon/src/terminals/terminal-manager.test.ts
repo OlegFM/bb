@@ -5,13 +5,20 @@ import type { AgentRuntime } from "@bb/agent-runtime";
 import type { HostDaemonDaemonWsMessage } from "@bb/host-daemon-contract";
 import type { HostWorkspace } from "@bb/host-workspace";
 import {
+  isSweepRootProcess,
+  unregisterSweepRootProcess,
+} from "@bb/process-utils";
+import {
   createDeferredPromise,
   makeWorkspaceMergeBase,
   makeWorkspaceStatus,
 } from "@bb/test-helpers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HostDaemonLogger } from "../logger.js";
-import { RuntimeManager } from "../runtime-manager.js";
+import {
+  RuntimeManager,
+  type RuntimeManagerOptions,
+} from "../runtime-manager.js";
 import {
   buildTerminalEnv,
   ensureNodePtySpawnHelpersExecutableInPackage,
@@ -19,6 +26,7 @@ import {
   resolveNodePtySpawnHelperPaths,
   TerminalManager,
   TerminalShellUnavailableError,
+  terminalCloseSupportsForceKill,
   terminalSpawnArgsForStart,
   terminalTitleFromShell,
   type ResolveTerminalShell,
@@ -32,6 +40,10 @@ import {
 
 const tempDirs: string[] = [];
 const DEFAULT_TERMINAL_START = { mode: "shell" } as const;
+const FAKE_TERMINAL_PID = 4242;
+const SWEEP_REGISTER_RETRY_MS = 250;
+const PRIMARY_DEVICE_ATTRIBUTES_RESPONSE = "\u001b[?1;2c";
+const WINDOWS_TEST_SHELL = "C:\\Windows\\System32\\cmd.exe";
 
 interface ResizeCall {
   cols: number;
@@ -61,7 +73,10 @@ type TerminalMessageObserver = (message: HostDaemonDaemonWsMessage) => void;
 
 interface CreateHarnessOptions {
   closeGracePeriodMs?: number;
+  markTerminalActiveError?: Error;
   onSendMessage: TerminalMessageObserver;
+  platform?: NodeJS.Platform;
+  ptyPids?: number[];
   resolveShell: ResolveTerminalShell;
 }
 
@@ -104,6 +119,8 @@ class FakeTerminalPty implements TerminalPtyProcess {
   readonly killCalls: (string | null)[];
   readonly resizeCalls: ResizeCall[];
   readonly writeCalls: (Buffer | string)[];
+  private readonly pendingPids: number[];
+  private currentPid: number;
   private readonly dataListeners: ((data: string) => void)[];
   private readonly exitListeners: ((event: TerminalPtyExit) => void)[];
   private readonly registeredDataListeners: ((data: string) => void)[];
@@ -111,15 +128,25 @@ class FakeTerminalPty implements TerminalPtyProcess {
     event: TerminalPtyExit,
   ) => void)[];
 
-  constructor() {
+  constructor(pids: number[]) {
     this.disposeCount = 0;
     this.killCalls = [];
     this.resizeCalls = [];
     this.writeCalls = [];
+    this.pendingPids = [...pids];
+    this.currentPid = 0;
     this.dataListeners = [];
     this.exitListeners = [];
     this.registeredDataListeners = [];
     this.registeredExitListeners = [];
+  }
+
+  get pid(): number {
+    const next = this.pendingPids.shift();
+    if (next !== undefined) {
+      this.currentPid = next;
+    }
+    return this.currentPid;
   }
 
   dispose(): void {
@@ -191,15 +218,30 @@ class FakeTerminalPty implements TerminalPtyProcess {
 
 class FakeTerminalPtyAdapter implements TerminalPtyAdapter {
   readonly spawned: SpawnedTerminal[];
+  private readonly pids: number[];
 
-  constructor() {
+  constructor(pids: number[] = [FAKE_TERMINAL_PID]) {
     this.spawned = [];
+    this.pids = pids;
   }
 
   spawn(args: SpawnTerminalPtyArgs): TerminalPtyProcess {
-    const pty = new FakeTerminalPty();
+    const pty = new FakeTerminalPty(this.pids);
     this.spawned.push({ args, pty });
     return pty;
+  }
+}
+
+class TerminalActiveFailureRuntimeManager extends RuntimeManager {
+  constructor(
+    options: RuntimeManagerOptions,
+    private readonly failure: Error,
+  ) {
+    super(options);
+  }
+
+  override markTerminalActive(): void {
+    throw this.failure;
   }
 }
 
@@ -304,21 +346,28 @@ function createHarnessWithShell(
 function createHarnessWithOptions(
   args: CreateHarnessOptions,
 ): TerminalManagerHarness {
-  const adapter = new FakeTerminalPtyAdapter();
+  const adapter = new FakeTerminalPtyAdapter(args.ptyPids);
   const messages: HostDaemonDaemonWsMessage[] = [];
   const runtime = createFakeRuntime();
   const workspace = createFakeWorkspace("/tmp/terminal-workspace");
-  const runtimeManager = new RuntimeManager({
+  const runtimeManagerOptions: RuntimeManagerOptions = {
     createRuntime: () => runtime,
     provisionWorkspace: async () => workspace,
     shellEnv: {
       BB_BASE_ENV: "1",
     },
-  });
+  };
+  const runtimeManager =
+    args.markTerminalActiveError === undefined
+      ? new RuntimeManager(runtimeManagerOptions)
+      : new TerminalActiveFailureRuntimeManager(
+          runtimeManagerOptions,
+          args.markTerminalActiveError,
+        );
   const manager = new TerminalManager({
     closeGracePeriodMs: args.closeGracePeriodMs,
     logger: createFakeLogger(),
-    platform: "linux",
+    platform: args.platform ?? "linux",
     ptyAdapter: adapter,
     resolveShell: args.resolveShell,
     runtimeManager,
@@ -391,13 +440,14 @@ async function openTerminal(
   return spawned.pty;
 }
 
-describe("TerminalManager", () => {
-  afterEach(async () => {
-    vi.useRealTimers();
-    vi.unstubAllEnvs();
-    await cleanupTempDirs();
-  });
+afterEach(async () => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+  unregisterSweepRootProcess(FAKE_TERMINAL_PID);
+  await cleanupTempDirs();
+});
 
+describe("TerminalManager", () => {
   it("opens a PTY in the workspace and keeps the environment active", async () => {
     const harness = createHarness();
     await openTerminal(harness);
@@ -1393,22 +1443,194 @@ describe("TerminalManager", () => {
     ]);
   });
 
-  it("opens a native Windows terminal through the injected adapter", async () => {
-    const harness = createHarness();
-    const shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
-    const manager = new TerminalManager({
-      logger: createFakeLogger(),
+  it("closes a Windows terminal with a single kill and no force stage", async () => {
+    vi.useFakeTimers();
+    const harness = createHarnessWithOptions({
+      closeGracePeriodMs: 10,
+      onSendMessage: () => undefined,
       platform: "win32",
-      ptyAdapter: harness.adapter,
-      resolveShell: async () => shell,
-      runtimeManager: harness.runtimeManager,
-      sendMessage: (message) => {
-        harness.messages.push(message);
-        return true;
+      resolveShell: async () => WINDOWS_TEST_SHELL,
+    });
+    const pty = await openTerminal(harness);
+
+    await harness.manager.handleMessage({
+      type: "terminal.close",
+      terminalId: "term-1",
+      reason: "user",
+    });
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(pty.killCalls).toEqual([null]);
+    expect(pty.disposeCount).toBe(1);
+    expect(
+      harness.messages.filter((message) => message.type === "terminal.exited"),
+    ).toEqual([
+      {
+        type: "terminal.exited",
+        terminalId: "term-1",
+        exitCode: null,
+        closeReason: "user",
       },
+    ]);
+  });
+
+  it("keeps the two-stage close on POSIX", async () => {
+    vi.useFakeTimers();
+    const harness = createHarnessWithOptions({
+      closeGracePeriodMs: 10,
+      onSendMessage: () => undefined,
+      platform: "linux",
+      resolveShell: async () => "/bin/zsh",
+    });
+    const pty = await openTerminal(harness);
+
+    await harness.manager.handleMessage({
+      type: "terminal.close",
+      terminalId: "term-1",
+      reason: "user",
+    });
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(pty.killCalls).toEqual([null, "SIGKILL"]);
+    expect(pty.disposeCount).toBe(1);
+    expect(
+      harness.messages.filter((message) => message.type === "terminal.exited"),
+    ).toEqual([
+      {
+        type: "terminal.exited",
+        terminalId: "term-1",
+        exitCode: null,
+        closeReason: "user",
+      },
+    ]);
+  });
+
+  it("registers the Windows pty as a sweep root once its pid is known", async () => {
+    vi.useFakeTimers();
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
+      platform: "win32",
+      ptyPids: [0, 0, FAKE_TERMINAL_PID],
+      resolveShell: async () => WINDOWS_TEST_SHELL,
+    });
+    const pty = await openTerminal(harness);
+
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+    await vi.advanceTimersByTimeAsync(2 * SWEEP_REGISTER_RETRY_MS);
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(true);
+
+    await harness.manager.handleMessage({
+      type: "terminal.close",
+      terminalId: "term-1",
+      reason: "user",
+    });
+    pty.emitExit(0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+  });
+
+  it("does not register sweep roots on POSIX", async () => {
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
+      platform: "linux",
+      resolveShell: async () => "/bin/zsh",
+    });
+    await openTerminal(harness);
+
+    expect(harness.manager.listOpenTerminalPids()).toEqual([FAKE_TERMINAL_PID]);
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+  });
+
+  it("writes the device attributes reply as UTF-8 bytes on Windows", async () => {
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
+      platform: "win32",
+      resolveShell: async () => WINDOWS_TEST_SHELL,
+    });
+    const pty = await openTerminal(harness);
+
+    pty.emitData("before\u001b[cafter");
+
+    expect(pty.writeCalls).toEqual([
+      Buffer.from(PRIMARY_DEVICE_ATTRIBUTES_RESPONSE, "utf8"),
+    ]);
+  });
+
+  it("writes the device attributes reply as a string on POSIX", async () => {
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
+      platform: "linux",
+      resolveShell: async () => "/bin/zsh",
+    });
+    const pty = await openTerminal(harness);
+
+    pty.emitData("before\u001b[cafter");
+
+    expect(pty.writeCalls).toEqual([PRIMARY_DEVICE_ATTRIBUTES_RESPONSE]);
+  });
+
+  it("kills the orphan pty when a Windows open fails after spawn", async () => {
+    const harness = createHarnessWithOptions({
+      markTerminalActiveError: new Error("terminal activation failed"),
+      onSendMessage: () => undefined,
+      platform: "win32",
+      resolveShell: async () => WINDOWS_TEST_SHELL,
+    });
+    const markInactive = vi.spyOn(
+      harness.runtimeManager,
+      "markTerminalInactive",
+    );
+    const pty = await openTerminal(harness);
+
+    expect(pty.killCalls).toEqual([null]);
+    expect(pty.disposeCount).toBe(1);
+    expect(harness.manager.listOpenTerminalPids()).toEqual([]);
+    expect(isSweepRootProcess(FAKE_TERMINAL_PID)).toBe(false);
+    expect(markInactive).not.toHaveBeenCalled();
+    expect(harness.messages).toEqual([
+      {
+        type: "terminal.error",
+        requestId: "open-1",
+        terminalId: "term-1",
+        code: "terminal_open_failed",
+        message: "terminal activation failed",
+      },
+    ]);
+  });
+
+  it("leaves the orphan pty alone on POSIX (pre-existing upstream behaviour)", async () => {
+    const harness = createHarnessWithOptions({
+      markTerminalActiveError: new Error("terminal activation failed"),
+      onSendMessage: () => undefined,
+      platform: "linux",
+      resolveShell: async () => "/bin/zsh",
+    });
+    const pty = await openTerminal(harness);
+
+    expect(pty.killCalls).toEqual([]);
+    expect(pty.disposeCount).toBe(0);
+    expect(harness.manager.listOpenTerminalPids()).toEqual([FAKE_TERMINAL_PID]);
+    expect(harness.messages).toEqual([
+      {
+        type: "terminal.error",
+        requestId: "open-1",
+        terminalId: "term-1",
+        code: "terminal_open_failed",
+        message: "terminal activation failed",
+      },
+    ]);
+  });
+
+  it("opens a native Windows terminal through the injected adapter", async () => {
+    const shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
+      platform: "win32",
+      resolveShell: async () => shell,
     });
 
-    await manager.handleMessage({
+    await harness.manager.handleMessage({
       type: "terminal.open",
       requestId: "open-1",
       terminalId: "term-1",
@@ -1443,22 +1665,15 @@ describe("TerminalManager", () => {
   });
 
   it("reports an unavailable Windows shell without spawning", async () => {
-    const harness = createHarness();
-    const manager = new TerminalManager({
-      logger: createFakeLogger(),
+    const harness = createHarnessWithOptions({
+      onSendMessage: () => undefined,
       platform: "win32",
-      ptyAdapter: harness.adapter,
       resolveShell: async () => {
         throw new TerminalShellUnavailableError();
       },
-      runtimeManager: harness.runtimeManager,
-      sendMessage: (message) => {
-        harness.messages.push(message);
-        return true;
-      },
     });
 
-    await manager.handleMessage({
+    await harness.manager.handleMessage({
       type: "terminal.open",
       requestId: "open-1",
       terminalId: "term-1",
@@ -1488,75 +1703,75 @@ describe("TerminalManager", () => {
     ]);
   });
 
-  it("runs commands in one persistent shell from the workspace cwd", async () => {
-    if (process.platform === "win32") {
-      return;
-    }
-
-    const workspacePath = await makeTempDir("bb-terminal-manager-real-");
-    const targetPath = await makeTempDir("bb-terminal-manager-target-");
-    const expectedWorkspacePath = await fs.realpath(workspacePath);
-    const expectedTargetPath = await fs.realpath(targetPath);
-    const messages: HostDaemonDaemonWsMessage[] = [];
-    const runtimeManager = new RuntimeManager({
-      createRuntime: () => createFakeRuntime(),
-      provisionWorkspace: async () => createFakeWorkspace(workspacePath),
-    });
-    const manager = new TerminalManager({
-      logger: {
-        debug: vi.fn(),
-        error: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-      },
-      resolveShell: async () => "/bin/sh",
-      runtimeManager,
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-    });
-
-    await manager.handleMessage({
-      type: "terminal.open",
-      requestId: "open-real",
-      terminalId: "term-real",
-      threadId: "thr-real",
-      target: {
-        kind: "workspace",
-        environmentId: "env-real",
-        workspaceContext: {
-          workspacePath,
+  it.skipIf(process.platform === "win32")(
+    "runs commands in one persistent shell from the workspace cwd (POSIX /bin/sh)",
+    async () => {
+      const workspacePath = await makeTempDir("bb-terminal-manager-real-");
+      const targetPath = await makeTempDir("bb-terminal-manager-target-");
+      const expectedWorkspacePath = await fs.realpath(workspacePath);
+      const expectedTargetPath = await fs.realpath(targetPath);
+      const messages: HostDaemonDaemonWsMessage[] = [];
+      const runtimeManager = new RuntimeManager({
+        createRuntime: () => createFakeRuntime(),
+        provisionWorkspace: async () => createFakeWorkspace(workspacePath),
+      });
+      const manager = new TerminalManager({
+        logger: {
+          debug: vi.fn(),
+          error: vi.fn(),
+          info: vi.fn(),
+          warn: vi.fn(),
         },
-      },
-      cols: 100,
-      rows: 30,
-      start: DEFAULT_TERMINAL_START,
-    });
-    await manager.handleMessage({
-      type: "terminal.input",
-      terminalId: "term-real",
-      dataBase64: Buffer.from(
-        [
-          'printf "__PWD1:%s\\n" "$(pwd -P)"',
-          `cd ${shellQuote(targetPath)}`,
-          'printf "__PWD2:%s\\n" "$(pwd -P)"',
-          "",
-        ].join("\n"),
-        "utf8",
-      ).toString("base64"),
-    });
+        resolveShell: async () => "/bin/sh",
+        runtimeManager,
+        sendMessage: (message) => {
+          messages.push(message);
+          return true;
+        },
+      });
 
-    await waitForOutputContaining({
-      messages,
-      text: `__PWD1:${expectedWorkspacePath}`,
-    });
-    await waitForOutputContaining({
-      messages,
-      text: `__PWD2:${expectedTargetPath}`,
-    });
-    await manager.shutdownAll();
-  }, 10_000);
+      await manager.handleMessage({
+        type: "terminal.open",
+        requestId: "open-real",
+        terminalId: "term-real",
+        threadId: "thr-real",
+        target: {
+          kind: "workspace",
+          environmentId: "env-real",
+          workspaceContext: {
+            workspacePath,
+          },
+        },
+        cols: 100,
+        rows: 30,
+        start: DEFAULT_TERMINAL_START,
+      });
+      await manager.handleMessage({
+        type: "terminal.input",
+        terminalId: "term-real",
+        dataBase64: Buffer.from(
+          [
+            'printf "__PWD1:%s\\n" "$(pwd -P)"',
+            `cd ${shellQuote(targetPath)}`,
+            'printf "__PWD2:%s\\n" "$(pwd -P)"',
+            "",
+          ].join("\n"),
+          "utf8",
+        ).toString("base64"),
+      });
+
+      await waitForOutputContaining({
+        messages,
+        text: `__PWD1:${expectedWorkspacePath}`,
+      });
+      await waitForOutputContaining({
+        messages,
+        text: `__PWD2:${expectedTargetPath}`,
+      });
+      await manager.shutdownAll();
+    },
+    10_000,
+  );
 });
 
 function makeTerminalOpenMessage(
@@ -1588,10 +1803,6 @@ function makeExecutableSet(
 }
 
 describe("resolveDefaultTerminalShell", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("prefers pwsh found on Path on Windows", async () => {
     await expect(
       resolveDefaultTerminalShell({
@@ -1603,6 +1814,24 @@ describe("resolveDefaultTerminalShell", () => {
           executableArgs.platform === "win32"
             ? "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
             : null,
+      }),
+    ).resolves.toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
+  });
+
+  it("ignores a pwsh launcher shim on Path on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: {
+          PATHEXT: ".EXE;.CMD",
+          Path: "C:\\shims",
+          ProgramFiles: "C:\\Program Files",
+          SystemRoot: "C:\\Windows",
+        },
+        pathIsExecutable: makeExecutableSet([
+          "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        ]),
+        resolveExecutable: async () => "C:\\shims\\pwsh.cmd",
       }),
     ).resolves.toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
   });
@@ -1817,10 +2046,6 @@ describe("terminalSpawnArgsForStart", () => {
 });
 
 describe("buildTerminalEnv", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("collapses every PATH casing into one Path on Windows", () => {
     const env = buildTerminalEnv({
       shellEnv: { PATH: "C:\\bb;C:\\old" },
@@ -1855,19 +2080,30 @@ describe("buildTerminalEnv", () => {
   });
 
   it("merges the sanitized inherited env, the shell env and the fixed terminal keys on POSIX", () => {
-    expect(
-      buildTerminalEnv({
-        shellEnv: { PATH: "/bb/bin:/usr/bin", SHELL_ONLY: "shell" },
-        terminalId: "term-1",
-        platform: "linux",
-        inheritedEnv: {
-          HOME: "/home/tester",
-          PATH: "/usr/bin",
-          NODE_ENV: "test",
-          BB_DROPPED: "1",
-        },
-      }),
-    ).toEqual({
+    const env = buildTerminalEnv({
+      shellEnv: { PATH: "/bb/bin:/usr/bin", SHELL_ONLY: "shell" },
+      terminalId: "term-1",
+      platform: "linux",
+      inheritedEnv: {
+        HOME: "/home/tester",
+        PATH: "/usr/bin",
+        NODE_ENV: "test",
+        BB_DROPPED: "1",
+      },
+    });
+
+    expect(Object.keys(env)).toEqual([
+      "HOME",
+      "PATH",
+      "SHELL_ONLY",
+      "BB_TERMINAL_SESSION_ID",
+      "COLORTERM",
+      "DISABLE_AUTO_TITLE",
+      "FORCE_HYPERLINK",
+      "PROMPT_EOL_MARK",
+      "TERM",
+    ]);
+    expect(env).toEqual({
       HOME: "/home/tester",
       PATH: "/bb/bin:/usr/bin",
       SHELL_ONLY: "shell",
@@ -1895,6 +2131,14 @@ describe("buildTerminalEnv", () => {
   });
 });
 
+describe("terminalCloseSupportsForceKill", () => {
+  it("refuses the force stage on Windows and keeps it on POSIX", () => {
+    expect(terminalCloseSupportsForceKill("win32")).toBe(false);
+    expect(terminalCloseSupportsForceKill("linux")).toBe(true);
+    expect(terminalCloseSupportsForceKill("darwin")).toBe(true);
+  });
+});
+
 describe("terminalTitleFromShell", () => {
   it("uses the Windows executable file name", () => {
     expect(
@@ -1902,6 +2146,12 @@ describe("terminalTitleFromShell", () => {
         "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
         "win32",
       ),
+    ).toBe("pwsh.exe");
+  });
+
+  it("uses the Windows executable file name after a forward slash", () => {
+    expect(
+      terminalTitleFromShell("C:/Program Files/PowerShell/7/pwsh.exe", "win32"),
     ).toBe("pwsh.exe");
   });
 

@@ -268,6 +268,10 @@ export function unregisterSweepRootProcess(pid: number): void {
   trackedSweepRoots.delete(pid);
 }
 
+export function isSweepRootProcess(pid: number): boolean {
+  return trackedSweepRoots.has(pid);
+}
+
 export function clearSweepRootProcesses(): void {
   trackedSweepRoots.clear();
 }
