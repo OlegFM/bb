@@ -1,4 +1,8 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import {
+  spawn,
+  type ChildProcess,
+  type SpawnOptions,
+} from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import { experimental_recordProviderChildIo } from "@get-bb/plugin-sdk/provider-bridge";
 import type { z } from "zod";
@@ -20,12 +24,20 @@ export interface CodexAppServerExitInfo {
   spawnFailed: boolean;
 }
 
+export type CodexAppServerSpawn = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptions,
+) => ChildProcess;
+
 interface CreateCodexAppServerConnectionOptions {
   command: string;
   args: string[];
   cwd: string;
   env: Record<string, string | undefined>;
   recordThreadId: string | null;
+  platform?: NodeJS.Platform;
+  spawnImpl?: CodexAppServerSpawn;
   onNotification(method: string, params: unknown): void;
   onRequest(
     method: string,
@@ -101,11 +113,17 @@ function isClosedChildStdinError(error: Error): boolean {
 export function createCodexAppServerConnection(
   options: CreateCodexAppServerConnectionOptions,
 ): CodexAppServerConnection {
-  const child: ChildProcess = spawn(options.command, options.args, {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const platform = options.platform ?? process.platform;
+  const child: ChildProcess = (options.spawnImpl ?? spawn)(
+    options.command,
+    options.args,
+    {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(platform === "win32" ? { windowsHide: true } : {}),
+    },
+  );
   experimental_recordProviderChildIo(child, {
     threadId: options.recordThreadId,
   });

@@ -4,6 +4,7 @@ import os from "node:os";
 import { posix as posixPath, win32 as win32Path } from "node:path";
 import { promisify } from "node:util";
 import {
+  experimental_resolveSpawnPlanOrThrow as resolveSpawnPlanOrThrow,
   type ProviderHealthResult,
   type ProviderInstallationCommand,
   type ProviderInstallationRunResult,
@@ -204,21 +205,41 @@ async function piGlobalInstallCommand(
     : npmGlobalInstallCommand(PI_NPM_PACKAGE, context.platform);
 }
 
+async function runPiVersionProbe(
+  launch: { command: string; args: readonly string[] },
+  context: PiMaintenanceContext,
+): Promise<string> {
+  const probeArgs = [...launch.args, "--version"];
+  if (context.platform === "win32") {
+    const plan = await resolveSpawnPlanOrThrow({
+      command: launch.command,
+      args: probeArgs,
+      env: context.env,
+      platform: "win32",
+    });
+    const { stdout } = await execFileAsync(plan.command, plan.args, {
+      timeout: VERSION_PROBE_TIMEOUT_MS,
+      env: context.env,
+      windowsHide: true,
+    });
+    return stdout;
+  }
+  const { stdout } = await execFileAsync(launch.command, probeArgs, {
+    timeout: VERSION_PROBE_TIMEOUT_MS,
+    env: context.env,
+  });
+  return stdout;
+}
+
 export async function probePiVersion(
-  env: NodeJS.ProcessEnv = process.env,
+  options: PiMaintenanceOptions = {},
 ): Promise<PiVersionProbe> {
-  const launch = resolvePiLaunch(env);
+  const context = maintenanceContext(options);
+  const launch = resolvePiLaunch(context.env);
   const display = formatCommand(launch.command, [...launch.args, "--version"]);
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(
-      launch.command,
-      [...launch.args, "--version"],
-      {
-        timeout: VERSION_PROBE_TIMEOUT_MS,
-        env,
-      },
-    ));
+    stdout = await runPiVersionProbe(launch, context);
   } catch (error) {
     return {
       version: null,
@@ -256,7 +277,7 @@ export async function getPiProviderInstallationStatus(
   const [resolvedExecutable, probe, latestVersion, npmGlobal] =
     await Promise.all([
       resolveExecutablePath(launch.command, context),
-      probePiVersion(context.env),
+      probePiVersion(context),
       npmLatestVersion(PI_NPM_PACKAGE, context),
       probeNpmGlobalPackage(PI_NPM_PACKAGE, context),
     ]);

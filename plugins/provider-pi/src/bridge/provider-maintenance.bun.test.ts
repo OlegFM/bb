@@ -26,7 +26,10 @@ vi.mock("@get-bb/plugin-sdk/provider-bridge", async (importOriginal) => {
 });
 
 vi.mock("./rpc-child.js", () => ({
-  resolvePiLaunch: () => ({ command: probeState.executablePath, args: [] }),
+  resolvePiLaunch: () => ({
+    command: process.execPath,
+    args: ["-e", "process.stdout.write('0.84.0')", "--"],
+  }),
 }));
 
 import {
@@ -68,8 +71,12 @@ describe("Pi provider maintenance with a Bun-managed executable", () => {
       chmod(probeState.executablePath, 0o755),
     ]);
 
-    const status = await getPiProviderInstallationStatus();
-    const run = await getPiProviderInstallationRun("update");
+    const status = await getPiProviderInstallationStatus({
+      platform: "linux",
+    });
+    const run = await getPiProviderInstallationRun("update", {
+      platform: "linux",
+    });
 
     expect(status.installAction?.command).toBe(
       "bun add -g @earendil-works/pi-coding-agent@latest",

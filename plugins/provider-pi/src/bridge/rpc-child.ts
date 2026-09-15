@@ -1,9 +1,14 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import {
+  spawn,
+  type ChildProcess,
+  type SpawnOptions,
+} from "node:child_process";
 import { PassThrough, Writable, type Readable } from "node:stream";
 import {
   experimental_isProviderBridgeRecording,
   experimental_readBoundedLines,
   experimental_recordProviderChildIo,
+  experimental_resolveSpawnPlanOrThrow as resolveSpawnPlanOrThrow,
   sanitizeInheritedChildProcessEnv,
   withoutBridgeRuntimeEnv,
 } from "@get-bb/plugin-sdk/provider-bridge";
@@ -35,6 +40,17 @@ export interface PiRpcResponse {
   error?: string;
 }
 
+export interface PiLaunchPlan {
+  command: string;
+  args: readonly string[];
+}
+
+export type PiRpcSpawn = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptions,
+) => ChildProcess;
+
 export interface SpawnPiRpcChildArgs {
   cwd: string;
   env: NodeJS.ProcessEnv;
@@ -44,6 +60,12 @@ export interface SpawnPiRpcChildArgs {
   onExit: (info: PiRpcChildExitInfo) => void;
   recordThreadId: string | null;
   onExtensionUiRequest?: (request: Record<string, unknown>) => void;
+  platform?: NodeJS.Platform;
+  spawnImpl?: PiRpcSpawn;
+}
+
+export interface PiRpcChildArgs extends SpawnPiRpcChildArgs {
+  launch: PiLaunchPlan;
 }
 
 export class PiRpcChildExitedError extends Error {
@@ -88,6 +110,23 @@ export function resolvePiLaunch(env: NodeJS.ProcessEnv): {
   return { command, args: parsed };
 }
 
+export async function spawnPiRpcChild(
+  args: SpawnPiRpcChildArgs,
+): Promise<PiRpcChild> {
+  const platform = args.platform ?? process.platform;
+  const launch = resolvePiLaunch(process.env);
+  if (platform !== "win32") {
+    return new PiRpcChild({ ...args, launch });
+  }
+  const plan = await resolveSpawnPlanOrThrow({
+    command: launch.command,
+    args: launch.args,
+    env: args.env,
+    platform,
+  });
+  return new PiRpcChild({ ...args, launch: plan });
+}
+
 export function buildPiChildEnv(
   overrides: Record<string, string>,
 ): NodeJS.ProcessEnv {
@@ -113,18 +152,24 @@ export class PiRpcChild {
   private readonly stdoutLines: string[] = [];
   private stdoutDraining = false;
 
-  constructor(private readonly args: SpawnPiRpcChildArgs) {
+  constructor(private readonly args: PiRpcChildArgs) {
     let resolveSettledExit: (info: PiRpcChildExitInfo) => void = () =>
       undefined;
     this.settledExit = new Promise((resolve) => {
       resolveSettledExit = resolve;
     });
-    const launch = resolvePiLaunch(process.env);
-    this.child = spawn(launch.command, [...launch.args, ...args.args], {
-      cwd: args.cwd,
-      env: args.env,
-      stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
-    });
+    const launch = args.launch;
+    const platform = args.platform ?? process.platform;
+    this.child = (args.spawnImpl ?? spawn)(
+      launch.command,
+      [...launch.args, ...args.args],
+      {
+        cwd: args.cwd,
+        env: args.env,
+        stdio: ["pipe", "pipe", "pipe", "pipe", "pipe"],
+        ...(platform === "win32" ? { windowsHide: true } : {}),
+      },
+    );
     experimental_recordProviderChildIo(this.child, {
       threadId: args.recordThreadId,
     });

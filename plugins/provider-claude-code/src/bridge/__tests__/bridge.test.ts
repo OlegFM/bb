@@ -635,8 +635,7 @@ async function startBridgeThread(args: StartBridgeThreadArgs): Promise<void> {
   args.bridge.sendRequest(1, "thread/start", {
     cwd: "/tmp/worktree",
     instructionMode: "append",
-    options: canonicalOptions({
-    }),
+    options: canonicalOptions({}),
     threadId: args.threadId,
   });
   await args.bridge.waitForResponse(1);
@@ -1035,6 +1034,7 @@ describe("bridge", () => {
         permissionScope: "workspace",
       },
       { PATH: binDir },
+      "linux",
     );
 
     expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
@@ -1061,6 +1061,7 @@ describe("bridge", () => {
         permissionScope: "workspace",
       },
       { HOME: homeDir, PATH: "/nonexistent-bb-test-dir" },
+      "linux",
     );
 
     expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
@@ -1083,6 +1084,7 @@ describe("bridge", () => {
         BB_CLAUDE_CODE_EXECUTABLE: executablePath,
         PATH: "/usr/bin",
       },
+      "linux",
     );
 
     expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
@@ -1105,6 +1107,7 @@ describe("bridge", () => {
         BB_CLAUDE_CODE_EXECUTABLE: `  ${executablePath}  `,
         PATH: "/usr/bin",
       },
+      "linux",
     );
 
     expect(options.pathToClaudeCodeExecutable).toBe(executablePath);
@@ -1131,6 +1134,7 @@ describe("bridge", () => {
           BB_CLAUDE_CODE_EXECUTABLE: executablePath,
           PATH: "/usr/bin",
         },
+        "linux",
       ),
     ).toThrow("BB_CLAUDE_CODE_EXECUTABLE must point to an executable");
   });
@@ -2571,9 +2575,10 @@ describe("bridge", () => {
       close,
     });
 
-    const { models, selectedOnlyModels } = await listClaudeCodeBridgeModels({
-      PATH: binDir,
-    });
+    const { models, selectedOnlyModels } = await listClaudeCodeBridgeModels(
+      { PATH: binDir },
+      "linux",
+    );
     expect(models.map((model) => model.model)).toEqual([
       "claude-fable-5-1",
       "claude-opus-5[1m]",

@@ -11,7 +11,9 @@ describe("probeAcpAgent", () => {
     });
 
     expect(probe.reachable).toBe(false);
-    expect(probe.reachable === false && probe.reason).toContain("ENOENT");
+    expect(probe.reachable === false && probe.reason).toMatch(
+      /ENOENT|bb-acp-agent-that-does-not-exist was not found on Path/u,
+    );
     expect(acpAgentProbeSchema.safeParse(probe).success).toBe(true);
   });
 

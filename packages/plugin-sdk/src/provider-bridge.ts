@@ -259,6 +259,21 @@ export type {
  */
 export { sanitizeInheritedChildProcessEnv } from "@bb/process-utils";
 
+/**
+ * Windows launch resolution. A bare command name is a POSIX privilege: on
+ * Windows `spawn`/`execFile` never consult `PATHEXT`, never find the `.cmd`
+ * shim npm writes for a global install, and read a `PATH` key the Windows
+ * environment spells `Path`. A bridge that starts a provider CLI therefore
+ * resolves the launch first and spawns the resolved command.
+ * `experimental_resolveSpawnPlanOrThrow` is the identity on every other
+ * platform, so a bridge may call it unconditionally or gate it on `win32`.
+ */
+export {
+  readWindowsEnvValue as experimental_readWindowsEnvValue,
+  resolveExecutableSync as experimental_resolveExecutableSync,
+  resolveSpawnPlanOrThrow as experimental_resolveSpawnPlanOrThrow,
+} from "@bb/process-utils";
+
 // ---------------------------------------------------------------------------
 // 4. The domain vocabulary the protocol's payloads reference
 // ---------------------------------------------------------------------------

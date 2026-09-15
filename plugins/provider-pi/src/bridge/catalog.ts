@@ -9,6 +9,7 @@ import {
   PiRpcChild,
   PiRpcChildExitedError,
   buildPiChildEnv,
+  spawnPiRpcChild,
 } from "./rpc-child.js";
 
 const EXTENDED_THINKING_LEVELS = [
@@ -98,7 +99,8 @@ async function spawnCatalog(
   }
 
   let generation: CatalogChildGeneration | null = null;
-  const spawnGeneration = (): CatalogChildGeneration => {
+  let pendingGeneration: Promise<CatalogChildGeneration> | null = null;
+  const spawnGeneration = async (): Promise<CatalogChildGeneration> => {
     let modelScope:
       | { scopedModelIds: string[]; defaultModelId?: string }
       | undefined;
@@ -117,7 +119,7 @@ async function spawnCatalog(
             : undefined,
       };
     };
-    const child = new PiRpcChild({
+    const child = await spawnPiRpcChild({
       cwd,
       env: buildPiChildEnv({}),
       args: ["--mode", "rpc", "--no-session", "--extension", extensionPath],
@@ -162,11 +164,24 @@ async function spawnCatalog(
     })();
     return { child, ready, getModelScope: () => modelScope };
   };
-  const activeGeneration = (): CatalogChildGeneration => {
-    if (generation === null || generation.child.exited) {
-      generation = spawnGeneration();
+  const activeGeneration = (): Promise<CatalogChildGeneration> => {
+    if (generation !== null && !generation.child.exited) {
+      return Promise.resolve(generation);
     }
-    return generation;
+    if (pendingGeneration === null) {
+      pendingGeneration = spawnGeneration().then(
+        (next) => {
+          generation = next;
+          pendingGeneration = null;
+          return next;
+        },
+        (error: unknown) => {
+          pendingGeneration = null;
+          throw error;
+        },
+      );
+    }
+    return pendingGeneration;
   };
   const fetchRawFrom = async (
     active: CatalogChildGeneration,
@@ -185,21 +200,21 @@ async function spawnCatalog(
     active: CatalogChildGeneration;
     raw: PiRpcModel[];
   }> => {
-    const first = activeGeneration();
+    const first = await activeGeneration();
     try {
       return { active: first, raw: await fetchRawFrom(first) };
     } catch (error) {
       if (!(error instanceof PiRpcChildExitedError)) {
         throw error;
       }
-      const active = activeGeneration();
+      const active = await activeGeneration();
       return { active, raw: await fetchRawFrom(active) };
     }
   };
   const fetchRaw = async (): Promise<PiRpcModel[]> =>
     (await fetchGeneration()).raw;
   const probe = async (): Promise<Record<string, unknown>> =>
-    activeGeneration().ready;
+    (await activeGeneration()).ready;
   await probe();
   return {
     async listModels() {

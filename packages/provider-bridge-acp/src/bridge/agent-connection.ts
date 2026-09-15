@@ -1,5 +1,10 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import {
+  spawn,
+  type ChildProcess,
+  type SpawnOptions,
+} from "node:child_process";
 import { createInterface } from "node:readline";
+import { resolveSpawnPlanOrThrow } from "@bb/process-utils";
 import { experimental_recordProviderChildIo } from "@bb/provider-bridge-protocol/bridge-kit";
 import type { z } from "zod";
 
@@ -17,12 +22,44 @@ export interface AcpAgentExitInfo {
   stderrTail: string;
 }
 
+export type AcpAgentSpawn = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptions,
+) => ChildProcess;
+
+export interface ResolveAcpAgentLaunchArgs {
+  command: string;
+  args: readonly string[];
+  env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  platform?: NodeJS.Platform;
+}
+
+export async function resolveAcpAgentLaunch(
+  args: ResolveAcpAgentLaunchArgs,
+): Promise<{ command: string; args: string[] }> {
+  const platform = args.platform ?? process.platform;
+  if (platform !== "win32") {
+    return { command: args.command, args: [...args.args] };
+  }
+  return resolveSpawnPlanOrThrow({
+    command: args.command,
+    args: args.args,
+    env: args.env ?? process.env,
+    platform,
+    ...(args.cwd === undefined ? {} : { cwd: args.cwd }),
+  });
+}
+
 interface CreateAcpAgentConnectionOptions {
   command: string;
   args: string[];
   cwd: string;
   env: Record<string, string | undefined>;
   recordThreadId: string | null;
+  platform?: NodeJS.Platform;
+  spawnImpl?: AcpAgentSpawn;
   onNotification(method: string, params: unknown): void;
   onRequest(
     method: string,
@@ -138,11 +175,17 @@ function parseAgentLine(line: string): ParsedAgentMessage | null {
 export function createAcpAgentConnection(
   options: CreateAcpAgentConnectionOptions,
 ): AcpAgentConnection {
-  const child: ChildProcess = spawn(options.command, options.args, {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const platform = options.platform ?? process.platform;
+  const child: ChildProcess = (options.spawnImpl ?? spawn)(
+    options.command,
+    options.args,
+    {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(platform === "win32" ? { windowsHide: true } : {}),
+    },
+  );
   experimental_recordProviderChildIo(child, {
     threadId: options.recordThreadId,
   });

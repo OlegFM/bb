@@ -7,6 +7,7 @@ import {
   PiRpcChild,
   PiRpcChildExitedError,
   buildPiChildEnv,
+  spawnPiRpcChild,
   type PiRpcChildExitInfo,
 } from "./rpc-child.js";
 
@@ -239,7 +240,7 @@ export class PiRpcSession {
 
     this.ready = createDeferred();
     const onExtensionUiRequest = this.options.onExtensionUiRequest;
-    const child = new PiRpcChild({
+    const child = await spawnPiRpcChild({
       cwd: this.options.cwd,
       env: buildPiChildEnv({
         ...(this.options.shellEnvOverrides ?? {}),

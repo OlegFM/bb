@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import {
   createCodexAppServerConnection,
   type CodexAppServerConnection,
   type CodexAppServerExitInfo,
+  type CodexAppServerSpawn,
 } from "./app-server-connection.js";
 
 const EPIPE_PAYLOAD_SIZE = 1024 * 1024;
@@ -191,6 +193,80 @@ describe("codex app-server connection", () => {
         stderrTail: expect.stringMatching(/stdin failed \(EPIPE\)/),
         spawnFailed: false,
       });
+    } finally {
+      await stopConnection(connection, exited.promise);
+    }
+  }, 30_000);
+});
+
+describe("codex app-server spawn options", () => {
+  function recordingSpawn(): {
+    calls: { command: string; args: readonly string[]; options: object }[];
+    spawnImpl: CodexAppServerSpawn;
+  } {
+    const calls: {
+      command: string;
+      args: readonly string[];
+      options: object;
+    }[] = [];
+    return {
+      calls,
+      spawnImpl: (command, args, options) => {
+        calls.push({ command, args, options });
+        return spawn(
+          process.execPath,
+          ["-e", "setTimeout(() => process.exit(0), 50);"],
+          { stdio: ["pipe", "pipe", "pipe"] },
+        );
+      },
+    };
+  }
+
+  it("spawns the resolved command with a hidden console on win32", async () => {
+    const exited = deferred<CodexAppServerExitInfo>();
+    const { calls, spawnImpl } = recordingSpawn();
+    const connection = createCodexAppServerConnection({
+      command: "C:\\Codex\\codex.exe",
+      args: ["app-server"],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      platform: "win32",
+      spawnImpl,
+      onNotification: () => undefined,
+      onRequest: () => undefined,
+      onExit: exited.resolve,
+    });
+
+    try {
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.command).toBe("C:\\Codex\\codex.exe");
+      expect(calls[0]?.args).toEqual(["app-server"]);
+      expect(calls[0]?.options).toMatchObject({ windowsHide: true });
+    } finally {
+      await stopConnection(connection, exited.promise);
+    }
+  }, 30_000);
+
+  it("passes no windowsHide key on a posix platform", async () => {
+    const exited = deferred<CodexAppServerExitInfo>();
+    const { calls, spawnImpl } = recordingSpawn();
+    const connection = createCodexAppServerConnection({
+      command: "codex",
+      args: ["app-server"],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      platform: "linux",
+      spawnImpl,
+      onNotification: () => undefined,
+      onRequest: () => undefined,
+      onExit: exited.resolve,
+    });
+
+    try {
+      expect(calls[0]?.command).toBe("codex");
+      expect(calls[0]?.options).not.toHaveProperty("windowsHide");
     } finally {
       await stopConnection(connection, exited.promise);
     }

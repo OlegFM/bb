@@ -1046,6 +1046,65 @@ a script that cannot run there.
    render as a link, rather than a prose sentence every caller must print
    verbatim.
 
+## Windows launch resolution (`experimental_resolveSpawnPlanOrThrow`, `experimental_resolveExecutableSync`, `experimental_readWindowsEnvValue`) (`@get-bb/plugin-sdk/provider-bridge`)
+
+**What it does.** Turns the bare command a bridge wants to start into one a
+Windows `spawn`/`execFile` can actually start. On win32 a bare name is not a
+launch: `CreateProcess` never consults `PATHEXT`, so `claude`, `codex`, `pi`
+and `cursor-agent` resolve to nothing even when `claude.exe` or the `.cmd`
+shim npm writes for a global install is on the search path; the search path
+itself arrives under the key `Path`, not `PATH`.
+`experimental_resolveSpawnPlanOrThrow` takes `{ command, args, env?,
+platform?, cwd? }` and answers `{ command, args }` — on win32 the absolute
+path of the first `Path` entry whose `PATHEXT` candidate exists (directories
+in order, extensions ranked within a directory), with a Node `.cmd`/`.bat`
+launcher rewritten to `node.exe <script>` and its arguments appended; on
+every other platform the identity, with no filesystem access at all. When
+win32 resolution fails it throws before the spawn, with the reason —
+"Command `<name>` was not found on Path", "Windows launcher `<path>` is not a
+Node shim bb can start directly", or "Windows launcher `<path>` cannot be
+started directly" — so a bridge reports why the provider could not start
+instead of an opaque `ENOENT` from a spawn that never had a chance.
+`experimental_resolveExecutableSync` is the same `Path`/`PATHEXT` walk
+without the shim rewrite, for the one caller that cannot await: the Claude
+Code bridge resolves `pathToClaudeCodeExecutable` inside the synchronous
+`buildSessionOptions`. `experimental_readWindowsEnvValue` reads one variable
+from an environment case-insensitively, which is how a bridge reaches
+`USERPROFILE` or `Path` in an env block it did not build itself.
+
+**Platform injection.** All three take an optional `platform` (default
+`process.platform`) and an optional `env` (default `process.env`), so a
+bridge's win32 behaviour is testable from a posix host and a posix path stays
+literally unchanged: on a non-win32 platform
+`experimental_resolveSpawnPlanOrThrow` returns the command and arguments it
+was given and the caller spawns exactly what it spawned before, with no
+`windowsHide` option added.
+
+**Audit before stabilizing.**
+
+1. **Resolution happens once, at launch.** The plan is computed immediately
+   before the spawn and not cached; a provider installed or upgraded while
+   bb runs is picked up on the next launch, but a long-lived session keeps
+   the executable it started with. Decide whether the seam owes a cache with
+   an invalidation rule, or whether per-launch resolution is the promise.
+2. **Only Node `.cmd`/`.bat` shims are rewritten.** A launcher that shells
+   out to python, bun or a native wrapper is refused with
+   `not_node_shim` rather than started through `cmd.exe` — deliberate, since
+   `cmd.exe /c` re-parses arguments and bb never spawns through a shell.
+   Decide whether a second, argv-safe shim reader (bun, deno) is owed before
+   the refusal message is a promise third-party bridges match on.
+3. **The failure is an `Error`, not a typed result.** Callers that want to
+   report rather than throw catch it and read `message`; the thrown
+   `SpawnPlanUnavailableError` carries `reason`/`command`/`resolvedPath` but
+   the class itself is not exported here. Decide whether the typed cause
+   becomes part of the surface, or whether a nullable-plan variant is the
+   better public shape.
+4. **`experimental_resolveExecutableSync` is synchronous filesystem work.**
+   It stats up to `Path.length × PATHEXT.length` candidates on the calling
+   thread. It exists for `buildSessionOptions`; if the Claude Agent SDK ever
+   accepts an async executable resolver, this export should be removed
+   rather than stabilized.
+
 ## Presentation builders (`experimental_presentationTitle`, `experimental_presentationDetail`, `experimental_withTitle`, `experimental_presentationFileName`, `experimental_COMPACTION_PRESENTATION`, `experimental_REASONING_PRESENTATION`, `experimental_fileReadPresentation`, `experimental_searchPresentation`, `experimental_webSearchPresentation`, `experimental_webFetchPresentation`, `experimental_planStepsPresentation`, `experimental_toolPresentation`) (`@get-bb/plugin-sdk/provider-bridge`)
 
 **What it does.** The bridge kit's presentation building blocks for the

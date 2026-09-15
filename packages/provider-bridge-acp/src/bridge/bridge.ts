@@ -113,6 +113,7 @@ import {
 import {
   AcpAgentResponseError,
   createAcpAgentConnection,
+  resolveAcpAgentLaunch,
   type AcpAgentConnection,
   type AcpAgentRequestResponder,
 } from "./agent-connection.js";
@@ -726,17 +727,25 @@ function acpClientCapabilities(
 async function loadAgentModelCatalog(
   listCommand: AcpAgentCommandParam,
 ): Promise<AgentModelCatalog | null> {
+  const listEnv = {
+    ...withoutBridgeRuntimeEnv(process.env),
+    ...(listCommand.envVars ?? {}),
+  };
+  const launch = await resolveAcpAgentLaunch({
+    command: listCommand.command,
+    args: listCommand.args,
+    env: listEnv,
+    ...(listCommand.cwd === undefined ? {} : { cwd: listCommand.cwd }),
+  });
   const stdout = await new Promise<string | null>((resolveExec, rejectExec) => {
     execFile(
-      listCommand.command,
-      listCommand.args,
+      launch.command,
+      launch.args,
       {
         ...(listCommand.cwd !== undefined ? { cwd: listCommand.cwd } : {}),
-        env: {
-          ...withoutBridgeRuntimeEnv(process.env),
-          ...(listCommand.envVars ?? {}),
-        },
+        env: listEnv,
         timeout: MODEL_LIST_TIMEOUT_MS,
+        ...(process.platform === "win32" ? { windowsHide: true } : {}),
       },
       (error, out, stderr) => {
         if (!error) {
@@ -795,9 +804,15 @@ async function loadSessionDiscoveredModels(
     ...withoutBridgeRuntimeEnv(process.env),
     ...(agent.envVars ?? {}),
   };
-  const connection = createAcpAgentConnection({
+  const discoveryLaunch = await resolveAcpAgentLaunch({
     command: agent.command,
     args: agent.args,
+    env: childEnv,
+    cwd: agent.cwd ?? process.cwd(),
+  });
+  const connection = createAcpAgentConnection({
+    command: discoveryLaunch.command,
+    args: discoveryLaunch.args,
     cwd: agent.cwd ?? process.cwd(),
     env: childEnv,
     recordThreadId: null,
@@ -1673,9 +1688,15 @@ async function startAgentSession(
     ...withoutBridgeRuntimeEnv(process.env),
     ...params.envVars,
   };
-  const connection = createAcpAgentConnection({
+  const spawnLaunch = await resolveAcpAgentLaunch({
     command: params.agent.command,
     args: launch.args,
+    env: childEnv,
+    cwd: params.cwd,
+  });
+  const connection = createAcpAgentConnection({
+    command: spawnLaunch.command,
+    args: spawnLaunch.args,
     cwd: params.cwd,
     env: childEnv,
     recordThreadId: bbThreadId,

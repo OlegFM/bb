@@ -7,6 +7,7 @@ import {
   type DynamicTool,
   type PromptInput,
   type ThreadDelta,
+  experimental_resolveSpawnPlanOrThrow as resolveSpawnPlanOrThrow,
   sanitizeInheritedChildProcessEnv,
   BRIDGE_INBOUND_REQUEST_METHODS,
   BRIDGE_JSON_RPC_ERRORS,
@@ -367,6 +368,24 @@ export function resolveAppServerLaunch(env: NodeJS.ProcessEnv = process.env): {
       'model_providers.bb-account-pool.env_http_headers.x-bb-account-pool-token="CODEX_POOL_AUTH_TOKEN"',
     ],
   };
+}
+
+export async function resolveCodexAppServerLaunch(args: {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+}): Promise<{ command: string; args: string[] }> {
+  const env = args.env ?? process.env;
+  const platform = args.platform ?? process.platform;
+  const launch = resolveAppServerLaunch(env);
+  if (platform !== "win32") {
+    return launch;
+  }
+  return resolveSpawnPlanOrThrow({
+    command: launch.command,
+    args: launch.args,
+    env,
+    platform,
+  });
 }
 
 function appServerLaunchEnv(
@@ -828,7 +847,7 @@ function handleChildExit(
   }
 }
 
-function spawnChildConnection(callbacks: {
+async function spawnChildConnection(callbacks: {
   envVars?: Readonly<Record<string, string>>;
   recordThreadId: string | null;
   onNotification: (method: string, params: unknown) => void;
@@ -838,9 +857,11 @@ function spawnChildConnection(callbacks: {
     responder: CodexAppServerRequestResponder,
   ) => void;
   onExit: (info: CodexAppServerExitInfo) => void;
-}): CodexAppServerConnection {
+}): Promise<CodexAppServerConnection> {
   const env = buildAppServerEnv(callbacks.envVars);
-  const launch = resolveAppServerLaunch(appServerLaunchEnv(callbacks.envVars));
+  const launch = await resolveCodexAppServerLaunch({
+    env: appServerLaunchEnv(callbacks.envVars),
+  });
   const { envVars: _envVars, ...connectionCallbacks } = callbacks;
   return createCodexAppServerConnection({
     command: launch.command,
@@ -982,7 +1003,7 @@ async function constructThreadSession(
   }
   sendThreadDeltas(session, [{ kind: "session.reset" }]);
 
-  const connection = spawnChildConnection({
+  const connection = await spawnChildConnection({
     envVars: decoded.sessionOptions.envVars,
     recordThreadId: args.threadId,
     onNotification: (method, params) =>
@@ -1162,7 +1183,7 @@ async function rebuildThreadSession(
 async function withMaintenanceChild<T>(
   fn: (connection: CodexAppServerConnection) => Promise<T>,
 ): Promise<T> {
-  const connection = spawnChildConnection({
+  const connection = await spawnChildConnection({
     recordThreadId: null,
     onNotification: () => {},
     onRequest: (_method, _params, responder) => {
@@ -1192,7 +1213,7 @@ async function getModelListConnection(): Promise<CodexAppServerConnection> {
   }
 
   const connectionPromise = (async () => {
-    const connection = spawnChildConnection({
+    const connection = await spawnChildConnection({
       recordThreadId: null,
       onNotification: () => {},
       onRequest: (_method, _params, responder) => {

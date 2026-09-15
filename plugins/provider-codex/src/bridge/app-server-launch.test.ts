@@ -1,7 +1,36 @@
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveAppServerLaunch } from "./bridge.js";
+import {
+  resolveAppServerLaunch,
+  resolveCodexAppServerLaunch,
+} from "./bridge.js";
 
-afterEach(() => vi.unstubAllEnvs());
+const onWindows = process.platform === "win32";
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+function makeBinDirectory(): string {
+  const directory = mkdtempSync(join(tmpdir(), "bb-codex-launch-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+function writeExecutable(directory: string, name: string): string {
+  const filePath = join(directory, name);
+  writeFileSync(filePath, "@echo off\n");
+  try {
+    chmodSync(filePath, 0o755);
+  } catch {}
+  return filePath;
+}
 
 describe("Codex Account Pool launch", () => {
   it("adds an in-memory base URL and environment-backed hub header", () => {
@@ -35,4 +64,47 @@ describe("Codex Account Pool launch", () => {
       args: ["app-server"],
     });
   });
+});
+
+describe("Codex app-server spawn resolution", () => {
+  it("resolves the bare command through Path and PATHEXT on win32", async () => {
+    const binDirectory = makeBinDirectory();
+    const exePath = writeExecutable(binDirectory, "codex.exe");
+
+    await expect(
+      resolveCodexAppServerLaunch({
+        env: { Path: binDirectory, PATHEXT: ".EXE;.CMD" },
+        platform: "win32",
+      }),
+    ).resolves.toEqual({ command: exePath, args: ["app-server"] });
+  });
+
+  it("leaves the posix launch exactly as resolveAppServerLaunch built it", async () => {
+    await expect(
+      resolveCodexAppServerLaunch({ env: {}, platform: "linux" }),
+    ).resolves.toEqual({ command: "codex", args: ["app-server"] });
+  });
+
+  it("reports why the Windows launch is unavailable instead of spawning", async () => {
+    const binDirectory = makeBinDirectory();
+
+    await expect(
+      resolveCodexAppServerLaunch({
+        env: { Path: binDirectory, PATHEXT: ".EXE;.CMD" },
+        platform: "win32",
+      }),
+    ).rejects.toThrow("Command codex was not found on Path");
+  });
+
+  it.runIf(onWindows)(
+    "resolves the Codex CLI installed on this Windows host",
+    async () => {
+      const launch = await resolveCodexAppServerLaunch({
+        env: process.env,
+        platform: "win32",
+      });
+      expect(launch.command.toLowerCase()).toContain("codex");
+      expect(launch.args).toEqual(["app-server"]);
+    },
+  );
 });

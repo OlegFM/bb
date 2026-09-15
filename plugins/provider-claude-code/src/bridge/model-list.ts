@@ -4,8 +4,14 @@ import { buildClaudeCodeModels } from "../model-list.js";
 import { translateMissingClaudeCliError } from "./missing-cli-error.js";
 import { resolveClaudeCodeExecutable } from "./session-options.js";
 
-function buildModelProbeOptions(env: NodeJS.ProcessEnv): Options {
-  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable({ env });
+export function buildModelProbeOptions(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): Options {
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable({
+    env,
+    platform,
+  });
   return {
     cwd: process.cwd(),
     maxTurns: 0,
@@ -19,6 +25,7 @@ function buildModelProbeOptions(env: NodeJS.ProcessEnv): Options {
 
 export async function listClaudeCodeBridgeModels(
   env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<{
   models: AvailableModel[];
   selectedOnlyModels: AvailableModel[];
@@ -27,7 +34,7 @@ export async function listClaudeCodeBridgeModels(
   try {
     session = query({
       prompt: ".",
-      options: buildModelProbeOptions(env),
+      options: buildModelProbeOptions(env, platform),
     });
   } catch (error) {
     throw translateMissingClaudeCliError(error);

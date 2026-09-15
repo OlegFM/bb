@@ -3,6 +3,7 @@ import { withoutBridgeRuntimeEnv } from "@bb/provider-bridge-protocol/bridge-kit
 import {
   AcpAgentExitedError,
   createAcpAgentConnection,
+  resolveAcpAgentLaunch,
 } from "./bridge/agent-connection.js";
 import { ACP_PROTOCOL_VERSION, acpInitializeResultSchema } from "./wire.js";
 
@@ -36,11 +37,21 @@ export async function probeAcpAgent(
   const timeoutMs = request.timeoutMs ?? PROBE_TIMEOUT_MS;
   let connection: ReturnType<typeof createAcpAgentConnection> | undefined;
   try {
-    connection = createAcpAgentConnection({
+    const probeEnv = withoutBridgeRuntimeEnv({
+      ...process.env,
+      ...(request.env ?? {}),
+    });
+    const launch = await resolveAcpAgentLaunch({
       command: request.command,
-      args: [...request.args],
+      args: request.args,
+      env: probeEnv,
       cwd: request.cwd,
-      env: withoutBridgeRuntimeEnv({ ...process.env, ...(request.env ?? {}) }),
+    });
+    connection = createAcpAgentConnection({
+      command: launch.command,
+      args: launch.args,
+      cwd: request.cwd,
+      env: probeEnv,
       recordThreadId: null,
       onNotification: () => {},
       onRequest: (_method, _params, responder) => {

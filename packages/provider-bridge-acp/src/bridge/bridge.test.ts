@@ -1129,7 +1129,7 @@ describe("acp bridge", () => {
     });
     const failingResponse = await waitForResponse(failingId);
     expect(failingResponse.error?.message).toMatch(
-      /spawn \/nonexistent\/acp-model-lister ENOENT/,
+      /\/nonexistent\/acp-model-lister (ENOENT|was not found on Path)/u,
     );
   });
 

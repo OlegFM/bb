@@ -1,11 +1,13 @@
 import {
+  experimental_readWindowsEnvValue as readWindowsEnvValue,
+  experimental_resolveExecutableSync as resolveExecutableSync,
   type InstructionMode,
   type PermissionEscalation,
   type ReasoningLevel,
   type RuntimePermissionScope,
 } from "@get-bb/plugin-sdk/provider-bridge";
-import { accessSync, constants, statSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
+import { delimiter, join, win32 as win32Path } from "node:path";
 import type { Options, Settings } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudePermissionMode } from "../interactive-contract.js";
 import { buildReadonlyBashUpdatedInput } from "./readonly-bash-policy.js";
@@ -47,6 +49,7 @@ interface ResolveExecutableOnPathArgs {
 
 interface ResolveClaudeCodeExecutableArgs {
   env: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
 }
 
 const READONLY_ALLOWED_TOOLS = new Set([
@@ -238,7 +241,19 @@ function resolveExecutableOnPath(
   return null;
 }
 
-function wellKnownClaudeExecutablePaths(env: NodeJS.ProcessEnv): string[] {
+function wellKnownClaudeExecutablePaths(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): string[] {
+  if (platform === "win32") {
+    const profile = readWindowsEnvValue(env, "USERPROFILE")?.trim();
+    return profile
+      ? [
+          win32Path.join(profile, ".local", "bin", "claude.exe"),
+          win32Path.join(profile, ".claude", "local", "claude.exe"),
+        ]
+      : [];
+  }
   if (process.getuid?.() === 0) {
     return [];
   }
@@ -257,9 +272,23 @@ function wellKnownClaudeExecutablePaths(env: NodeJS.ProcessEnv): string[] {
 export function resolveClaudeCodeExecutable(
   args: ResolveClaudeCodeExecutableArgs,
 ): string | null {
+  const platform = args.platform ?? process.platform;
   const explicitPath = args.env[CLAUDE_CODE_EXECUTABLE_ENV];
   const trimmedExplicitPath = explicitPath?.trim();
   if (trimmedExplicitPath && trimmedExplicitPath.length > 0) {
+    if (platform === "win32") {
+      const resolved = resolveExecutableSync({
+        command: trimmedExplicitPath,
+        env: args.env,
+        platform,
+      });
+      if (resolved !== null) {
+        return resolved;
+      }
+      throw new Error(
+        `${CLAUDE_CODE_EXECUTABLE_ENV} must point to an executable Claude CLI path: ${trimmedExplicitPath}`,
+      );
+    }
     try {
       accessSync(trimmedExplicitPath, constants.X_OK);
       return trimmedExplicitPath;
@@ -270,6 +299,26 @@ export function resolveClaudeCodeExecutable(
     }
   }
 
+  if (platform === "win32") {
+    const onPath = resolveExecutableSync({
+      command: "claude",
+      env: args.env,
+      platform,
+    });
+    if (onPath !== null) {
+      return onPath;
+    }
+    for (const candidate of wellKnownClaudeExecutablePaths(
+      args.env,
+      platform,
+    )) {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   const executableOnPath = resolveExecutableOnPath({
     executableName: "claude",
     pathEnv: args.env.PATH,
@@ -278,7 +327,7 @@ export function resolveClaudeCodeExecutable(
     return executableOnPath;
   }
 
-  for (const candidate of wellKnownClaudeExecutablePaths(args.env)) {
+  for (const candidate of wellKnownClaudeExecutablePaths(args.env, platform)) {
     if (isExecutableFile(candidate)) {
       return candidate;
     }
@@ -290,6 +339,7 @@ export function resolveClaudeCodeExecutable(
 export function buildSessionOptions(
   params: BuildSessionOptionsArgs,
   env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
 ): SdkSessionOptions {
   const systemPrompt: Exclude<Options["systemPrompt"], undefined> =
     params.instructionMode === "replace"
@@ -307,7 +357,10 @@ export function buildSessionOptions(
   const additionalDirectories = usesWorkspaceSandbox(params)
     ? (params.additionalWorkspaceWriteRoots ?? [])
     : [];
-  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable({ env });
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutable({
+    env,
+    platform,
+  });
   const flagSettings = buildFlagSettings(params);
   const extraArgs = buildChromeExtraArgs(params.chromeEnabled);
 

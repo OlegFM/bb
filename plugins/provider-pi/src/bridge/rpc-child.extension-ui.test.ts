@@ -1,15 +1,12 @@
 import { expect, it, vi } from "vitest";
-import { PiRpcChild } from "./rpc-child.js";
+import { spawnPiRpcChild } from "./rpc-child.js";
 
 function childScript(script: string): { command: string; args: string[] } {
   return { command: process.execPath, args: ["-e", script] };
 }
 
 it("auto-cancels extension ui requests when no handler is installed", async () => {
-  vi.stubEnv(
-    "BB_PI_BRIDGE_COMMAND",
-    process.execPath,
-  );
+  vi.stubEnv("BB_PI_BRIDGE_COMMAND", process.execPath);
   vi.stubEnv(
     "BB_PI_BRIDGE_ARGS",
     JSON.stringify([
@@ -29,7 +26,7 @@ it("auto-cancels extension ui requests when no handler is installed", async () =
     ]),
   );
   const events: Record<string, unknown>[] = [];
-  const child = new PiRpcChild({
+  const child = await spawnPiRpcChild({
     cwd: process.cwd(),
     env: process.env,
     args: [],
@@ -55,7 +52,7 @@ it("forwards extension ui requests to the installed handler", async () => {
   const { command, args } = childScript(script);
   vi.stubEnv("BB_PI_BRIDGE_COMMAND", command);
   vi.stubEnv("BB_PI_BRIDGE_ARGS", JSON.stringify(args));
-  const child = new PiRpcChild({
+  const child = await spawnPiRpcChild({
     cwd: process.cwd(),
     env: process.env,
     args: [],
@@ -67,7 +64,12 @@ it("forwards extension ui requests to the installed handler", async () => {
   });
   await child.waitForExit();
   expect(forwarded).toEqual([
-    { type: "extension_ui_request", id: "ui-2", method: "confirm", title: "Go?" },
+    {
+      type: "extension_ui_request",
+      id: "ui-2",
+      method: "confirm",
+      title: "Go?",
+    },
   ]);
   vi.unstubAllEnvs();
 });
@@ -93,7 +95,7 @@ it("respondToExtensionUi writes the response line to pi stdin", async () => {
     ]),
   );
   const events: Record<string, unknown>[] = [];
-  const child = new PiRpcChild({
+  const child = await spawnPiRpcChild({
     cwd: process.cwd(),
     env: process.env,
     args: [],
