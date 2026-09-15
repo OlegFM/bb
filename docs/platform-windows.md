@@ -443,6 +443,11 @@ directly`.
 - JetBrains Toolbox version selection under
   `%LOCALAPPDATA%\JetBrains\Toolbox\apps` picks lexicographically, not by
   parsed version number.
+- Editor and app open targets on Windows are launched detached, so the open
+  request returns once the process is spawned and reports only spawn failures
+  (as macOS `open -a` does), not the editor's exit status. An editor started
+  through a `.cmd` shim keeps a hidden, detached `cmd.exe` alive for the
+  editor's lifetime.
 - A `pid-reused` skip is reported only where a caller wires the
   `onSkippedProcess` callback, which today is the environment hook runner
   alone. Wiring the worktree and personal-workspace sweep's skip callback to
