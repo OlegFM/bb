@@ -1,0 +1,131 @@
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/packages/local-open-targets
+
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > default workspace open-target runtime > exposes the resolved shell PATH without changing system-tool launches
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > default workspace open-target runtime > builds a single Path key for the shell PATH on Windows
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > returns no targets on unsupported platforms without probing apps
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers Linux platform targets and editor CLIs from PATH
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers Linux desktop apps outside app-specific adapters
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers WSL default app and file manager integrations
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > lists Windows platform targets without POSIX editor paths
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens WSL paths with the configured default app bridge
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens WSL paths with the file manager bridge through the Linux runtime
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > rejects unsupported non-Linux open requests
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens Linux files with discovered editor CLIs
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens Linux desktop app targets from desktop Exec entries
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens Linux paths with the platform default app
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens remote SSH paths in a Linux terminal
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers built-in targets and bundle-id matches
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens paths with the macOS default app
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > reveals files in Finder
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens BBEdit and Emacs through macOS application open instead of editor CLIs
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens TextMate locations through txmt URLs with column support
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > advertises and uses column support for IntelliJ IDEA
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > falls back to application bundle paths when bundle id lookup misses
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses Cursor's bundled macOS CLI when the shell command is unavailable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses bundled macOS editor CLIs when shell commands are unavailable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses bundled VS Code CLI for remote SSH opens when the shell command is unavailable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers Warp from the macOS application bundle
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers Antigravity with the current bundle id
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers Devin Desktop with its current bundle id
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers generic macOS apps from file-specific LaunchServices results
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens generic macOS app targets by bundle id
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses app-provided icons for discovered targets without built-in icons
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > prefers app-provided icons for discovered known app targets
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > discovers and opens JetBrains Toolbox applications through bundled executables
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > falls back when app-provided icons exceed the contract size limit
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens Xcode files through xed with the enclosing project container
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens the workspace with an argument separator before the path
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses the VS Code CLI for workspace opens when available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > advertises VS Code remote SSH support only when the CLI is available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > advertises terminal remote SSH support only when osascript and ssh are available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens remote SSH paths with VS Code without local path checks
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens remote SSH paths in Terminal with a remote editor script
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens remote SSH paths in Ghostty by passing ssh args to the app
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens remote SSH paths in Zed with SSH URIs
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > rejects remote SSH opens for targets without remote support
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > rejects missing paths
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local directories in Terminal with a short cd command
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local directories in iTerm2 with a short cd command
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in Terminal with a resolved terminal editor command
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in iTerm2 with a resolved terminal editor command
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > inserts terminal editor location args before explicit editor args separator
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in Terminal at the containing directory when no terminal editor is available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in Warp at the containing directory
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in Ghostty with a resolved terminal editor command
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > opens local files in Ghostty at the containing directory when no terminal editor is available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses line-aware direct-editor commands when available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > uses Devin Desktop line and column direct-editor commands when available
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > falls back to regular app opens when a line-aware executable is unavailable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > rejects unavailable targets
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > rejects workspace opening on unsupported platforms
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > discovers VS Code on the Windows Path with remote support
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > opens files in VS Code at line and column from the Windows Path
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > discovers an editor through the App Paths registry when the Path misses
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > runs a node .cmd shim through the Node executable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > runs a non-node .cmd shim through cmd.exe
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > selects files and opens directories in Explorer
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > opens files and directories with the default app through Explorer
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > opens Windows Terminal at the containing directory
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > falls back to a detached PowerShell console when wt is absent
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > starts the console fallback in a spaced directory through cmd start
+stdout | test/workspace-open-targets.test.ts > workspace open targets > windows > leaves a live interactive console behind for the terminal fallback
+terminal fallback consoles: pid=26416 started=2026-09-15T08:42:57.0566900+03:00
+
+ × |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > leaves a live interactive console behind for the terminal fallback 5013ms
+   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > treats an Explorer exit code of 1 on an existing path as success
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > surfaces Explorer failures when the path is gone or the code is not 1
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > opens remote SSH paths in VS Code and rejects targets without remote support
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > rejects desktop and macOS app targets as unavailable
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > discovers editors from Windows install roots
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > discovers JetBrains Toolbox shims and versioned installs
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > leaves JetBrains targets unavailable without Toolbox or installs
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > passes a .cmd shim and its arguments through environment variables
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > runs a real spaced .cmd shim with a spaced argument through cmd.exe
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > rejects a detached launch whose executable cannot be spawned
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > reveals a spaced file path with a quoted Explorer select token
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > ignores a PowerShell script launcher on the Windows Path
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > does not let an earlier-Path script hide a later launcher
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > probes App Paths only for adapters that declare Windows install paths
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > reports mac-only terminals as unsupported for remote SSH paths
+ ↓ |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > lists the real open targets of this desktop
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@bb/local-open-targets| test/workspace-open-targets.test.ts > workspace open targets > windows > leaves a live interactive console behind for the terminal fallback
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/workspace-open-targets.test.ts:2959:6
+    2957|     it.runIf(
+    2958|       process.platform === "win32" && process.env.BB_QA_REAL_LAUNCH ==…
+    2959|     )(
+       |      ^
+    2960|       "leaves a live interactive console behind for the terminal fallb…
+    2961|       async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 84 skipped (85)
+   Start at  08:42:53
+   Duration  7.95s (transform 924ms, setup 0ms, import 2.67s, tests 5.02s, environment 0ms)
+
+undefined
+C:\Users\olege\Work\bb\packages\local-open-targets:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run test/workspace-open-targets.test.ts -t leaves a live interactive console behind for the terminal fallback --reporter=verbose
+EXIT=1
+
+=== same case re-run with --testTimeout=30000 ===
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/packages/local-open-targets
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 84 skipped (85)
+   Start at  08:43:25
+   Duration  7.94s (transform 857ms, setup 0ms, import 2.06s, tests 5.66s, environment 0ms)
+
+EXIT_TIMEOUT30=0

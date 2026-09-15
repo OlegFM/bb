@@ -1,0 +1,36 @@
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/apps/host-daemon
+
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > creates, moves, and removes paths beneath the declared root 64ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > creates missing parent directories when recursive is enabled 10ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > removes empty directories non-recursively and requires recursive for non-empty directories 14ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > rejects symlink escapes and refuses to remove the declared root 20ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > junctions > refuses to remove a file reached through a junction that leaves the root 14ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > junctions > refuses to move a junction and leaves its target untouched 13ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > junctions > refuses a junction substituted for a working directory and removes only the resolved path when the junction stays inside the root 26ms
+ ✓ |@bb/host-daemon| src/command-handlers/path-mutations.test.ts > confined host path mutations > does not overwrite a move destination 23ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  08:35:55
+   Duration  6.73s (transform 3.13s, setup 0ms, import 6.01s, tests 189ms, environment 0ms)
+
+EXIT=0
+
+=== skill junction link (provider-claude-code) ===
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/plugins/provider-claude-code
+
+ ✓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > assembles a plugin whose skills directory links to the generic root 27ms
+ ✓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > passes the junction link type on win32 and the dir type off win32 16ms
+ ✓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > links the skills directory as a junction on Windows 27ms
+ ↓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > links the skills directory as a directory symlink off Windows
+ ✓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > is idempotent for a root and re-points the link when the root moves 27ms
+ ✓ |bb-plugin-provider-claude-code| src/bridge/__tests__/skill-plugins.test.ts > claude skill plugins > keeps the stable name across catalog changes and suffixes only a colliding second root 52ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 1 skipped (6)
+   Start at  08:36:13
+   Duration  592ms (transform 81ms, setup 0ms, import 147ms, tests 153ms, environment 0ms)
+
+EXIT_SKILL=0

@@ -1,0 +1,200 @@
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[184/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > refuses a pinned git tag unless the source is changed explicitly
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-POGM3J\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[185/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > loads a legacy-layout plugin unchanged, then migrates lazily on update
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-KgyvG9\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[186/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > offers and applies a newer tag inside a git semver range
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-qAUB1d\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[187/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > refuses to resolve a release tag that was moved to another commit
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-APKhM8\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[188/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > protects an unclassified Phase 1 exact-tag row in a full update sweep
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-mD6tH1\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[189/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > refuses to turn a legacy tag pin into a same-name branch
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-wkJkAc\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[190/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > falls back to the newest compatible release in a range
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-ysa0q0\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[191/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > installs the newest compatible release from a git range
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-94gxUg\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[192/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-update.test.ts > plugin update service and routes > refuses an exact-tag install whose tag moved
+@bb/server:test: Error: git ls-remote failed (exit 128): fatal: unable to access 'https://C:\Users\olege\AppData\Local\Temp\bb-plugin-update-gIupKG\repo/': URL rejected: Port number was not a decimal number between 0 and 65535
+@bb/server:test:  ❯ ChildProcess.<anonymous> src/services/plugins/install-sources.ts:644:9
+@bb/server:test:     642|       const tail = stderr.trim().slice(-1000);
+@bb/server:test:     643|       reject(
+@bb/server:test:     644|         new Error(
+@bb/server:test:        |         ^
+@bb/server:test:     645|           `${command} ${args[0]} failed (exit ${code ?? "signal"})${ta…
+@bb/server:test:     646|         ),
+@bb/server:test:  ❯ ChildProcess.cp.emit ../../node_modules/.pnpm/cross-spawn@7.0.6/node_modules/cross-spawn/lib/enoent.js:34:29
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[193/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-wire.test.ts > plugin wire surfaces (http/rpc dispatcher + realtime) > serves a registered route for local requests (no origin, and app origins)
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-wire.test.ts > plugin wire surfaces (http/rpc dispatcher + realtime) > local auth rejects foreign origins but tolerates host-bound LAN/Tailscale serving
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-wire.test.ts > plugin wire surfaces (http/rpc dispatcher + realtime) > adopts a structurally valid Response from another realm (#1661)
+@bb/server:test: Error: Hook timed out in 10000ms.
+@bb/server:test: If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+@bb/server:test:  ❯ test/services/plugins/plugin-wire.test.ts:197:3
+@bb/server:test:     195|   let rootDir: string;
+@bb/server:test:     196|
+@bb/server:test:     197|   beforeEach(async () => {
+@bb/server:test:        |   ^
+@bb/server:test:     198|     harness = await createTestAppHarness({ devAppPort: 5173 });
+@bb/server:test:     199|     rootDir = await writePlugin(join(harness.config.dataDir, "fixtures…
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[194/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-wire.test.ts > plugin wire surfaces (http/rpc dispatcher + realtime) > serves a registered route for local requests (no origin, and app origins)
+@bb/server:test: TypeError: Cannot read properties of undefined (reading 'pluginService')
+@bb/server:test:  ❯ test/services/plugins/plugin-wire.test.ts:208:19
+@bb/server:test:     206|
+@bb/server:test:     207|   afterEach(async () => {
+@bb/server:test:     208|     await harness.pluginService.stop();
+@bb/server:test:        |                   ^
+@bb/server:test:     209|     await harness.cleanup();
+@bb/server:test:     210|   });
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[195/213]⎯
+@bb/server:test: 
+@bb/server:test:  FAIL  |@bb/server:isolated| test/services/plugins/plugin-wire.test.ts > plugin wire surfaces (http/rpc dispatcher + realtime) > streams a foreign response body instead of buffering it
+@bb/server:test: AssertionError: expected 404 to be 200 // Object.is equality
+@bb/server:test: 
+@bb/server:test: - Expected
+@bb/server:test: + Received
+@bb/server:test: 
+@bb/server:test: - 200
+@bb/server:test: + 404
+@bb/server:test: 
+@bb/server:test:  ❯ test/services/plugins/plugin-wire.test.ts:480:31
+@bb/server:test:     478|         `${BASE}/api/v1/plugins/wire/http/foreign-stream`,
+@bb/server:test:     479|       );
+@bb/server:test:     480|       expect(response.status).toBe(200);
+@bb/server:test:        |                               ^
+@bb/server:test:     481|       const reader = response.body!.getReader();
+@bb/server:test:     482|       const decoder = new TextDecoder();
+@bb/server:test: 
+@bb/server:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[196/213]⎯
+@bb/server:test: 
+@bb/server:test: 
+@bb/server:test:  Test Files  44 failed | 194 passed | 2 skipped (240)
+@bb/server:test:       Tests  197 failed | 2253 passed | 6 skipped (2456)
+@bb/server:test:    Start at  00:12:51
+@bb/server:test:    Duration  469.87s (transform 1644.05s, setup 0ms, import 2887.11s, tests 3849.72s, environment 66ms)
+@bb/server:test: 
+@bb/server:test:  ELIFECYCLE  Test failed. See above for more details.
+@bb/server#test:  WARNING  command finished with error, but continuing...
+@bb/config#test:  ERROR  command (C:\Users\olege\Work\bb\packages\config) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/scripts#test:  ERROR  command (C:\Users\olege\Work\bb\packages\scripts) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-app#test:  ERROR  command (C:\Users\olege\Work\bb\packages\bb-app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/local-open-targets#test:  ERROR  command (C:\Users\olege\Work\bb\packages\local-open-targets) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-automations#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\automations) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-github#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\github) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-environment-personal-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\environment-personal-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/cli#test:  ERROR  command (C:\Users\olege\Work\bb\apps\cli) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/db#test:  ERROR  command (C:\Users\olege\Work\bb\packages\db) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/desktop#test:  ERROR  command (C:\Users\olege\Work\bb\apps\desktop) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-claude-code#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-claude-code) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-daemon#test:  ERROR  command (C:\Users\olege\Work\bb\apps\host-daemon) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/process-utils#test:  ERROR  command (C:\Users\olege\Work\bb\packages\process-utils) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\packages\host-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/app#test:  ERROR  command (C:\Users\olege\Work\bb\apps\app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/server#test:  ERROR  command (C:\Users\olege\Work\bb\apps\server) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+
+  Tasks:    15 successful, 31 total
+ Cached:    7 cached, 31 total
+   Time:    7m57.893s 
+Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JKrwwED587vxSvZcNRW04gnnSh.json
+ Failed:    @bb/app#test, @bb/cli#test, @bb/config#test, @bb/db#test, @bb/desktop#test, @bb/host-daemon#test, @bb/host-workspace#test, @bb/local-open-targets#test, @bb/process-utils#test, @bb/scripts#test, @bb/server#test, bb-app#test, bb-plugin-automations#test, bb-plugin-environment-personal-workspace#test, bb-plugin-github#test, bb-plugin-provider-claude-code#test
+
+ ERROR  run failed: command  exited (1)
+EXIT=1

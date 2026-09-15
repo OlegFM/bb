@@ -1,0 +1,38 @@
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/apps/host-daemon
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed | 7 skipped (16)
+   Start at  00:26:27
+   Duration  12.64s (transform 575ms, setup 0ms, import 1.80s, tests 10.64s, environment 0ms)
+
+EXIT_LIFECYCLE=0
+
+=== verbose re-run (per-case pass lines) ===
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/apps/host-daemon
+
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > runs in the environment directory and streams stdout and stderr
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > surfaces output before setup failure
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > enforces the setup timeout
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > enforces the teardown timeout
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > reports teardown failure without rejecting removal
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > cancels a running setup before returning to cleanup
+ ↓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > core environment scripts > skips absent scripts
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > fails setup when only the POSIX hook exists on Windows 9ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > reports a POSIX-only teardown on Windows without blocking removal 3ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > prefers the PowerShell hook when both hooks exist 3ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > builds a non-interactive PowerShell -File command 1ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > builds the teardown command and refuses a POSIX teardown hook 1ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > streams PowerShell hook output 427ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > times out a sleeping PowerShell hook 4491ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > reports the exit code of a failing PowerShell hook 351ms
+ ✓ |@bb/host-daemon| src/environment-lifecycle-script.test.ts > windows environment scripts > cancels a PowerShell hook and leaves no descendant 5224ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed | 7 skipped (16)
+   Start at  00:26:54
+   Duration  12.09s (transform 583ms, setup 0ms, import 1.37s, tests 10.51s, environment 0ms)
+
+EXIT_LIFECYCLE_VERBOSE=0

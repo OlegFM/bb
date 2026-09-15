@@ -1,0 +1,30 @@
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/packages/process-utils
+
+PID_REUSE_EVIDENCE {"leaderPid":24720,"grandchildPid":19904,"unrelatedPid":38188,"unrelatedAlive":true,"recycleIterations":300,"leaderExited":true,"descendantsKilled":[19904],"descendantsSkipped":[],"skipped":[]}
+ENUMERATION_EVIDENCE {"directory":"C:\\Users\\olege\\AppData\\Local\\Temp\\bb-enum-demo-nXA6EI","enumerationMs":635,"underMatchPid":13760,"underMatchMissed":true,"overMatchPid":22172,"overMatchEvidence":"command-line","matchedPids":[22172,24476]}
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  00:22:41
+   Duration  23.31s (transform 104ms, setup 0ms, import 243ms, tests 22.86s, environment 0ms)
+
+EXIT=0
+
+=== verbose re-run (per-case pass lines) ===
+
+ RUN  v4.1.1 C:/Users/olege/Work/bb/packages/process-utils
+
+ ✓ |@bb/process-utils| test/windows-process-real.test.ts > terminateProcessTree against real Windows processes > kills the grandchild and reports it 6658ms
+ ✓ |@bb/process-utils| test/windows-process-real.test.ts > terminateProcessTree against real Windows processes > skips a descendant whose recorded CreationDate no longer matches 6434ms
+PID_REUSE_EVIDENCE {"leaderPid":9932,"grandchildPid":25456,"unrelatedPid":38748,"unrelatedAlive":true,"recycleIterations":300,"leaderExited":true,"descendantsKilled":[25456],"descendantsSkipped":[],"skipped":[]}
+ ✓ |@bb/process-utils| test/windows-process-real.test.ts > terminateProcessTree against real Windows processes > leaves unrelated processes alive while PIDs are recycled under a tree kill 7912ms
+ENUMERATION_EVIDENCE {"directory":"C:\\Users\\olege\\AppData\\Local\\Temp\\bb-enum-demo-0XxA7K","enumerationMs":647,"underMatchPid":21020,"underMatchMissed":true,"overMatchPid":8652,"overMatchEvidence":"command-line","matchedPids":[8652,40656]}
+ ✓ |@bb/process-utils| test/windows-process-real.test.ts > Windows process enumeration against real processes > documents an under-match and an over-match 1683ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  00:27:17
+   Duration  23.11s (transform 95ms, setup 0ms, import 220ms, tests 22.69s, environment 0ms)
+
+EXIT_VERBOSE=0
