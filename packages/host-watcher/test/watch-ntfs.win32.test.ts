@@ -11,7 +11,9 @@ import {
 import type { HostPathWatchChange } from "../src/host-watcher-types.js";
 
 const tempDirs: string[] = [];
+const activeStops: Array<() => void | Promise<void>> = [];
 const TEST_TIMEOUT_MS = 20_000;
+const INNER_WAIT_TIMEOUT_MS = TEST_TIMEOUT_MS / 3;
 const POLL_INTERVAL_MS = 50;
 
 type Sleep = (durationMs: number) => Promise<void>;
@@ -25,6 +27,13 @@ async function makeTempDir(prefix: string): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+function registerStop(
+  stop: () => void | Promise<void>,
+): () => void | Promise<void> {
+  activeStops.push(stop);
+  return stop;
 }
 
 async function waitFor(
@@ -72,6 +81,7 @@ function watchExtendedLengthRoot(
 }
 
 afterEach(async () => {
+  await Promise.all(activeStops.splice(0).map((stop) => stop()));
   await Promise.all(
     tempDirs
       .splice(0)
@@ -103,9 +113,12 @@ describe.runIf(process.platform === "win32")(
           onWatchError: () => {},
         });
         expect(stopWatching).toBeDefined();
+        if (stopWatching) {
+          registerStop(stopWatching);
+        }
 
         try {
-          await waitFor(() => ready, TEST_TIMEOUT_MS);
+          await waitFor(() => ready, INNER_WAIT_TIMEOUT_MS);
 
           const filePath = path.join(root, "a.txt");
           await fs.writeFile(filePath, "hello");
@@ -114,7 +127,7 @@ describe.runIf(process.platform === "win32")(
               changes.some((change) =>
                 change.path.toLowerCase().endsWith("\\a.txt"),
               ),
-            TEST_TIMEOUT_MS,
+            INNER_WAIT_TIMEOUT_MS,
           );
 
           const renamedPath = path.join(root, "B.TXT");
@@ -124,7 +137,7 @@ describe.runIf(process.platform === "win32")(
               changes.some((change) =>
                 change.path.toLowerCase().endsWith("\\b.txt"),
               ),
-            TEST_TIMEOUT_MS,
+            INNER_WAIT_TIMEOUT_MS,
           );
 
           await fs.rm(renamedPath, { force: true });
@@ -175,11 +188,12 @@ describe.runIf(process.platform === "win32")(
             changes.push(...batch);
           },
         );
+        registerStop(stop);
 
         try {
           await Promise.race([
             ready,
-            sleep(TEST_TIMEOUT_MS).then(() => {
+            sleep(INNER_WAIT_TIMEOUT_MS).then(() => {
               throw new Error("Timed out waiting for the watcher to be ready");
             }),
           ]);
@@ -191,7 +205,7 @@ describe.runIf(process.platform === "win32")(
               changes.some((change) =>
                 change.path.toLowerCase().endsWith("c.txt"),
               ),
-            TEST_TIMEOUT_MS,
+            INNER_WAIT_TIMEOUT_MS,
           );
 
           expect(

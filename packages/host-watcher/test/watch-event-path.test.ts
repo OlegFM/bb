@@ -49,6 +49,12 @@ describe("watch event paths on win32", () => {
     ).toBe("C:\\very\\long\\repo\\file.ts");
   });
 
+  it("trims a trailing separator on an extended-length drive root before joining", () => {
+    expect(normalizeWatchEventPath("\\\\?\\C:\\", "a.ts", "win32")).toBe(
+      "\\\\?\\C:\\a.ts",
+    );
+  });
+
   it("treats same paths with different case as within root", () => {
     expect(
       isWatchPathWithinRoot("C:\\Work\\bb", "c:\\work\\bb\\SRC\\a.ts", "win32"),
@@ -73,6 +79,26 @@ describe("watch event paths on win32", () => {
     ).toBe(false);
   });
 
+  it("rejects a plain candidate that escapes an extended-length root via ..", () => {
+    expect(
+      isWatchPathWithinRoot(
+        "\\\\?\\C:\\Work\\bb",
+        "C:\\Work\\bb\\..\\evil\\x",
+        "win32",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects an extended-length candidate that escapes a plain root via ..", () => {
+    expect(
+      isWatchPathWithinRoot(
+        "C:\\Work\\bb",
+        "\\\\?\\C:\\Work\\bb\\..\\evil\\x",
+        "win32",
+      ),
+    ).toBe(false);
+  });
+
   it("emits forward-slash relative keys for windows candidates", () => {
     expect(
       toWatchRootRelativeKey(
@@ -81,6 +107,24 @@ describe("watch event paths on win32", () => {
         "win32",
       ),
     ).toBe("SRC/a.ts");
+  });
+
+  it("strips an extended-length prefix from the candidate before keying", () => {
+    expect(
+      toWatchRootRelativeKey("C:\\Work\\bb", "\\\\?\\C:\\Work\\bb\\x", "win32"),
+    ).toBe("x");
+  });
+
+  it("strips an extended-length prefix from the root before keying", () => {
+    expect(
+      toWatchRootRelativeKey("\\\\?\\C:\\Work\\bb", "C:\\Work\\bb\\x", "win32"),
+    ).toBe("x");
+  });
+
+  it("returns an empty key when the candidate equals an extended-length root", () => {
+    expect(
+      toWatchRootRelativeKey("C:\\Work\\bb", "\\\\?\\C:\\Work\\bb", "win32"),
+    ).toBe("");
   });
 
   it("dedupes windows update events that differ only by case, keeping the first", () => {
@@ -118,6 +162,12 @@ describe("watch event paths on posix", () => {
     expect(
       normalizeWatchEventPath("/work/repo", "/work/repo/a/../b.ts", "linux"),
     ).toBe("/work/repo/b.ts");
+  });
+
+  it("treats a windows-shaped extended-length prefix as an ordinary relative segment", () => {
+    expect(normalizeWatchEventPath("/work/bb", "\\\\?\\x", "linux")).toBe(
+      "/work/bb/\\\\?\\x",
+    );
   });
 
   it("is case-sensitive and rejects siblings that differ only by case", () => {

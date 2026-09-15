@@ -6,19 +6,28 @@ export function isExtendedLengthWindowsPath(candidatePath: string): boolean {
   );
 }
 
+function trimTrailingWindowsSeparators(candidatePath: string): string {
+  const trimmed = candidatePath.replace(/[\\/]+$/u, "");
+  return trimmed.length === 0 ? candidatePath : trimmed;
+}
+
+function stripExtendedLengthWindowsPrefix(candidatePath: string): string {
+  return candidatePath.replace(/^\\\\[?.]\\/u, "");
+}
+
 export function normalizeWatchEventPath(
   rootPath: string,
   eventPath: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
-  if (isExtendedLengthWindowsPath(eventPath)) {
-    return eventPath;
-  }
   if (platform === "win32") {
+    if (isExtendedLengthWindowsPath(eventPath)) {
+      return eventPath;
+    }
     if (isExtendedLengthWindowsPath(rootPath)) {
       return path.win32.isAbsolute(eventPath)
         ? path.win32.normalize(eventPath)
-        : `${rootPath}\\${eventPath}`;
+        : `${trimTrailingWindowsSeparators(rootPath)}\\${eventPath}`;
     }
     return path.win32.isAbsolute(eventPath)
       ? path.win32.normalize(eventPath)
@@ -29,13 +38,12 @@ export function normalizeWatchEventPath(
     : path.posix.resolve(rootPath, eventPath);
 }
 
-function trimTrailingWindowsSeparators(candidatePath: string): string {
-  const trimmed = candidatePath.replace(/[\\/]+$/u, "");
-  return trimmed.length === 0 ? candidatePath : trimmed;
-}
-
-function stripExtendedLengthWindowsPrefix(candidatePath: string): string {
-  return candidatePath.replace(/^\\\\[?.]\\/u, "");
+function foldWindowsPathForContainment(candidatePath: string): string {
+  const stripped = stripExtendedLengthWindowsPrefix(candidatePath);
+  const normalized = isExtendedLengthWindowsPath(stripped)
+    ? stripped
+    : path.win32.normalize(stripped);
+  return trimTrailingWindowsSeparators(normalized).toLowerCase();
 }
 
 export function isWatchPathWithinRoot(
@@ -54,11 +62,8 @@ export function isWatchPathWithinRoot(
     isExtendedLengthWindowsPath(rootPath) ||
     isExtendedLengthWindowsPath(candidatePath)
   ) {
-    const foldedRoot = trimTrailingWindowsSeparators(
-      stripExtendedLengthWindowsPrefix(rootPath),
-    ).toLowerCase();
-    const foldedCandidate =
-      stripExtendedLengthWindowsPrefix(candidatePath).toLowerCase();
+    const foldedRoot = foldWindowsPathForContainment(rootPath);
+    const foldedCandidate = foldWindowsPathForContainment(candidatePath);
     return (
       foldedCandidate === foldedRoot ||
       foldedCandidate.startsWith(`${foldedRoot}\\`)
@@ -85,11 +90,14 @@ export function toWatchRootRelativeKey(
   platform: NodeJS.Platform = process.platform,
 ): string {
   if (platform === "win32") {
+    const normalizedRoot = path.win32.normalize(
+      stripExtendedLengthWindowsPrefix(rootPath),
+    );
+    const normalizedCandidate = stripExtendedLengthWindowsPrefix(
+      normalizeWatchEventPath(rootPath, candidatePath, platform),
+    );
     return path.win32
-      .relative(
-        path.win32.normalize(rootPath),
-        normalizeWatchEventPath(rootPath, candidatePath, platform),
-      )
+      .relative(normalizedRoot, normalizedCandidate)
       .split(/[/\\]/u)
       .join("/");
   }
