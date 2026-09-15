@@ -32,6 +32,7 @@ import {
   type HostWorkspace,
   type ProvisionWorkspaceArgs,
 } from "@bb/host-workspace";
+import { assignPathEnv } from "@bb/process-utils";
 import {
   cleanupInjectedSkillStagingDirs,
   EMPTY_SKILL_CATALOG_HASH,
@@ -169,6 +170,7 @@ export interface RuntimeManagerOptions {
   fetchSkillTree?: FetchSkillTree;
   hostWatcher?: HostWatcher;
   logger?: Pick<Logger, "debug" | "warn">;
+  platform?: NodeJS.Platform;
   provisionWorkspace?: (
     options: ProvisionWorkspaceArgs,
   ) => Promise<HostWorkspace>;
@@ -243,10 +245,17 @@ function shellEnvEquals(
 
 function providerProcessEnvFromShellEnv(
   shellEnv: NonNullable<AgentRuntimeOptions["shellEnv"]>,
+  platform: NodeJS.Platform = process.platform,
 ): Record<string, string> | null {
-  const env: Record<string, string> = {};
+  let env: Record<string, string> = {};
   if (shellEnv.PATH) {
-    env.PATH = shellEnv.PATH;
+    env = Object.fromEntries(
+      Object.entries(
+        assignPathEnv({ env: {}, path: shellEnv.PATH, platform }),
+      ).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
   }
   const recordDir = process.env.BB_PROVIDER_BRIDGE_RECORD_DIR;
   if (recordDir) {
@@ -289,12 +298,14 @@ export class RuntimeManager {
     null;
   readonly providerInstallationGate: ProviderInstallationGate;
   private stopWatchingDataDirSkillsRoot: StopWatching = STOP_WATCHING;
+  private readonly platform: NodeJS.Platform;
 
   constructor(private readonly options: RuntimeManagerOptions = {}) {
     this.createRuntime = options.createRuntime ?? createAgentRuntime;
     this.hostWatcher = options.hostWatcher;
     this.provisionWorkspace = options.provisionWorkspace ?? provisionWorkspace;
     this.baseShellEnv = { ...(options.shellEnv ?? {}) };
+    this.platform = options.platform ?? process.platform;
     this.providerInstallationGate = createProviderInstallationGate({
       ttlMs:
         options.providerInstallationGateTtlMs ??
@@ -1163,7 +1174,10 @@ export class RuntimeManager {
 
     let runtime: AgentRuntime | null = null;
     const shellEnv = this.getShellEnv();
-    const providerProcessEnv = providerProcessEnvFromShellEnv(shellEnv);
+    const providerProcessEnv = providerProcessEnvFromShellEnv(
+      shellEnv,
+      this.platform,
+    );
     runtime = this.createRuntime({
       workspacePath,
       additionalWorkspaceWriteRoots: [],
@@ -1234,7 +1248,10 @@ export class RuntimeManager {
     });
     let runtime: AgentRuntime | null = null;
     const shellEnv = this.getShellEnv();
-    const providerProcessEnv = providerProcessEnvFromShellEnv(shellEnv);
+    const providerProcessEnv = providerProcessEnvFromShellEnv(
+      shellEnv,
+      this.platform,
+    );
     runtime = this.createRuntime({
       workspacePath: workspace.path,
       additionalWorkspaceWriteRoots,

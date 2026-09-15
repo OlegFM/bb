@@ -1009,6 +1009,7 @@ describe("RuntimeManager", () => {
     const manager = new RuntimeManager({
       provisionWorkspace,
       createRuntime,
+      platform: "linux",
       shellEnv: {
         PATH: "/tmp/bb-bin:/usr/bin",
       },
@@ -1059,6 +1060,7 @@ describe("RuntimeManager", () => {
     const manager = new RuntimeManager({
       provisionWorkspace,
       createRuntime,
+      platform: "linux",
       shellEnv: {
         PATH: "/tmp/bb-bin:/home/me/.local/bin:/usr/bin",
         BB_SERVER_URL: "http://127.0.0.1:3334",
@@ -1085,6 +1087,37 @@ describe("RuntimeManager", () => {
     );
   });
 
+  it("gives provider processes a single Path key on Windows", async () => {
+    const provisionWorkspace = createProvisionWorkspaceMock("/tmp/env-1");
+    const createRuntime = vi.fn(() => createFakeRuntime());
+    const manager = new RuntimeManager({
+      provisionWorkspace,
+      createRuntime,
+      platform: "win32",
+      shellEnv: {
+        PATH: "C:\\bb;C:\\x",
+        BB_SERVER_URL: "http://127.0.0.1:3334",
+      },
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+
+    expect(createRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: {
+          Path: "C:\\bb;C:\\x",
+        },
+        shellEnv: {
+          PATH: "C:\\bb;C:\\x",
+          BB_SERVER_URL: "http://127.0.0.1:3334",
+        },
+      }),
+    );
+  });
+
   it("recreates the provider maintenance runtime after base shell env changes", async () => {
     const dataDir = await makeTempDir("bb-provider-maintenance-");
     const firstRuntime = createFakeRuntime();
@@ -1095,6 +1128,7 @@ describe("RuntimeManager", () => {
       .mockReturnValueOnce(secondRuntime);
     const manager = new RuntimeManager({
       createRuntime,
+      platform: "linux",
       shellEnv: {
         PATH: "/old/bin:/usr/bin",
       },
@@ -1209,6 +1243,7 @@ describe("RuntimeManager", () => {
     const manager = new RuntimeManager({
       provisionWorkspace,
       createRuntime,
+      platform: "linux",
       shellEnv: {
         PATH: "/old/bin:/usr/bin",
       },

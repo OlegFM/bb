@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
-import { basename, delimiter, resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentRuntimeOptions } from "@bb/agent-runtime";
 import { assignIfDefined } from "@bb/config/objects";
@@ -160,10 +160,12 @@ async function requireCliRuntimePath(cliRuntimePath: string): Promise<void> {
 
 function prependPath(
   executableDirectoryPath: string,
-  inheritedPath?: string,
+  inheritedPath: string | undefined,
+  platform: NodeJS.Platform,
 ): string {
+  const pathListDelimiter = platform === "win32" ? ";" : ":";
   return inheritedPath
-    ? `${executableDirectoryPath}${delimiter}${inheritedPath}`
+    ? `${executableDirectoryPath}${pathListDelimiter}${inheritedPath}`
     : executableDirectoryPath;
 }
 
@@ -685,16 +687,15 @@ export function resolveBbExecutablePathInDirectory(
 export function prepareRuntimeShellEnv(
   options: PrepareRuntimeShellEnvOptions,
 ): NonNullable<AgentRuntimeOptions["shellEnv"]> {
+  const platform = options.platform ?? process.platform;
   const bbExecutablePath =
     options.bbExecutablePath ??
-    resolveBbExecutablePathInDirectory(
-      options.bbExecutableDirectory,
-      options.platform ?? process.platform,
-    );
+    resolveBbExecutablePathInDirectory(options.bbExecutableDirectory, platform);
   const shellEnv: NonNullable<AgentRuntimeOptions["shellEnv"]> = {
     PATH: prependPath(
       options.bbExecutableDirectory,
       options.inheritedPath ?? process.env.PATH,
+      platform,
     ),
     BB_CLI: bbExecutablePath,
     BB_SERVER_URL: options.serverUrl,

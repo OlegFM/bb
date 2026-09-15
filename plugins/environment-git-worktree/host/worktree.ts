@@ -678,7 +678,14 @@ export async function removeWorktree(args: RemoveWorktreeArgs): Promise<void> {
     return;
   }
 
-  await experimental_killProcessesWithCwdUnder({ directory: workspacePath });
+  await experimental_killProcessesWithCwdUnder({
+    directory: workspacePath,
+    onSkippedProcess: (event) => {
+      process.stderr.write(
+        `bb sweep left pid ${String(event.pid)} alone: process id reused\n`,
+      );
+    },
+  });
   throwIfProvisionAborted(args.signal);
 
   const commonDirResult = await runGit(["rev-parse", "--git-common-dir"], {

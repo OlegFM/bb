@@ -456,7 +456,7 @@ describe("prepareRuntimeShellEnv", () => {
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
-      PATH: `/tmp/bb-bin${delimiter}/usr/bin`,
+      PATH: `/tmp/bb-bin${path.posix.delimiter}/usr/bin`,
       BB_CLI: path.resolve("/tmp/bb-bin", "bb"),
       BB_SERVER_URL: "http://127.0.0.1:3334",
       BB_HOST_DAEMON_PORT: "3002",
@@ -488,7 +488,7 @@ describe("prepareRuntimeShellEnv", () => {
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
-      PATH: `/tmp/bb-bin${delimiter}/usr/local/bin:/usr/bin`,
+      PATH: `/tmp/bb-bin${path.posix.delimiter}/usr/local/bin:/usr/bin`,
       BB_CLI: path.resolve("/tmp/bb-bin", "bb"),
       BB_SERVER_URL: "http://127.0.0.1:3334",
       BB_HOST_DAEMON_PORT: "3002",
@@ -504,10 +504,29 @@ describe("prepareRuntimeShellEnv", () => {
         serverUrl: "http://127.0.0.1:3334",
       }),
     ).toEqual({
-      PATH: `/tmp/bb-bin${delimiter}/usr/bin`,
+      PATH: `/tmp/bb-bin${path.posix.delimiter}/usr/bin`,
       BB_CLI: path.resolve("/tmp/bb-bin", "bb"),
       BB_SERVER_URL: "http://127.0.0.1:3334",
     });
+  });
+
+  it("gives provider processes a Windows path list when inherited PATH is joined", () => {
+    expect(
+      prepareRuntimeShellEnv({
+        bbExecutableDirectory: "C:\\bb",
+        inheritedPath: "C:\\x",
+        platform: "win32",
+        serverUrl: "http://127.0.0.1:3334",
+      }).PATH,
+    ).toBe("C:\\bb;C:\\x");
+    expect(
+      prepareRuntimeShellEnv({
+        bbExecutableDirectory: "/bb",
+        inheritedPath: "/x",
+        platform: "linux",
+        serverUrl: "http://127.0.0.1:3334",
+      }).PATH,
+    ).toBe("/bb:/x");
   });
 });
 
