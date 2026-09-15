@@ -1,5 +1,6 @@
 export * from "./plugin-process-paths.js";
 export * from "./resolve-executable.js";
+export * from "./run-command-capture.js";
 export * from "./windows-process-snapshot.js";
 export * from "./windows-process-stop.js";
 export * from "./windows-system-tools.js";

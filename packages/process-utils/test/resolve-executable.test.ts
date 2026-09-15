@@ -1,3 +1,4 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,9 +8,13 @@ import {
   POWERSHELL_NONINTERACTIVE_ARGS,
   readNodeCmdShim,
   resolveExecutable,
+  resolveExecutableSync,
   resolveNodeShimSpawnPlan,
   resolvePowerShellExecutable,
+  resolveSpawnPlan,
   resolveWindowsSystemToolPath,
+  SpawnPlanUnavailableError,
+  spawnPlanUnavailableMessage,
   windowsExecutableExtensions,
 } from "../src/index.js";
 
@@ -17,6 +22,12 @@ const roots: string[] = [];
 
 async function makeRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "bb-resolve-exec-"));
+  roots.push(root);
+  return root;
+}
+
+function makeRootSync(): string {
+  const root = mkdtempSync(join(tmpdir(), "bb-resolve-exec-"));
   roots.push(root);
   return root;
 }
@@ -259,6 +270,99 @@ describe("resolveExecutable on win32", () => {
   );
 });
 
+describe("resolveExecutableSync", () => {
+  it("walks Path and returns the same result as resolveExecutable", async () => {
+    const root = makeRootSync();
+    writeFileSync(join(root, "tool.exe"), "");
+    const args = {
+      command: "tool",
+      env: { Path: `C:\\missing;${root}`, PATHEXT: ".COM;.EXE" },
+      platform: "win32" as const,
+    };
+    expect(resolveExecutableSync(args)).toBe(join(root, "tool.exe"));
+    await expect(resolveExecutable(args)).resolves.toBe(
+      resolveExecutableSync(args),
+    );
+  });
+
+  it("appends PATHEXT suffixes in order, matching the async walk", async () => {
+    const root = makeRootSync();
+    writeFileSync(join(root, "x.com"), "");
+    writeFileSync(join(root, "x.exe"), "");
+    const args = {
+      command: "x",
+      env: { Path: root, PATHEXT: ".COM;.EXE" },
+      platform: "win32" as const,
+    };
+    expect(resolveExecutableSync(args)).toBe(join(root, "x.com"));
+    await expect(resolveExecutable(args)).resolves.toBe(
+      resolveExecutableSync(args),
+    );
+  });
+
+  it("finds an explicit .cmd only when .cmd is in PATHEXT, matching the async walk", async () => {
+    const root = makeRootSync();
+    writeFileSync(join(root, "tool.cmd"), "");
+    const withCmd = {
+      command: join(root, "tool.cmd"),
+      env: {},
+      platform: "win32" as const,
+    };
+    expect(resolveExecutableSync(withCmd)).toBe(join(root, "tool.cmd"));
+    await expect(resolveExecutable(withCmd)).resolves.toBe(
+      resolveExecutableSync(withCmd),
+    );
+
+    const withoutCmd = {
+      command: "tool",
+      env: { Path: root, PATHEXT: ".EXE" },
+      platform: "win32" as const,
+    };
+    expect(resolveExecutableSync(withoutCmd)).toBeNull();
+    await expect(resolveExecutable(withoutCmd)).resolves.toBe(
+      resolveExecutableSync(withoutCmd),
+    );
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "returns the executable file on posix, matching the async walk",
+    async () => {
+      const root = makeRootSync();
+      const target = `${root}/git`;
+      writeFileSync(target, "");
+      chmodSync(target, 0o755);
+      const args = {
+        command: "git",
+        env: { PATH: `/definitely-missing:${root}` },
+        platform: "linux" as const,
+      };
+      expect(resolveExecutableSync(args)).toBe(target);
+      await expect(resolveExecutable(args)).resolves.toBe(
+        resolveExecutableSync(args),
+      );
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "returns null for a non-executable file on posix, matching the async walk",
+    async () => {
+      const root = makeRootSync();
+      const target = join(root, "data");
+      writeFileSync(target, "");
+      chmodSync(target, 0o644);
+      const args = {
+        command: "data",
+        env: { PATH: root },
+        platform: "linux" as const,
+      };
+      expect(resolveExecutableSync(args)).toBeNull();
+      await expect(resolveExecutable(args)).resolves.toBe(
+        resolveExecutableSync(args),
+      );
+    },
+  );
+});
+
 describe("readNodeCmdShim", () => {
   it("reads the one-line bb shim", async () => {
     const root = await makeRoot();
@@ -339,6 +443,58 @@ describe("readNodeCmdShim", () => {
     await expect(readNodeCmdShim(shim)).resolves.toBeNull();
     await expect(readNodeCmdShim(join(root, "absent.cmd"))).resolves.toBeNull();
   });
+
+  const NPM_LAUNCHER_SHIM = [
+    ":: Created by npm, please don't edit manually.",
+    "@ECHO OFF",
+    "SETLOCAL",
+    'SET "NODE_EXE=%~dp0\\node.exe"',
+    'IF NOT EXIST "%NODE_EXE%" ( SET "NODE_EXE=node" )',
+    'SET "NPM_PREFIX_JS=%~dp0\\node_modules\\npm\\bin\\npm-prefix.js"',
+    'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+    'FOR /F "delims=" %%F IN (\'CALL "%NODE_EXE%" "%NPM_PREFIX_JS%"\') DO (',
+    '  SET "NPM_PREFIX_NPM_CLI_JS=%%F\\node_modules\\npm\\bin\\npm-cli.js"',
+    ")",
+    'IF EXIST "%NPM_PREFIX_NPM_CLI_JS%" ( SET "NPM_CLI_JS=%NPM_PREFIX_NPM_CLI_JS%" )',
+    '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
+    "",
+  ].join("\r\n");
+
+  it("reads the npm launcher shim", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "npm.cmd");
+    await writeFile(shim, NPM_LAUNCHER_SHIM);
+    await expect(readNodeCmdShim(shim)).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "node_modules", "npm", "bin", "npm-cli.js")],
+    });
+  });
+
+  it("reads the npx launcher shim", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "npx.cmd");
+    await writeFile(
+      shim,
+      NPM_LAUNCHER_SHIM.replaceAll("NPM_", "NPX_").replaceAll("npm-", "npx-"),
+    );
+    await expect(readNodeCmdShim(shim)).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "node_modules", "npm", "bin", "npx-cli.js")],
+    });
+  });
+
+  it("returns null for a launcher whose NPM_CLI_JS names a binary", async () => {
+    const root = await makeRoot();
+    const shim = join(root, "npm.cmd");
+    await writeFile(
+      shim,
+      NPM_LAUNCHER_SHIM.replace(
+        'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+        'SET "NPM_CLI_JS=%~dp0\\node.exe"',
+      ),
+    );
+    await expect(readNodeCmdShim(shim)).resolves.toBeNull();
+  });
 });
 
 describe("resolveNodeShimSpawnPlan", () => {
@@ -382,5 +538,137 @@ describe("resolveNodeShimSpawnPlan", () => {
     expect(nodeShimRefusalMessage("C:\\tools\\code.cmd")).toBe(
       "Windows launcher C:\\tools\\code.cmd is not a Node shim bb can start directly",
     );
+  });
+});
+
+describe("resolveSpawnPlan", () => {
+  it("is a literal identity on posix with no filesystem access", async () => {
+    await expect(
+      resolveSpawnPlan({
+        command: "definitely-missing-tool",
+        args: ["--x"],
+        platform: "linux",
+        env: { PATH: "" },
+      }),
+    ).resolves.toEqual({ command: "definitely-missing-tool", args: ["--x"] });
+  });
+
+  it("resolves an .exe found on Path", async () => {
+    const root = await makeRoot();
+    await writeFile(join(root, "tool.exe"), "");
+    await expect(
+      resolveSpawnPlan({
+        command: "tool",
+        args: ["--x"],
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toEqual({ command: join(root, "tool.exe"), args: ["--x"] });
+  });
+
+  it("plans a node run for a Node shim found on Path", async () => {
+    const root = await makeRoot();
+    await writeFile(
+      join(root, "tool.cmd"),
+      '@node "%~dp0\\..\\lib\\cli.js" %*\r\n',
+    );
+    await expect(
+      resolveSpawnPlan({
+        command: "tool",
+        args: ["--x"],
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "..", "lib", "cli.js"), "--x"],
+    });
+  });
+
+  it("plans a node run for the npm launcher shim found on Path", async () => {
+    const root = await makeRoot();
+    await writeFile(
+      join(root, "npm.cmd"),
+      [
+        ":: Created by npm, please don't edit manually.",
+        "@ECHO OFF",
+        "SETLOCAL",
+        'SET "NODE_EXE=%~dp0\\node.exe"',
+        'IF NOT EXIST "%NODE_EXE%" ( SET "NODE_EXE=node" )',
+        'SET "NPM_PREFIX_JS=%~dp0\\node_modules\\npm\\bin\\npm-prefix.js"',
+        'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
+        'FOR /F "delims=" %%F IN (\'CALL "%NODE_EXE%" "%NPM_PREFIX_JS%"\') DO (',
+        '  SET "NPM_PREFIX_NPM_CLI_JS=%%F\\node_modules\\npm\\bin\\npm-cli.js"',
+        ")",
+        'IF EXIST "%NPM_PREFIX_NPM_CLI_JS%" ( SET "NPM_CLI_JS=%NPM_PREFIX_NPM_CLI_JS%" )',
+        '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
+        "",
+      ].join("\r\n"),
+    );
+    await expect(
+      resolveSpawnPlan({
+        command: "npm",
+        args: ["install"],
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toEqual({
+      command: process.execPath,
+      args: [join(root, "node_modules", "npm", "bin", "npm-cli.js"), "install"],
+    });
+  });
+
+  it("returns null when the command is not found on Path", async () => {
+    const root = await makeRoot();
+    await expect(
+      resolveSpawnPlan({
+        command: "definitely-missing-tool",
+        args: [],
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null for a .cmd that is not a Node shim", async () => {
+    const root = await makeRoot();
+    await writeFile(join(root, "tool.cmd"), "@echo hi\r\n");
+    await expect(
+      resolveSpawnPlan({
+        command: "tool",
+        args: [],
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("builds the not-found and not-a-Node-shim refusal messages", () => {
+    expect(
+      spawnPlanUnavailableMessage({ command: "npm", resolvedPath: null }),
+    ).toBe("Command npm was not found on Path");
+    expect(
+      spawnPlanUnavailableMessage({
+        command: "code",
+        resolvedPath: "C:\\x\\t.cmd",
+      }),
+    ).toBe(nodeShimRefusalMessage("C:\\x\\t.cmd"));
+  });
+
+  it("carries the reason and resolved path on SpawnPlanUnavailableError", () => {
+    const notFound = new SpawnPlanUnavailableError({
+      command: "npm",
+      resolvedPath: null,
+    });
+    expect(notFound.reason).toBe("not_found");
+    expect(notFound.command).toBe("npm");
+    expect(notFound.resolvedPath).toBeNull();
+
+    const notNodeShim = new SpawnPlanUnavailableError({
+      command: "code",
+      resolvedPath: "C:\\x\\t.cmd",
+    });
+    expect(notNodeShim.reason).toBe("not_node_shim");
+    expect(notNodeShim.message).toBe(nodeShimRefusalMessage("C:\\x\\t.cmd"));
   });
 });
