@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { open, realpath } from "node:fs/promises";
 import os from "node:os";
-import path from "node:path";
+import { posix as posixPath, win32 as win32Path } from "node:path";
 import { promisify } from "node:util";
 import {
   type ProviderHealthResult,
@@ -74,23 +74,56 @@ function firstOutputLine(output: string | null): string | null {
   );
 }
 
-function pathIsInside(child: string, parent: string): boolean {
-  const relativePath = path.relative(path.resolve(parent), path.resolve(child));
+function platformPathFor(platform: NodeJS.Platform) {
+  return platform === "win32" ? win32Path : posixPath;
+}
+
+function comparablePath(value: string, platform: NodeJS.Platform): string {
+  const resolved = platformPathFor(platform).resolve(value);
+  return platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function pathIsInside(
+  child: string,
+  parent: string,
+  platform: NodeJS.Platform,
+): boolean {
+  const platformPath = platformPathFor(platform);
+  const relativePath = platformPath.relative(
+    comparablePath(parent, platform),
+    comparablePath(child, platform),
+  );
   return (
     relativePath === "" ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+    (!relativePath.startsWith("..") && !platformPath.isAbsolute(relativePath))
   );
 }
 
-function expandHomePath(value: string): string {
+function samePath(
+  left: string,
+  right: string,
+  platform: NodeJS.Platform,
+): boolean {
+  return comparablePath(left, platform) === comparablePath(right, platform);
+}
+
+function expandHomePath(value: string, platform: NodeJS.Platform): string {
+  const platformPath = platformPathFor(platform);
   const home = os.homedir();
-  if (value.startsWith("$HOME/")) return path.join(home, value.slice(6));
-  if (value.startsWith("${HOME}/")) return path.join(home, value.slice(8));
-  if (value.startsWith("~/")) return path.join(home, value.slice(2));
+  if (value.startsWith("$HOME/")) {
+    return platformPath.join(home, value.slice(6));
+  }
+  if (value.startsWith("${HOME}/")) {
+    return platformPath.join(home, value.slice(8));
+  }
+  if (value.startsWith("~/")) return platformPath.join(home, value.slice(2));
   return value;
 }
 
-async function shellExecTarget(executablePath: string): Promise<string | null> {
+async function shellExecTarget(
+  executablePath: string,
+  platform: NodeJS.Platform,
+): Promise<string | null> {
   const handle = await open(executablePath, "r").catch(() => null);
   if (handle === null) return null;
   try {
@@ -101,7 +134,7 @@ async function shellExecTarget(executablePath: string): Promise<string | null> {
     for (const line of source.split(/\r?\n/u)) {
       const match = line.match(/^\s*exec\s+(?:"([^"]+)"|'([^']+)'|(\S+))/u);
       const target = match?.[1] ?? match?.[2] ?? match?.[3];
-      if (target !== undefined) return expandHomePath(target);
+      if (target !== undefined) return expandHomePath(target, platform);
     }
     return null;
   } finally {
@@ -118,10 +151,11 @@ async function isBunManagedPi(
     await commandOutput(bunCommand(), ["pm", "bin", "-g"], context),
   );
   if (bunBin === null) return false;
-  if (pathIsInside(executablePath, bunBin)) return true;
-  const bunPi = path.join(
+  const platform = context.platform;
+  if (pathIsInside(executablePath, bunBin, platform)) return true;
+  const bunPi = platformPathFor(platform).join(
     bunBin,
-    context.platform === "win32" ? "pi.exe" : "pi",
+    platform === "win32" ? "pi.exe" : "pi",
   );
   const [resolvedExecutable, resolvedBunPi] = await Promise.all([
     realpath(executablePath).catch(() => null),
@@ -129,20 +163,22 @@ async function isBunManagedPi(
   ]);
   if (
     resolvedExecutable !== null &&
-    (pathIsInside(resolvedExecutable, bunBin) ||
-      resolvedExecutable === resolvedBunPi)
+    (pathIsInside(resolvedExecutable, bunBin, platform) ||
+      (resolvedBunPi !== null &&
+        samePath(resolvedExecutable, resolvedBunPi, platform)))
   ) {
     return true;
   }
-  const delegatedTarget = await shellExecTarget(executablePath);
+  const delegatedTarget = await shellExecTarget(executablePath, platform);
   if (delegatedTarget === null) return false;
-  if (path.resolve(delegatedTarget) === path.resolve(bunPi)) return true;
+  if (samePath(delegatedTarget, bunPi, platform)) return true;
   const resolvedDelegatedTarget = await realpath(delegatedTarget).catch(
     () => null,
   );
   return (
     resolvedDelegatedTarget !== null &&
-    resolvedDelegatedTarget === resolvedBunPi
+    resolvedBunPi !== null &&
+    samePath(resolvedDelegatedTarget, resolvedBunPi, platform)
   );
 }
 
@@ -155,6 +191,12 @@ async function piGlobalInstallCommand(
   }
   if (context.platform !== "win32") {
     return npmGlobalInstallCommand(PI_NPM_PACKAGE, context.platform);
+  }
+  if (
+    executablePath === null &&
+    (await resolveExecutablePath(bunCommand(), context)) !== null
+  ) {
+    return bunGlobalInstallCommand(PI_NPM_PACKAGE);
   }
   const npm = npmCommand(context.platform);
   return (await commandOutput(npm, ["--version"], context)) === null
@@ -174,6 +216,7 @@ export async function probePiVersion(
       [...launch.args, "--version"],
       {
         timeout: VERSION_PROBE_TIMEOUT_MS,
+        env,
       },
     ));
   } catch (error) {

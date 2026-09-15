@@ -67,12 +67,16 @@ export function buildProviderCliIssue(
     const requiredDescription = status.minimumSupportedVersion
       ? `required ${status.minimumSupportedVersion}+`
       : "requires a newer version";
+    const unsupportedDescription = `${currentVersion}; ${requiredDescription}`;
     return {
       provider,
       status,
       action: status.installAction,
       title: `${status.displayName} update needed`,
-      description: `${currentVersion}; ${requiredDescription}`,
+      description:
+        status.installUnavailableReason === null
+          ? unsupportedDescription
+          : `${unsupportedDescription}; ${status.installUnavailableReason}`,
       fingerprint: [
         provider,
         "unsupported",

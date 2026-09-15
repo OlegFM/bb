@@ -229,6 +229,38 @@ describe("provider CLI schemas", () => {
     ).toMatchObject({ kind: "install" });
   });
 
+  it("rejects a provider CLI status that omits installUnavailableReason", () => {
+    const status = {
+      displayName: "Codex",
+      executableName: "codex",
+      executablePath: "/usr/local/bin/codex",
+      installed: true,
+      installSource: "npmGlobal",
+      currentVersion: "0.146.0",
+      latestVersion: "0.146.0",
+      minimumSupportedVersion: "0.136.0",
+      npmPackageName: "@openai/codex",
+      npmGlobalPackageVersion: "0.146.0",
+      installAction: null,
+      installUnavailableReason: null,
+      needsUpdate: false,
+      versionUnsupported: false,
+    };
+    expect(
+      providerCliStatusResponseSchema.safeParse({ codex: status }).success,
+    ).toBe(true);
+    const { installUnavailableReason: _omitted, ...withoutReason } = status;
+    const parsed = providerCliStatusResponseSchema.safeParse({
+      codex: withoutReason,
+    });
+    expect(parsed.success).toBe(false);
+    expect(
+      parsed.success
+        ? []
+        : parsed.error.issues.map((issue) => issue.path.join(".")),
+    ).toContain("codex.installUnavailableReason");
+  });
+
   it("accepts install requests and streamed install events", () => {
     expect(
       providerCliInstallRequestSchema.parse({

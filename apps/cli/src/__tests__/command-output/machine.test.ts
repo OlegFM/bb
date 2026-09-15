@@ -82,9 +82,10 @@ describe("bb machine command output", () => {
     ]);
   });
 
-  it("bb machine provider-cli status prints an unavailable install reason", async () => {
-    const reason =
-      "bb needs bun or npm on Path to install Pi on Windows. Install Node.js or Bun, then reload.";
+  const providerCliStatusReason =
+    "bb needs bun or npm on Path to install Pi on Windows. Install Node.js or Bun, then reload.";
+
+  function stubProviderCliStatus(): void {
     stubServerApi({
       "v1.hosts.$get": vi.fn(async () => hosts),
       "v1.hosts.:id.provider-clis.status.$get": vi.fn(async () => ({
@@ -100,12 +101,16 @@ describe("bb machine command output", () => {
           npmPackageName: "@earendil-works/pi-coding-agent",
           npmGlobalPackageVersion: null,
           installAction: null,
-          installUnavailableReason: reason,
+          installUnavailableReason: providerCliStatusReason,
           needsUpdate: false,
           versionUnsupported: false,
         },
       })),
     });
+  }
+
+  it("bb machine provider-cli status keeps stdout parseable and reports the reason on stderr", async () => {
+    stubProviderCliStatus();
 
     await runCommand(
       ["machine", "provider-cli", "status", "workstation"],
@@ -113,10 +118,30 @@ describe("bb machine command output", () => {
     );
 
     const payloads = collectLogPayloads(vi.mocked(console.log));
-    expect(payloads.at(-1)).toBe(`Pi: ${reason}`);
+    expect(payloads).toHaveLength(1);
     expect(JSON.parse(String(payloads[0])).pi.installUnavailableReason).toBe(
-      reason,
+      providerCliStatusReason,
     );
+    expect(collectLogPayloads(vi.mocked(console.error))).toEqual([
+      `Pi: ${providerCliStatusReason}`,
+    ]);
+  });
+
+  it("bb machine provider-cli status --json prints only the JSON document", async () => {
+    stubProviderCliStatus();
+
+    await runCommand(
+      ["machine", "provider-cli", "status", "workstation", "--json"],
+      register,
+    );
+
+    const payloads = collectLogPayloads(vi.mocked(console.log));
+    expect(payloads).toHaveLength(1);
+    expect(() => JSON.parse(String(payloads[0]))).not.toThrow();
+    expect(JSON.parse(String(payloads[0])).pi.installUnavailableReason).toBe(
+      providerCliStatusReason,
+    );
+    expect(collectLogPayloads(vi.mocked(console.error))).toEqual([]);
   });
 });
 

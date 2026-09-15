@@ -218,6 +218,42 @@ describe("buildProviderCliIssue", () => {
     });
   });
 
+  it("appends the reason to an unsupported version bb cannot update", () => {
+    const actionable = issueForProvider("claude-code");
+    const issue = buildProviderCliIssue({
+      provider: "claude-code",
+      status: {
+        ...actionable.status,
+        minimumSupportedVersion: "2.0.0",
+        versionUnsupported: true,
+        installAction: null,
+        installUnavailableReason: "bb needs bun or npm on Path.",
+      },
+    });
+
+    expect(issue).toMatchObject({
+      action: null,
+      title: "Claude Code update needed",
+      description: "1.0.0; required 2.0.0+; bb needs bun or npm on Path.",
+    });
+  });
+
+  it("keeps the unsupported-version description alone without a reason", () => {
+    const actionable = issueForProvider("claude-code");
+    const issue = buildProviderCliIssue({
+      provider: "claude-code",
+      status: {
+        ...actionable.status,
+        minimumSupportedVersion: "2.0.0",
+        versionUnsupported: true,
+      },
+    });
+
+    expect(issue).toMatchObject({
+      description: "1.0.0; required 2.0.0+",
+    });
+  });
+
   it("appends the reason to an update bb cannot apply", () => {
     const actionable = issueForProvider("claude-code");
     const issue = buildProviderCliIssue({

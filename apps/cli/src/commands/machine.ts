@@ -234,14 +234,14 @@ export function registerMachineCommands(
         const hostId = resolveMachineId(await sdk.hosts.list(), target);
         const result = await sdk.hosts.providerCliStatus({ hostId });
         if (outputJson(opts, result)) return;
-        console.log(JSON.stringify(result, null, 2));
         for (const status of Object.values(result)) {
           if (status.installUnavailableReason !== null) {
-            console.log(
+            console.error(
               `${status.displayName}: ${status.installUnavailableReason}`,
             );
           }
         }
+        console.log(JSON.stringify(result, null, 2));
       }),
     );
   providerCli

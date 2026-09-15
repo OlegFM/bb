@@ -10,6 +10,7 @@ import {
   initializeResultSchema,
   PROVIDER_BRIDGE_PROTOCOL_VERSION,
   providerInstallationStatusParamsSchema,
+  providerInstallationStatusSchema,
   threadStopParamsSchema,
   ThreadEventGrammar,
   toolCallRequestParamsSchema,
@@ -56,6 +57,35 @@ describe("provider installation status", () => {
         requirement: "anything",
       }).success,
     ).toBe(false);
+  });
+
+  it("requires installUnavailableReason rather than defaulting it", () => {
+    const status = {
+      executableName: "codex",
+      executablePath: null,
+      installed: false,
+      installSource: "notInstalled" as const,
+      currentVersion: null,
+      latestVersion: null,
+      minimumSupportedVersion: null,
+      npmPackageName: null,
+      npmGlobalPackageVersion: null,
+      installAction: null,
+      installUnavailableReason: null,
+      needsUpdate: false,
+      versionUnsupported: false,
+    };
+    expect(providerInstallationStatusSchema.safeParse(status).success).toBe(
+      true,
+    );
+    const { installUnavailableReason: _omitted, ...withoutReason } = status;
+    const parsed = providerInstallationStatusSchema.safeParse(withoutReason);
+    expect(parsed.success).toBe(false);
+    expect(
+      parsed.success
+        ? []
+        : parsed.error.issues.map((issue) => issue.path.join(".")),
+    ).toContain("installUnavailableReason");
   });
 });
 
