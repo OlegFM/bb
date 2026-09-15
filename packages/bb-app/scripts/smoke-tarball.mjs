@@ -132,8 +132,17 @@ function resolveLaunch(command, args) {
   });
 }
 
+function resolveLaunchForLabel(label, command, args) {
+  try {
+    return resolveLaunch(command, args);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label}: ${message}`);
+  }
+}
+
 async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
-  const launch = resolveLaunch(command, args);
+  const launch = resolveLaunchForLabel(label, command, args);
   const childProcess = spawn(launch.command, launch.args, {
     cwd,
     env: {
@@ -155,7 +164,7 @@ async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
 
 function spawnManagedProcess({ args, command, env = {}, label }) {
   const detached = process.platform !== "win32";
-  const launch = resolveLaunch(command, args);
+  const launch = resolveLaunchForLabel(label, command, args);
   const childProcess = spawn(launch.command, launch.args, {
     cwd: tempRoot,
     detached,
@@ -405,10 +414,15 @@ function resolveInstalledBinEntry(binDir, bin) {
   const packageJson = JSON.parse(
     readFileSync(join(packageDir, "package.json"), "utf8"),
   );
-  const entry = packageJson.bin?.[bin];
+  const entry =
+    typeof packageJson.bin === "string"
+      ? packageJson.name === bin
+        ? packageJson.bin
+        : undefined
+      : packageJson.bin?.[bin];
   if (typeof entry !== "string") {
     throw new Error(
-      `Installed bb-app package.json has no bin entry for ${bin}`,
+      `Installed ${packageJson.name ?? "package"} package.json has no bin entry for ${bin}`,
     );
   }
   return join(packageDir, entry);

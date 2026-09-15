@@ -932,7 +932,9 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     }
   }
 
-  async function runGatedRefresh(): Promise<void> {
+  async function runGatedRefresh(
+    onError?: (error: unknown) => void,
+  ): Promise<void> {
     if (refreshInProgress) {
       refreshAgain = true;
       return;
@@ -941,6 +943,11 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     refreshInProgress = true;
     try {
       await refreshTailProcesses();
+    } catch (error) {
+      if (onError === undefined) {
+        throw error;
+      }
+      onError(error);
     } finally {
       refreshInProgress = false;
       if (refreshAgain) {
@@ -954,24 +961,10 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     if (stopped) {
       return;
     }
-    if (refreshInProgress) {
-      refreshAgain = true;
-      return;
-    }
-
-    refreshInProgress = true;
-    void refreshTailProcesses()
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        emitSystemLine({ text: `log refresh failed: ${message}` });
-      })
-      .finally(() => {
-        refreshInProgress = false;
-        if (refreshAgain) {
-          refreshAgain = false;
-          scheduleRefresh();
-        }
-      });
+    void runGatedRefresh((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      emitSystemLine({ text: `log refresh failed: ${message}` });
+    });
   }
 
   return {

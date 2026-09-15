@@ -25,16 +25,25 @@ function outputTail(output) {
   return output.slice(-outputTailLength);
 }
 
-async function waitForPattern(getOutput, pattern, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    const match = getOutput().match(pattern);
-    if (match !== null) {
-      return match;
+async function pollUntil({ check, deadlineMs, intervalMs = pollIntervalMs }) {
+  const deadline = Date.now() + deadlineMs;
+  for (;;) {
+    const value = await check();
+    if (value) {
+      return value;
     }
-    await sleep(pollIntervalMs);
+    if (Date.now() > deadline) {
+      return null;
+    }
+    await sleep(intervalMs);
   }
-  return null;
+}
+
+async function waitForPattern(getOutput, pattern, timeoutMs) {
+  return pollUntil({
+    check: () => getOutput().match(pattern),
+    deadlineMs: timeoutMs,
+  });
 }
 
 async function waitForExit(exitPromise, timeoutMs) {
@@ -45,14 +54,11 @@ async function waitForExit(exitPromise, timeoutMs) {
 }
 
 async function waitForCondition(predicate, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    if (predicate()) {
-      return true;
-    }
-    await sleep(pollIntervalMs);
-  }
-  return false;
+  const matched = await pollUntil({
+    check: () => (predicate() ? true : null),
+    deadlineMs: timeoutMs,
+  });
+  return matched === true;
 }
 
 function countOccurrences(haystack, needle) {
@@ -72,17 +78,21 @@ function countOccurrences(haystack, needle) {
 }
 
 async function waitForShellPid(pty, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    const pid = pty.pid;
-    if (typeof pid === "number" && Number.isInteger(pid) && pid > 0) {
-      return pid;
-    }
-    await sleep(pollIntervalMs);
+  const pid = await pollUntil({
+    check: () => {
+      const value = pty.pid;
+      return typeof value === "number" && Number.isInteger(value) && value > 0
+        ? value
+        : null;
+    },
+    deadlineMs: timeoutMs,
+  });
+  if (pid === null) {
+    throw new Error(
+      `node-pty never reported a usable PID (last saw ${String(pty.pid)}).`,
+    );
   }
-  throw new Error(
-    `node-pty never reported a usable PID (last saw ${String(pty.pid)}).`,
-  );
+  return pid;
 }
 
 async function readTasklist(pid) {
@@ -98,20 +108,19 @@ function tasklistContainsPid(tasklistStdout, pid) {
 }
 
 async function waitForPidInTasklist(pid, present, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() <= deadline) {
-    let stdout = "";
-    try {
-      stdout = await readTasklist(pid);
-    } catch {
-      stdout = "";
-    }
-    if (tasklistContainsPid(stdout, pid) === present) {
-      return true;
-    }
-    await sleep(pollIntervalMs);
-  }
-  return false;
+  const matched = await pollUntil({
+    check: async () => {
+      let stdout = "";
+      try {
+        stdout = await readTasklist(pid);
+      } catch {
+        stdout = "";
+      }
+      return tasklistContainsPid(stdout, pid) === present ? true : null;
+    },
+    deadlineMs: timeoutMs,
+  });
+  return matched === true;
 }
 
 function taskkillTree(pid) {
@@ -418,7 +427,7 @@ async function runClose(nodePty, shellFile) {
       throw new Error(`Shell pid ${String(pid)} ignored pty.kill().`);
     }
     const exitCode = session.getExitCode();
-    if (exitCode !== null && !acceptableKillExitCodes.has(exitCode)) {
+    if (exitCode === null || !acceptableKillExitCodes.has(exitCode)) {
       throw new Error(
         `Shell pid ${String(pid)} exited with unexpected code ${String(exitCode)}.`,
       );
