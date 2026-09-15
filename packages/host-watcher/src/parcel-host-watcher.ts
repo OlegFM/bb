@@ -1,5 +1,6 @@
 import path from "node:path";
 import { RootSubscription } from "./root-subscription.js";
+import { normalizeWatchEventPath } from "./watch-event-path.js";
 import { watchPathChanges } from "./watch-path.js";
 import { watchWorkspaceStatus } from "./watch-status.js";
 import type {
@@ -205,9 +206,7 @@ function watchPathRoot(args: WatchPathRootArgs): () => Promise<void> {
     onEvents: (events) => {
       args.onChange(
         events.map((event) => ({
-          path: path.isAbsolute(event.path)
-            ? path.normalize(event.path)
-            : path.resolve(args.rootPath, event.path),
+          path: normalizeWatchEventPath(args.rootPath, event.path),
           type: event.type,
         })),
       );

@@ -1,5 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  dedupeWatchPathChanges,
+  isWatchPathWithinRoot,
+  normalizeWatchEventPath,
+  toWatchRootRelativeKey,
+} from "./watch-event-path.js";
 import type { WorkspaceStatusChangeEvent } from "./watch-status-types.js";
 
 type ParcelWatcherSubscribe = (typeof import("@parcel/watcher"))["subscribe"];
@@ -89,27 +95,6 @@ function createCommonDirWatchOptions(): ParcelWatcherOptions {
   };
 }
 
-function isPathWithinRoot(rootPath: string, candidatePath: string): boolean {
-  const relativePath = path.relative(rootPath, candidatePath);
-  return (
-    relativePath.length === 0 ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
-  );
-}
-
-function resolveEventPath(rootPath: string, eventPath: string): string {
-  return path.isAbsolute(eventPath)
-    ? path.normalize(eventPath)
-    : path.resolve(rootPath, eventPath);
-}
-
-function normalizeRelativePath(
-  rootPath: string,
-  candidatePath: string,
-): string {
-  return path.relative(rootPath, candidatePath).split(path.sep).join("/");
-}
-
 function isSharedGitRefPath(relativePath: string): boolean {
   if (relativePath.length === 0 || relativePath.endsWith(".lock")) {
     return false;
@@ -152,13 +137,16 @@ export function collectWorkspaceStatusChanges(args: {
     WorkspaceStatusChangeEvent["changeKinds"][number]
   >();
 
-  for (const event of args.events) {
-    const candidatePath = resolveEventPath(args.spec.rootPath, event.path);
-    if (!isPathWithinRoot(args.spec.rootPath, candidatePath)) {
+  for (const event of dedupeWatchPathChanges(args.events)) {
+    const candidatePath = normalizeWatchEventPath(
+      args.spec.rootPath,
+      event.path,
+    );
+    if (!isWatchPathWithinRoot(args.spec.rootPath, candidatePath)) {
       continue;
     }
 
-    const relativePath = normalizeRelativePath(
+    const relativePath = toWatchRootRelativeKey(
       args.spec.rootPath,
       candidatePath,
     );

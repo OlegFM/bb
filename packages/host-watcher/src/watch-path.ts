@@ -6,6 +6,10 @@ import {
 } from "./root-subscription.js";
 import { createDebouncedCallbackScheduler } from "./watch-callback-scheduler.js";
 import { toWatchErrorMessage } from "./watch-error.js";
+import {
+  isWatchPathWithinRoot,
+  normalizeWatchEventPath,
+} from "./watch-event-path.js";
 import type {
   PathChangeEvent,
   PathChangeCallback,
@@ -37,31 +41,14 @@ function createPathChangeCallbackError(
   };
 }
 
-function isPathWithinTarget(
-  targetPath: string,
-  candidatePath: string,
-): boolean {
-  const relativePath = path.relative(targetPath, candidatePath);
-  return (
-    relativePath.length === 0 ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
-  );
-}
-
-function resolveEventPath(watchedPath: string, eventPath: string): string {
-  return path.isAbsolute(eventPath)
-    ? path.normalize(eventPath)
-    : path.resolve(watchedPath, eventPath);
-}
-
 function collectTouchedTargetPaths(
   targetPath: string,
   events: ParcelWatcherEventBatch,
 ): string[] {
   const touchedPaths = new Set<string>();
   for (const event of events) {
-    const candidatePath = resolveEventPath(targetPath, event.path);
-    if (isPathWithinTarget(targetPath, candidatePath)) {
+    const candidatePath = normalizeWatchEventPath(targetPath, event.path);
+    if (isWatchPathWithinRoot(targetPath, candidatePath)) {
       touchedPaths.add(candidatePath);
     }
   }

@@ -1,4 +1,3 @@
-import path from "node:path";
 import type {
   ParcelAsyncSubscription,
   ParcelWatcherBackend,
@@ -6,6 +5,7 @@ import type {
 } from "../parcel-watcher-backend.js";
 import { isRescanRequiredMessage } from "../watch-recovery.js";
 import { toWatchErrorMessage } from "../watch-error.js";
+import { joinWatchedEntry } from "../watch-event-path.js";
 import type {
   ChildToParentMessage,
   ParentToChildMessage,
@@ -45,7 +45,7 @@ export function createParcelChildHandler(args: {
       kind: "events",
       id,
       events: entries.map((entry) => ({
-        path: path.join(dir, entry),
+        path: joinWatchedEntry(dir, entry),
         type: "update",
       })),
     });
