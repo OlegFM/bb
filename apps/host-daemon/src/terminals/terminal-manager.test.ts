@@ -13,11 +13,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HostDaemonLogger } from "../logger.js";
 import { RuntimeManager } from "../runtime-manager.js";
 import {
+  buildTerminalEnv,
   ensureNodePtySpawnHelpersExecutableInPackage,
+  resolveDefaultTerminalShell,
   resolveNodePtySpawnHelperPaths,
   TerminalManager,
+  TerminalShellUnavailableError,
+  terminalSpawnArgsForStart,
+  terminalTitleFromShell,
   type ResolveTerminalShell,
   type SpawnTerminalPtyArgs,
+  type TerminalOpenMessage,
   type TerminalPtyAdapter,
   type TerminalPtyDisposable,
   type TerminalPtyExit,
@@ -312,6 +318,7 @@ function createHarnessWithOptions(
   const manager = new TerminalManager({
     closeGracePeriodMs: args.closeGracePeriodMs,
     logger: createFakeLogger(),
+    platform: "linux",
     ptyAdapter: adapter,
     resolveShell: args.resolveShell,
     runtimeManager,
@@ -1386,17 +1393,64 @@ describe("TerminalManager", () => {
     ]);
   });
 
-  it("rejects native Windows opens", async () => {
+  it("opens a native Windows terminal through the injected adapter", async () => {
     const harness = createHarness();
+    const shell = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
     const manager = new TerminalManager({
-      logger: {
-        debug: vi.fn(),
-        error: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-      },
+      logger: createFakeLogger(),
       platform: "win32",
       ptyAdapter: harness.adapter,
+      resolveShell: async () => shell,
+      runtimeManager: harness.runtimeManager,
+      sendMessage: (message) => {
+        harness.messages.push(message);
+        return true;
+      },
+    });
+
+    await manager.handleMessage({
+      type: "terminal.open",
+      requestId: "open-1",
+      terminalId: "term-1",
+      threadId: "thr-1",
+      target: {
+        kind: "workspace",
+        environmentId: "env-1",
+        workspaceContext: {
+          workspacePath: "/tmp/terminal-workspace",
+        },
+      },
+      cols: 100,
+      rows: 30,
+      start: DEFAULT_TERMINAL_START,
+    });
+
+    expect(harness.messages).toContainEqual(
+      expect.objectContaining({
+        type: "terminal.opened",
+        terminalId: "term-1",
+        shell,
+        title: "pwsh.exe",
+      }),
+    );
+    expect(harness.adapter.spawned).toHaveLength(1);
+    const spawned = harness.adapter.spawned[0];
+    expect(spawned?.args).toMatchObject({ args: ["-NoLogo"], file: shell });
+    const spawnedEnv = spawned?.args.env ?? {};
+    expect(
+      Object.keys(spawnedEnv).filter((key) => key.toLowerCase() === "path"),
+    ).toEqual(["Path"]);
+  });
+
+  it("reports an unavailable Windows shell without spawning", async () => {
+    const harness = createHarness();
+    const manager = new TerminalManager({
+      logger: createFakeLogger(),
+      platform: "win32",
+      ptyAdapter: harness.adapter,
+      resolveShell: async () => {
+        throw new TerminalShellUnavailableError();
+      },
       runtimeManager: harness.runtimeManager,
       sendMessage: (message) => {
         harness.messages.push(message);
@@ -1427,8 +1481,9 @@ describe("TerminalManager", () => {
         type: "terminal.error",
         requestId: "open-1",
         terminalId: "term-1",
-        code: "unsupported_platform",
-        message: "Native Windows terminals are not supported",
+        code: "shell_unavailable",
+        message:
+          "No terminal shell was found: tried pwsh.exe, powershell.exe, ComSpec and cmd.exe",
       },
     ]);
   });
@@ -1502,4 +1557,359 @@ describe("TerminalManager", () => {
     });
     await manager.shutdownAll();
   }, 10_000);
+});
+
+function makeTerminalOpenMessage(
+  start: TerminalOpenMessage["start"],
+): TerminalOpenMessage {
+  return {
+    type: "terminal.open",
+    requestId: "open-1",
+    terminalId: "term-1",
+    threadId: "thr-1",
+    target: {
+      kind: "workspace",
+      environmentId: "env-1",
+      workspaceContext: {
+        workspacePath: "/tmp/terminal-workspace",
+      },
+    },
+    cols: 100,
+    rows: 30,
+    start,
+  };
+}
+
+function makeExecutableSet(
+  executables: string[],
+): (filePath: string) => Promise<boolean> {
+  const allowed = new Set(executables);
+  return async (filePath) => allowed.has(filePath);
+}
+
+describe("resolveDefaultTerminalShell", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("prefers pwsh found on Path on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: { Path: "C:\\Program Files\\PowerShell\\7" },
+        pathIsExecutable: makeExecutableSet([]),
+        resolveExecutable: async (executableArgs) =>
+          executableArgs.command === "pwsh" &&
+          executableArgs.platform === "win32"
+            ? "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+            : null,
+      }),
+    ).resolves.toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
+  });
+
+  it("falls back to the ProgramFiles pwsh install on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: {
+          ProgramFiles: "C:\\Program Files",
+          SystemRoot: "C:\\Windows",
+          ComSpec: "D:\\shells\\cmd.exe",
+        },
+        pathIsExecutable: makeExecutableSet([
+          "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "D:\\shells\\cmd.exe",
+        ]),
+        resolveExecutable: async () => null,
+      }),
+    ).resolves.toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
+  });
+
+  it("falls back to Windows PowerShell 5.1 on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ComSpec: "D:\\shells\\cmd.exe" },
+        pathIsExecutable: makeExecutableSet([
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+          "D:\\shells\\cmd.exe",
+        ]),
+        resolveExecutable: async () => null,
+      }),
+    ).resolves.toBe(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    );
+  });
+
+  it("falls back to ComSpec before the System32 cmd.exe on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ComSpec: "D:\\shells\\cmd.exe" },
+        pathIsExecutable: makeExecutableSet([
+          "D:\\shells\\cmd.exe",
+          "C:\\Windows\\System32\\cmd.exe",
+        ]),
+        resolveExecutable: async () => null,
+      }),
+    ).resolves.toBe("D:\\shells\\cmd.exe");
+  });
+
+  it("falls back to the System32 cmd.exe on Windows", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows" },
+        pathIsExecutable: makeExecutableSet(["C:\\Windows\\System32\\cmd.exe"]),
+        resolveExecutable: async () => null,
+      }),
+    ).resolves.toBe("C:\\Windows\\System32\\cmd.exe");
+  });
+
+  it("rejects when no Windows shell is available", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: { SystemRoot: "C:\\Windows", ComSpec: "D:\\shells\\cmd.exe" },
+        pathIsExecutable: makeExecutableSet([]),
+        resolveExecutable: async () => null,
+      }),
+    ).rejects.toThrow(TerminalShellUnavailableError);
+  });
+
+  it("accepts a Windows candidate that exists without the executable bit", async () => {
+    const shellDir = await makeTempDir("bb-terminal-shell-");
+    const comSpecPath = path.join(shellDir, "cmd.exe");
+    await fs.writeFile(comSpecPath, "");
+    await fs.chmod(comSpecPath, 0o644);
+
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "win32",
+        env: {
+          SystemRoot: path.join(shellDir, "missing-windows-root"),
+          ComSpec: comSpecPath,
+        },
+        resolveExecutable: async () => null,
+      }),
+    ).resolves.toBe(comSpecPath);
+  });
+
+  it("uses an executable SHELL on POSIX", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "linux",
+        env: { SHELL: "/usr/bin/fish" },
+        pathIsExecutable: makeExecutableSet(["/usr/bin/fish"]),
+      }),
+    ).resolves.toBe("/usr/bin/fish");
+  });
+
+  it("prefers /bin/zsh over /bin/bash when SHELL is not executable on POSIX", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "linux",
+        env: { SHELL: "/usr/bin/fish" },
+        pathIsExecutable: makeExecutableSet(["/bin/zsh", "/bin/bash"]),
+      }),
+    ).resolves.toBe("/bin/zsh");
+  });
+
+  it("falls back to /bin/sh when nothing is executable on POSIX", async () => {
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "linux",
+        env: {},
+        pathIsExecutable: makeExecutableSet([]),
+      }),
+    ).resolves.toBe("/bin/sh");
+  });
+
+  it("reads SHELL from process.env by default on POSIX", async () => {
+    vi.stubEnv("SHELL", "/usr/bin/fish");
+
+    await expect(
+      resolveDefaultTerminalShell({
+        platform: "linux",
+        pathIsExecutable: makeExecutableSet(["/usr/bin/fish"]),
+      }),
+    ).resolves.toBe("/usr/bin/fish");
+  });
+});
+
+describe("terminalSpawnArgsForStart", () => {
+  it("starts a Windows PowerShell session with -NoLogo only", () => {
+    for (const shell of [
+      "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    ]) {
+      const args = terminalSpawnArgsForStart(
+        makeTerminalOpenMessage({ mode: "shell" }),
+        shell,
+        "win32",
+      );
+
+      expect(args).toEqual(["-NoLogo"]);
+      expect(args).not.toContain("-NoProfile");
+      expect(args).not.toContain("chcp");
+    }
+  });
+
+  it("runs a Windows PowerShell command through -Command", () => {
+    for (const shell of [
+      "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    ]) {
+      const args = terminalSpawnArgsForStart(
+        makeTerminalOpenMessage({ mode: "command", command: "git status" }),
+        shell,
+        "win32",
+      );
+
+      expect(args).toEqual(["-NoLogo", "-Command", "git status"]);
+      expect(args).not.toContain("-NoProfile");
+      expect(args).not.toContain("chcp");
+    }
+  });
+
+  it("starts a Windows cmd.exe session with no arguments", () => {
+    const args = terminalSpawnArgsForStart(
+      makeTerminalOpenMessage({ mode: "shell" }),
+      "C:\\Windows\\System32\\cmd.exe",
+      "win32",
+    );
+
+    expect(args).toEqual([]);
+    expect(args).not.toContain("-NoProfile");
+    expect(args).not.toContain("chcp");
+  });
+
+  it("runs a Windows cmd.exe command through /s /c", () => {
+    expect(
+      terminalSpawnArgsForStart(
+        makeTerminalOpenMessage({ mode: "command", command: "git status" }),
+        "C:\\Windows\\System32\\cmd.exe",
+        "win32",
+      ),
+    ).toEqual(["/s", "/c", "git status"]);
+  });
+
+  it("spawns a POSIX login shell with no arguments", () => {
+    expect(
+      terminalSpawnArgsForStart(
+        makeTerminalOpenMessage({ mode: "shell" }),
+        "/bin/zsh",
+        "linux",
+      ),
+    ).toEqual([]);
+  });
+
+  it("runs a POSIX command through -lc", () => {
+    expect(
+      terminalSpawnArgsForStart(
+        makeTerminalOpenMessage({ mode: "command", command: "git status" }),
+        "/bin/zsh",
+        "linux",
+      ),
+    ).toEqual(["-lc", "git status"]);
+  });
+});
+
+describe("buildTerminalEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("collapses every PATH casing into one Path on Windows", () => {
+    const env = buildTerminalEnv({
+      shellEnv: { PATH: "C:\\bb;C:\\old" },
+      terminalId: "term-1",
+      platform: "win32",
+      inheritedEnv: { Path: "C:\\old", PATH: "C:\\older", HOME: "x" },
+    });
+
+    expect(
+      Object.keys(env).filter((key) => key.toLowerCase() === "path"),
+    ).toEqual(["Path"]);
+    expect(env.Path).toBe("C:\\bb;C:\\old");
+    expect(env).toMatchObject({
+      BB_TERMINAL_SESSION_ID: "term-1",
+      COLORTERM: "truecolor",
+      TERM: "xterm-256color",
+    });
+  });
+
+  it("keeps the inherited Path on Windows when the shell env has none", () => {
+    const env = buildTerminalEnv({
+      shellEnv: { BB_BASE_ENV: "1" },
+      terminalId: "term-1",
+      platform: "win32",
+      inheritedEnv: { Path: "C:\\inherited", HOME: "x" },
+    });
+
+    expect(
+      Object.keys(env).filter((key) => key.toLowerCase() === "path"),
+    ).toEqual(["Path"]);
+    expect(env.Path).toBe("C:\\inherited");
+  });
+
+  it("merges the sanitized inherited env, the shell env and the fixed terminal keys on POSIX", () => {
+    expect(
+      buildTerminalEnv({
+        shellEnv: { PATH: "/bb/bin:/usr/bin", SHELL_ONLY: "shell" },
+        terminalId: "term-1",
+        platform: "linux",
+        inheritedEnv: {
+          HOME: "/home/tester",
+          PATH: "/usr/bin",
+          NODE_ENV: "test",
+          BB_DROPPED: "1",
+        },
+      }),
+    ).toEqual({
+      HOME: "/home/tester",
+      PATH: "/bb/bin:/usr/bin",
+      SHELL_ONLY: "shell",
+      BB_TERMINAL_SESSION_ID: "term-1",
+      COLORTERM: "truecolor",
+      DISABLE_AUTO_TITLE: "true",
+      FORCE_HYPERLINK: "1",
+      PROMPT_EOL_MARK: "",
+      TERM: "xterm-256color",
+    });
+  });
+
+  it("inherits process.env by default", () => {
+    vi.stubEnv("BB_TERMINAL_ENV_PIN", "inherited");
+    vi.stubEnv("TERMINAL_ENV_PIN", "inherited");
+
+    const env = buildTerminalEnv({
+      shellEnv: {},
+      terminalId: "term-1",
+      platform: "linux",
+    });
+
+    expect(env.TERMINAL_ENV_PIN).toBe("inherited");
+    expect(env.BB_TERMINAL_ENV_PIN).toBeUndefined();
+  });
+});
+
+describe("terminalTitleFromShell", () => {
+  it("uses the Windows executable file name", () => {
+    expect(
+      terminalTitleFromShell(
+        "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+        "win32",
+      ),
+    ).toBe("pwsh.exe");
+  });
+
+  it("uses the POSIX basename", () => {
+    expect(terminalTitleFromShell("/bin/zsh", "linux")).toBe("zsh");
+  });
+
+  it("falls back to Terminal when the shell has no basename", () => {
+    expect(terminalTitleFromShell("", "linux")).toBe("Terminal");
+  });
 });

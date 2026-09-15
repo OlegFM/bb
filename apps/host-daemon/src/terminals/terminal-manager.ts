@@ -7,7 +7,12 @@ import { spawn as spawnPty } from "node-pty";
 import type { TerminalSessionCloseReason } from "@bb/domain";
 import type { HostDaemonDaemonWsMessage } from "@bb/host-daemon-contract";
 import {
+  assignPathEnv,
+  joinExecutablePath,
   killProcessGroup,
+  readWindowsEnvValue,
+  resolveExecutable,
+  resolveWindowsSystemToolPath,
   sanitizeInheritedChildProcessEnv,
 } from "@bb/process-utils";
 import type { HostDaemonServerTerminalMessage } from "../server-connection-support.js";
@@ -68,7 +73,7 @@ export interface TerminalPtyAdapter {
 }
 
 export type ResolveTerminalShell = () => Promise<string>;
-type TerminalOpenMessage = Extract<
+export type TerminalOpenMessage = Extract<
   HostDaemonServerTerminalMessage,
   { type: "terminal.open" }
 >;
@@ -148,7 +153,9 @@ interface ShutdownTerminalArgs {
   terminalId: string;
 }
 
-interface BuildTerminalEnvArgs {
+export interface BuildTerminalEnvArgs {
+  inheritedEnv?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
   shellEnv: NodeJS.ProcessEnv;
   terminalId: string;
 }
@@ -323,20 +330,95 @@ async function pathIsExecutable(filePath: string): Promise<boolean> {
   }
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isNonEmptyString(value: string | undefined): value is string {
   return value !== undefined && value.length > 0;
 }
 
-async function resolveDefaultTerminalShell(): Promise<string> {
-  const candidates = [
-    process.env.SHELL,
-    "/bin/zsh",
-    "/bin/bash",
-    "/bin/sh",
-  ].filter(isNonEmptyString);
+export class TerminalShellUnavailableError extends Error {
+  constructor() {
+    super(
+      "No terminal shell was found: tried pwsh.exe, powershell.exe, ComSpec and cmd.exe",
+    );
+    this.name = "TerminalShellUnavailableError";
+  }
+}
+
+export interface ResolveDefaultTerminalShellArgs {
+  env?: NodeJS.ProcessEnv;
+  pathIsExecutable?: (filePath: string) => Promise<boolean>;
+  platform?: NodeJS.Platform;
+  resolveExecutable?: typeof resolveExecutable;
+}
+
+function windowsTerminalShellCandidates(env: NodeJS.ProcessEnv): string[] {
+  const programFiles = readWindowsEnvValue(env, "ProgramFiles");
+  const comSpec = readWindowsEnvValue(env, "ComSpec");
+  return [
+    ...(programFiles === undefined
+      ? []
+      : [joinExecutablePath("win32", programFiles, "PowerShell\\7\\pwsh.exe")]),
+    resolveWindowsSystemToolPath(
+      "WindowsPowerShell\\v1.0\\powershell.exe",
+      env,
+    ),
+    ...(comSpec === undefined ? [] : [comSpec]),
+    resolveWindowsSystemToolPath("cmd.exe", env),
+  ];
+}
+
+async function resolveWindowsTerminalShell(
+  args: Required<ResolveDefaultTerminalShellArgs>,
+): Promise<string> {
+  const shellOnPath = await args.resolveExecutable({
+    command: "pwsh",
+    env: args.env,
+    platform: "win32",
+  });
+  if (shellOnPath !== null) {
+    return shellOnPath;
+  }
+
+  for (const candidate of windowsTerminalShellCandidates(args.env)) {
+    if (await args.pathIsExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new TerminalShellUnavailableError();
+}
+
+export async function resolveDefaultTerminalShell(
+  args: ResolveDefaultTerminalShellArgs = {},
+): Promise<string> {
+  const platform = args.platform ?? process.platform;
+  const env = args.env ?? process.env;
+  const pathIsExecutableFn =
+    args.pathIsExecutable ??
+    (platform === "win32" ? pathExists : pathIsExecutable);
+  if (platform === "win32") {
+    return resolveWindowsTerminalShell({
+      platform,
+      env,
+      pathIsExecutable: pathIsExecutableFn,
+      resolveExecutable: args.resolveExecutable ?? resolveExecutable,
+    });
+  }
+
+  const candidates = [env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(
+    isNonEmptyString,
+  );
 
   for (const candidate of candidates) {
-    if (await pathIsExecutable(candidate)) {
+    if (await pathIsExecutableFn(candidate)) {
       return candidate;
     }
   }
@@ -344,9 +426,13 @@ async function resolveDefaultTerminalShell(): Promise<string> {
   return "/bin/sh";
 }
 
-function buildTerminalEnv(args: BuildTerminalEnvArgs): NodeJS.ProcessEnv {
-  return {
-    ...sanitizeInheritedChildProcessEnv({ env: process.env }),
+export function buildTerminalEnv(
+  args: BuildTerminalEnvArgs,
+): NodeJS.ProcessEnv {
+  const platform = args.platform ?? process.platform;
+  const inheritedEnv = args.inheritedEnv ?? process.env;
+  const mergedEnv: NodeJS.ProcessEnv = {
+    ...sanitizeInheritedChildProcessEnv({ env: inheritedEnv }),
     ...args.shellEnv,
     BB_TERMINAL_SESSION_ID: args.terminalId,
     COLORTERM: "truecolor",
@@ -355,10 +441,25 @@ function buildTerminalEnv(args: BuildTerminalEnvArgs): NodeJS.ProcessEnv {
     PROMPT_EOL_MARK: "",
     TERM: "xterm-256color",
   };
+  if (platform !== "win32") {
+    return mergedEnv;
+  }
+  return assignPathEnv({
+    env: mergedEnv,
+    path: args.shellEnv.PATH ?? readWindowsEnvValue(inheritedEnv, "Path") ?? "",
+    platform: "win32",
+  });
 }
 
-function terminalTitleFromShell(shell: string): string {
-  return path.basename(shell) || "Terminal";
+export function terminalTitleFromShell(
+  shell: string,
+  platform: NodeJS.Platform,
+): string {
+  const base =
+    platform === "win32"
+      ? (shell.split(/[/\\]/u).pop() ?? "")
+      : path.basename(shell);
+  return base || "Terminal";
 }
 
 function terminalTitleFromCommand(command: string): string {
@@ -369,22 +470,44 @@ function terminalTitleFromCommand(command: string): string {
   return `${normalized.slice(0, 77)}...`;
 }
 
-function terminalSpawnArgsForStart(message: TerminalOpenMessage): string[] {
+function isPowerShellExecutable(shell: string): boolean {
+  const name = shell.split(/[/\\]/u).pop()?.toLowerCase() ?? "";
+  return name === "pwsh.exe" || name === "powershell.exe" || name === "pwsh";
+}
+
+export function terminalSpawnArgsForStart(
+  message: TerminalOpenMessage,
+  shell: string,
+  platform: NodeJS.Platform,
+): string[] {
+  if (platform !== "win32") {
+    switch (message.start.mode) {
+      case "shell":
+        return [];
+      case "command":
+        return ["-lc", message.start.command];
+    }
+  }
+
+  const powerShell = isPowerShellExecutable(shell);
   switch (message.start.mode) {
     case "shell":
-      return [];
+      return powerShell ? ["-NoLogo"] : [];
     case "command":
-      return ["-lc", message.start.command];
+      return powerShell
+        ? ["-NoLogo", "-Command", message.start.command]
+        : ["/s", "/c", message.start.command];
   }
 }
 
 function terminalTitleForStart(
   message: TerminalOpenMessage,
   shell: string,
+  platform: NodeJS.Platform,
 ): string {
   switch (message.start.mode) {
     case "shell":
-      return terminalTitleFromShell(shell);
+      return terminalTitleFromShell(shell, platform);
     case "command":
       return terminalTitleFromCommand(message.start.command);
   }
@@ -467,7 +590,9 @@ export class TerminalManager {
       options.closeGracePeriodMs ?? DEFAULT_TERMINAL_CLOSE_GRACE_PERIOD_MS;
     this.platform = options.platform ?? process.platform;
     this.ptyAdapter = options.ptyAdapter ?? nodePtyAdapter;
-    this.resolveShell = options.resolveShell ?? resolveDefaultTerminalShell;
+    this.resolveShell =
+      options.resolveShell ??
+      (() => resolveDefaultTerminalShell({ platform: this.platform }));
   }
 
   async handleMessage(message: HostDaemonServerTerminalMessage): Promise<void> {
@@ -563,16 +688,6 @@ export class TerminalManager {
       return;
     }
 
-    if (this.platform === "win32") {
-      this.sendTerminalError({
-        code: "unsupported_platform",
-        message: "Native Windows terminals are not supported",
-        requestId: message.requestId,
-        terminalId: message.terminalId,
-      });
-      return;
-    }
-
     const openingEnvironmentId = terminalEnvironmentIdFromOpenMessage(message);
     this.openingTerminalEnvironmentIds.set(
       message.terminalId,
@@ -582,10 +697,11 @@ export class TerminalManager {
       const target = await this.resolveTerminalOpenTarget(message);
       const shell = await this.resolveShell();
       const pty = this.ptyAdapter.spawn({
-        args: terminalSpawnArgsForStart(message),
+        args: terminalSpawnArgsForStart(message, shell, this.platform),
         cols: message.cols,
         cwd: target.cwd,
         env: buildTerminalEnv({
+          platform: this.platform,
           shellEnv: this.options.runtimeManager.getShellEnv(),
           terminalId: message.terminalId,
         }),
@@ -644,17 +760,19 @@ export class TerminalManager {
         requestId: message.requestId,
         terminalId: message.terminalId,
         shell,
-        title: terminalTitleForStart(message, shell),
+        title: terminalTitleForStart(message, shell, this.platform),
         initialCwd: target.cwd,
         cols: message.cols,
         rows: message.rows,
       });
     } catch (error) {
       const code =
-        error instanceof ExpectedCommandDispatchError &&
-        error.code === "workspace_type_mismatch"
-          ? error.code
-          : "terminal_open_failed";
+        error instanceof TerminalShellUnavailableError
+          ? "shell_unavailable"
+          : error instanceof ExpectedCommandDispatchError &&
+              error.code === "workspace_type_mismatch"
+            ? error.code
+            : "terminal_open_failed";
       this.sendTerminalError({
         code,
         message: error instanceof Error ? error.message : String(error),
