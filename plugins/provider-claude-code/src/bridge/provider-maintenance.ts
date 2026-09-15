@@ -105,6 +105,14 @@ function claudeDoctor(value: string | null): {
   };
 }
 
+function claudeDownloadedInstallerCommand() {
+  const installer = downloadedInstallerCommand(CLAUDE_INSTALL_SCRIPT_URL);
+  if (installer === null) {
+    throw new Error("Claude Code installer is unavailable on this platform");
+  }
+  return installer;
+}
+
 function isDefaultNativeClaudePath(executablePath: string | null): boolean {
   if (executablePath === null) return false;
   const normalized = executablePath.replace(/\\/gu, "/");
@@ -175,7 +183,7 @@ export async function getClaudeProviderInstallationStatus(): Promise<ProviderIns
       : null;
   const displayCommand =
     actionKind === "install"
-      ? downloadedInstallerCommand(CLAUDE_INSTALL_SCRIPT_URL).displayCommand
+      ? claudeDownloadedInstallerCommand().displayCommand
       : formatCommand(command, ["update"]);
   return {
     executableName: command,
@@ -220,7 +228,7 @@ function buildClaudeProviderInstallationRun(
   const command = claudeExecutable();
   const execution =
     action === "install"
-      ? downloadedInstallerCommand(CLAUDE_INSTALL_SCRIPT_URL)
+      ? claudeDownloadedInstallerCommand()
       : {
           command,
           args: ["update"],

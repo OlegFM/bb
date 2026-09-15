@@ -1,10 +1,18 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  commandOutput,
   compareVersions,
+  downloadedInstallerCommand,
   formatCommand,
   installationVerification,
+  installerUnavailableReason,
+  npmCommand,
+  npmGlobalInstallCommand,
   npmGlobalInstallSource,
+  resolveExecutablePath,
   versionFrom,
 } from "./provider-maintenance-kit.js";
 
@@ -82,4 +90,133 @@ describe("provider maintenance kit", () => {
       ),
     ).toEqual({ kind: "installed" });
   });
+});
+
+describe("provider maintenance kit: platform injection", () => {
+  const roots: string[] = [];
+
+  async function makeRoot(): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), "bb-provider-kit-"));
+    roots.push(root);
+    return root;
+  }
+
+  afterEach(async () => {
+    await Promise.all(
+      roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    );
+  });
+
+  it("resolves npm on every platform (the daemon resolves the real launcher)", () => {
+    expect(npmCommand("linux")).toBe("npm");
+    expect(npmCommand("darwin")).toBe("npm");
+    expect(npmCommand("win32")).toBe("npm");
+  });
+
+  it("builds the same npm global install command on posix and win32", () => {
+    const expected = {
+      command: "npm",
+      args: ["install", "-g", "@openai/codex@latest"],
+      displayCommand: "npm install -g @openai/codex@latest",
+    };
+    expect(npmGlobalInstallCommand("@openai/codex", "linux")).toEqual(expected);
+    expect(npmGlobalInstallCommand("@openai/codex", "win32")).toEqual(expected);
+  });
+
+  it("keeps the POSIX downloaded-installer script byte-identical and refuses on win32", () => {
+    const script =
+      'tmp=$(mktemp "${TMPDIR:-/tmp}/provider-installation.XXXXXX") && trap \'rm -f "$tmp"\' EXIT && curl -fsSL https://claude.ai/install.sh -o "$tmp" && bash "$tmp"';
+    expect(
+      downloadedInstallerCommand("https://claude.ai/install.sh", "linux"),
+    ).toEqual({ command: "sh", args: ["-c", script], displayCommand: script });
+    expect(
+      downloadedInstallerCommand("https://claude.ai/install.sh", "win32"),
+    ).toBeNull();
+  });
+
+  it("names the installer-unavailable reason sentence", () => {
+    expect(
+      installerUnavailableReason(
+        "Claude Code",
+        "https://claude.com/claude-code",
+      ),
+    ).toBe(
+      "bb cannot run the Claude Code shell installer on Windows. Install Claude Code from https://claude.com/claude-code, then reload.",
+    );
+  });
+
+  it("attributes npm-global installs case-insensitively on win32 and case-sensitively elsewhere", () => {
+    const executablePath = "C:\\NVM4W\\nodejs\\codex.cmd";
+    const npmBin = "C:\\nvm4w\\nodejs";
+    expect(
+      npmGlobalInstallSource({
+        installed: true,
+        executablePath,
+        npmBin,
+        platform: "win32",
+      }),
+    ).toBe("npmGlobal");
+    expect(
+      npmGlobalInstallSource({
+        installed: true,
+        executablePath,
+        npmBin,
+        platform: "linux",
+      }),
+    ).toBe("external");
+  });
+
+  it("resolves a win32 executable through Path and PATHEXT, not where.exe", async () => {
+    const root = await makeRoot();
+    await writeFile(path.join(root, "pwsh.exe"), "");
+    await expect(
+      resolveExecutablePath("pwsh", {
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toBe(path.join(root, "pwsh.exe"));
+    await expect(
+      resolveExecutablePath("pwsh", {
+        platform: "win32",
+        env: { Path: root, PATHEXT: ".COM;.CMD" },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      resolveExecutablePath(path.join(root, "pwsh"), {
+        platform: "win32",
+        env: {},
+      }),
+    ).resolves.toBe(path.join(root, "pwsh.exe"));
+  });
+
+  it("returns null without throwing when a win32 spawn plan cannot resolve", async () => {
+    const root = await makeRoot();
+    await expect(
+      commandOutput("npm", ["--version"], {
+        platform: "win32",
+        env: { Path: root },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it.runIf(process.platform === "win32")(
+    "runs npm through the resolved spawn plan on win32",
+    async () => {
+      const output = await commandOutput("npm", ["--version"], {
+        platform: "win32",
+      });
+      expect(output).toMatch(/^\d+\.\d+\.\d+/u);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "keeps POSIX commandOutput byte-identical",
+    async () => {
+      await expect(
+        commandOutput("sh", ["-c", "printf out; printf err 1>&2"], {
+          platform: "linux",
+        }),
+      ).resolves.toBe("out\nerr");
+    },
+  );
 });

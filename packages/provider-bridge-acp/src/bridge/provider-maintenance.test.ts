@@ -57,21 +57,43 @@ describe("ACP provider maintenance", () => {
     });
   });
 
-  it("offers the installer only through a fresh matching action", () => {
-    expect(
-      __testing.buildProviderInstallationRun(
-        cursorMissingInstallationStatus(),
-        {
-          maintenance: CURSOR_ACP_MAINTENANCE,
-          command: "cursor-agent",
-          action: "install",
-        },
-      ),
-    ).toMatchObject({
-      available: true,
-      command: { command: "sh" },
-      verification: { kind: "installed" },
-    });
+  it.skipIf(process.platform === "win32")(
+    "offers the installer only through a fresh matching action",
+    () => {
+      expect(
+        __testing.buildProviderInstallationRun(
+          cursorMissingInstallationStatus(),
+          {
+            maintenance: CURSOR_ACP_MAINTENANCE,
+            command: "cursor-agent",
+            action: "install",
+          },
+        ),
+      ).toMatchObject({
+        available: true,
+        command: { command: "sh" },
+        verification: { kind: "installed" },
+      });
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "throws for the shell installer on win32, pending the reason flow",
+    () => {
+      expect(() =>
+        __testing.buildProviderInstallationRun(
+          cursorMissingInstallationStatus(),
+          {
+            maintenance: CURSOR_ACP_MAINTENANCE,
+            command: "cursor-agent",
+            action: "install",
+          },
+        ),
+      ).toThrow("Cursor installer is unavailable on this platform");
+    },
+  );
+
+  it("refuses an install for an unmatched or unmaintained command", () => {
     expect(
       __testing.buildProviderInstallationRun(
         { ...cursorMissingInstallationStatus(), installAction: null },

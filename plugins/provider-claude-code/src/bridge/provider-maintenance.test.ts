@@ -65,19 +65,34 @@ describe("Claude Code provider maintenance", () => {
     });
   });
 
-  it("keeps the native installer plan private behind the run method", () => {
-    const run = __testing.buildProviderInstallationRun(
-      missingInstallationStatus(),
-      "install",
-    );
-    expect(run).toMatchObject({
-      available: true,
-      command: { command: "sh" },
-      verification: { kind: "installed" },
-    });
-    expect(run.available && run.command.args).toHaveLength(2);
-    expect(run.available && run.command.args[1]).toContain(
-      "https://claude.ai/install.sh",
-    );
-  });
+  it.skipIf(process.platform === "win32")(
+    "keeps the native installer plan private behind the run method",
+    () => {
+      const run = __testing.buildProviderInstallationRun(
+        missingInstallationStatus(),
+        "install",
+      );
+      expect(run).toMatchObject({
+        available: true,
+        command: { command: "sh" },
+        verification: { kind: "installed" },
+      });
+      expect(run.available && run.command.args).toHaveLength(2);
+      expect(run.available && run.command.args[1]).toContain(
+        "https://claude.ai/install.sh",
+      );
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "throws for the shell installer on win32, pending the reason flow",
+    () => {
+      expect(() =>
+        __testing.buildProviderInstallationRun(
+          missingInstallationStatus(),
+          "install",
+        ),
+      ).toThrow("Claude Code installer is unavailable on this platform");
+    },
+  );
 });

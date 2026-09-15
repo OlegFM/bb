@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { access } from "node:fs/promises";
-import path from "node:path";
+import path, { posix as posixPath, win32 as win32Path } from "node:path";
 import { promisify } from "node:util";
+import { resolveExecutable, resolveSpawnPlan } from "@bb/process-utils";
 import { z } from "zod";
 import type {
   ProviderInstallationCommand,
@@ -16,9 +17,33 @@ const execFileAsync = promisify(execFile);
 const CLI_PROBE_TIMEOUT_MS = 5_000;
 const INSTALLATION_CHECK_TIMEOUT_MS = 15_000;
 
+export interface KitPlatformOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+}
+
+async function windowsSpawnPlan(
+  command: string,
+  args: readonly string[],
+  options: KitPlatformOptions,
+) {
+  return resolveSpawnPlan({
+    command,
+    args,
+    env: options.env ?? process.env,
+    platform: "win32",
+  });
+}
+
 export async function resolveExecutablePath(
   command: string,
+  options: KitPlatformOptions = {},
 ): Promise<string | null> {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  if (platform === "win32") {
+    return resolveExecutable({ command, env, platform });
+  }
   if (path.isAbsolute(command)) {
     try {
       await access(command, fsConstants.X_OK);
@@ -28,8 +53,7 @@ export async function resolveExecutablePath(
     }
   }
   try {
-    const lookup = process.platform === "win32" ? "where" : "which";
-    const { stdout } = await execFileAsync(lookup, [command], {
+    const { stdout } = await execFileAsync("which", [command], {
       timeout: CLI_PROBE_TIMEOUT_MS,
     });
     return (
@@ -46,10 +70,29 @@ export async function resolveExecutablePath(
 export async function commandOutput(
   command: string,
   args: readonly string[],
+  options: KitPlatformOptions = {},
 ): Promise<string | null> {
+  const platform = options.platform ?? process.platform;
+  if (platform !== "win32") {
+    try {
+      const { stdout, stderr } = await execFileAsync(command, [...args], {
+        timeout: INSTALLATION_CHECK_TIMEOUT_MS,
+        env: options.env,
+      });
+      return `${stdout}\n${stderr}`.trim();
+    } catch {
+      return null;
+    }
+  }
+  const plan = await windowsSpawnPlan(command, args, options);
+  if (plan === null) {
+    return null;
+  }
   try {
-    const { stdout, stderr } = await execFileAsync(command, [...args], {
+    const { stdout, stderr } = await execFileAsync(plan.command, plan.args, {
       timeout: INSTALLATION_CHECK_TIMEOUT_MS,
+      windowsHide: true,
+      env: options.env,
     });
     return `${stdout}\n${stderr}`.trim();
   } catch {
@@ -63,10 +106,35 @@ export function versionFrom(value: string | null): string | null {
   );
 }
 
-export async function readCliVersion(command: string): Promise<string | null> {
+export async function readCliVersion(
+  command: string,
+  options: KitPlatformOptions = {},
+): Promise<string | null> {
+  const platform = options.platform ?? process.platform;
+  if (platform !== "win32") {
+    try {
+      const { stdout, stderr } = await execFileAsync(command, ["--version"], {
+        timeout: CLI_PROBE_TIMEOUT_MS,
+        env: options.env,
+      });
+      return (
+        `${stdout}\n${stderr}`.match(
+          /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/u,
+        )?.[0] ?? null
+      );
+    } catch {
+      return null;
+    }
+  }
+  const plan = await windowsSpawnPlan(command, ["--version"], options);
+  if (plan === null) {
+    return null;
+  }
   try {
-    const { stdout, stderr } = await execFileAsync(command, ["--version"], {
+    const { stdout, stderr } = await execFileAsync(plan.command, plan.args, {
       timeout: CLI_PROBE_TIMEOUT_MS,
+      windowsHide: true,
+      env: options.env,
     });
     return (
       `${stdout}\n${stderr}`.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/u)?.[0] ??
@@ -101,8 +169,10 @@ export function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-export function npmCommand(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+export function npmCommand(
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return "npm";
 }
 
 export function formatCommand(
@@ -120,17 +190,24 @@ export function formatCommand(
 
 export function npmGlobalInstallCommand(
   npmPackage: string,
+  platform: NodeJS.Platform = process.platform,
 ): ProviderInstallationCommand {
-  const command = npmCommand();
+  const command = npmCommand(platform);
   const args = ["install", "-g", `${npmPackage}@latest`];
   return { command, args, displayCommand: formatCommand(command, args) };
 }
 
 export async function npmLatestVersion(
   npmPackage: string,
+  options: KitPlatformOptions = {},
 ): Promise<string | null> {
+  const platform = options.platform ?? process.platform;
   return versionFrom(
-    await commandOutput(npmCommand(), ["view", npmPackage, "version"]),
+    await commandOutput(
+      npmCommand(platform),
+      ["view", npmPackage, "version"],
+      options,
+    ),
   );
 }
 
@@ -141,18 +218,24 @@ export interface NpmGlobalPackageProbe {
 
 export async function probeNpmGlobalPackage(
   npmPackage: string,
+  options: KitPlatformOptions = {},
 ): Promise<NpmGlobalPackageProbe> {
-  const npm = npmCommand();
+  const platform = options.platform ?? process.platform;
+  const npm = npmCommand(platform);
   const [prefixOutput, listOutput] = await Promise.all([
-    commandOutput(npm, ["prefix", "-g"]),
-    commandOutput(npm, ["list", "-g", npmPackage, "--depth=0", "--json"]),
+    commandOutput(npm, ["prefix", "-g"], options),
+    commandOutput(
+      npm,
+      ["list", "-g", npmPackage, "--depth=0", "--json"],
+      options,
+    ),
   ]);
   const npmPrefix = firstLine(prefixOutput);
   return {
     npmBin:
       npmPrefix === null
         ? null
-        : process.platform === "win32"
+        : platform === "win32"
           ? npmPrefix
           : path.join(npmPrefix, "bin"),
     npmGlobalPackageVersion: npmGlobalPackageVersion(listOutput, npmPackage),
@@ -189,11 +272,21 @@ function npmGlobalPackageVersion(
   }
 }
 
-function pathIsInside(child: string, parent: string): boolean {
-  const relativePath = path.relative(path.resolve(parent), path.resolve(child));
+function pathIsInside(
+  child: string,
+  parent: string,
+  platform: NodeJS.Platform,
+): boolean {
+  const platformPath = platform === "win32" ? win32Path : posixPath;
+  const normalize = (value: string) =>
+    platform === "win32" ? value.toLowerCase() : value;
+  const relativePath = platformPath.relative(
+    normalize(platformPath.resolve(parent)),
+    normalize(platformPath.resolve(child)),
+  );
   return (
     relativePath === "" ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+    (!relativePath.startsWith("..") && !platformPath.isAbsolute(relativePath))
   );
 }
 
@@ -201,12 +294,14 @@ export function npmGlobalInstallSource(args: {
   installed: boolean;
   executablePath: string | null;
   npmBin: string | null;
+  platform?: NodeJS.Platform;
 }): ProviderInstallationSource {
+  const platform = args.platform ?? process.platform;
   return !args.installed
     ? "notInstalled"
     : args.executablePath !== null &&
         args.npmBin !== null &&
-        pathIsInside(args.executablePath, args.npmBin)
+        pathIsInside(args.executablePath, args.npmBin, platform)
       ? "npmGlobal"
       : "external";
 }
@@ -227,7 +322,11 @@ export function installationVerification(
 
 export function downloadedInstallerCommand(
   url: string,
-): ProviderInstallationCommand {
+  platform: NodeJS.Platform = process.platform,
+): ProviderInstallationCommand | null {
+  if (platform === "win32") {
+    return null;
+  }
   const script = [
     'tmp=$(mktemp "${TMPDIR:-/tmp}/provider-installation.XXXXXX")',
     "trap 'rm -f \"$tmp\"' EXIT",
@@ -235,6 +334,13 @@ export function downloadedInstallerCommand(
     'bash "$tmp"',
   ].join(" && ");
   return { command: "sh", args: ["-c", script], displayCommand: script };
+}
+
+export function installerUnavailableReason(
+  displayName: string,
+  url: string,
+): string {
+  return `bb cannot run the ${displayName} shell installer on Windows. Install ${displayName} from ${url}, then reload.`;
 }
 
 export function clampPercent(value: number): number {

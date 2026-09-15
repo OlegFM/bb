@@ -386,9 +386,17 @@ export async function getAcpProviderUsage(args: {
   return args.maintenance.readUsage();
 }
 
+function cursorDownloadedInstallerCommand() {
+  const installer = downloadedInstallerCommand(CURSOR_INSTALL_SCRIPT_URL);
+  if (installer === null) {
+    throw new Error("Cursor installer is unavailable on this platform");
+  }
+  return installer;
+}
+
 export const CURSOR_ACP_MAINTENANCE: AcpMaintenanceDialect = {
   loginCommand: "cursor-agent login",
-  installer: () => downloadedInstallerCommand(CURSOR_INSTALL_SCRIPT_URL),
+  installer: cursorDownloadedInstallerCommand,
   readAccount: async () => {
     const accessToken = await readAccessToken();
     return accessToken === null ? null : { email: readAccountEmail() };

@@ -972,9 +972,10 @@ whether `retryable` should be per kind (only `sessionArchived` and
 bridge's `provider/health`, `provider/usage` and `provider/installation/*`
 answers when its provider is a user-installed CLI. The probes:
 `experimental_resolveExecutablePath` (the command's absolute path — the path
-itself when given absolute and executable, else the first `which`/`where`
-hit, null when absent; 5 s), `experimental_readCliVersion` (`<command>
---version`, the first `x.y.z[-pre]` on stdout or stderr; 5 s),
+itself when given absolute and executable, else the first `which` hit on
+posix or a `Path`/`PATHEXT` walk on win32, null when absent; 5 s),
+`experimental_readCliVersion` (`<command> --version`, the first `x.y.z[-pre]`
+on stdout or stderr; 5 s),
 `experimental_commandOutput` (any command's trimmed stdout+stderr or null on
 failure; 15 s), `experimental_versionFrom` (the first version token in a
 banner), `experimental_npmLatestVersion` (`npm view <package> version`) and
@@ -989,13 +990,28 @@ status saw, or by any change when the registry was unreachable). The
 actions: `experimental_npmGlobalInstallCommand` (`npm install -g
 <package>@latest` with its display string), `experimental_downloadedInstallerCommand`
 (a vendor's `curl | bash` script run from a temp file),
-`experimental_npmCommand` (`npm` / `npm.cmd`) and
+`experimental_npmCommand` (`npm`, every platform) and
 `experimental_formatCommand` (a display command line with shell-unsafe
 arguments single-quoted). `experimental_clampPercent` rounds a usage
 percentage into 0–100. The codex, claude-code and pi bridges and the ACP kit
 build their maintenance answers from these; each keeps its own policy (the
 minimum supported version, the login command, credential and usage readers,
 dist-tag and `doctor` parsing) beside them.
+
+**Platform injection.** `experimental_resolveExecutablePath`,
+`experimental_commandOutput`, `experimental_readCliVersion`,
+`experimental_npmLatestVersion`, `experimental_probeNpmGlobalPackage`,
+`experimental_npmGlobalInstallSource`, `experimental_npmCommand`,
+`experimental_npmGlobalInstallCommand` and
+`experimental_downloadedInstallerCommand` all accept an optional `platform`
+(default `process.platform`) and, on the functions that spawn a process, an
+optional `env`. On win32 a command is resolved through `Path` and `PATHEXT`
+rather than `where.exe`, and a Node `.cmd`/`.bat` shim (npm's launcher
+included) is started as `node.exe <script>` instead of being executed
+directly. `experimental_npmCommand` returns `npm` on every platform — the
+host daemon resolves the real win32 launcher — and
+`experimental_downloadedInstallerCommand` returns `null` on win32 instead of
+a script that cannot run there.
 
 **Audit before stabilizing.**
 
@@ -1010,9 +1026,11 @@ dist-tag and `doctor` parsing) beside them.
    `npmGlobalInstallSource` model one layout (npm's global prefix); pnpm,
    volta and corepack shims read as `external`. Decide whether the source
    enum should grow before it is relied on.
-4. **`downloadedInstallerCommand` is POSIX.** `sh -c` with `mktemp`, `curl`
-   and `bash`; there is no Windows form. Decide whether it should refuse on
-   win32 rather than hand the daemon a command that cannot run.
+4. **`downloadedInstallerCommand` returns `null` on win32.** The Claude Code
+   bridge turns that into `installAction: null` with
+   `installUnavailableReason`. Stabilisation: decide whether a native
+   Windows installer (winget/MSI) should be modelled as a second command
+   kind.
 
 ## Presentation builders (`experimental_presentationTitle`, `experimental_presentationDetail`, `experimental_withTitle`, `experimental_presentationFileName`, `experimental_COMPACTION_PRESENTATION`, `experimental_REASONING_PRESENTATION`, `experimental_fileReadPresentation`, `experimental_searchPresentation`, `experimental_webSearchPresentation`, `experimental_webFetchPresentation`, `experimental_planStepsPresentation`, `experimental_toolPresentation`) (`@get-bb/plugin-sdk/provider-bridge`)
 
