@@ -7,6 +7,7 @@
 - macOS persistent host
 - Linux persistent host
 - Windows via Ubuntu on WSL2
+- Windows 11 x64, native (beta)
 
 Minimum runtime: Node.js 22.19. Pi no longer sets the floor: its bridge is a
 plugin and the `pi` CLI is user-installed like `codex` and `claude`, so the
@@ -24,14 +25,24 @@ floor only, so a release line we have not tested yet still installs rather than
 failing hard on the day it ships. The `bb-app` npm `engines` field lists the
 tested lines, which npm surfaces as a warning rather than an install failure.
 
-Windows support means the Linux stack runs entirely inside WSL2:
+WSL2 is the stable Windows path, and it means the Linux stack runs entirely
+inside WSL2:
 
 - all `bb` processes run inside the same Ubuntu WSL2 distro
 - Node.js, Git, provider CLIs, and pnpm for source-development flows are
   installed inside WSL2
 - local project paths use Linux-style absolute paths from inside WSL2
-- native Windows PowerShell, CMD, drive-letter paths, and UNC paths are not
-  supported product paths
+- native Windows PowerShell, CMD, and drive-letter paths are not part of this
+  path; UNC paths are not a supported product path on any host
+
+Native Windows 11 x64 is a second, beta path. bb runs the server, the host
+daemon, terminals and providers directly on Windows, with drive-letter project
+paths, PowerShell terminals through ConPTY, and provider CLIs resolved through
+`Path` and `PATHEXT`; see [platform-windows.md](platform-windows.md) for what
+has been measured and what is known not to work. It is verified on the fork's
+`windows-native/*` branches and by the `windows-x64` CI job. It is beta
+because the Windows Desktop app (Phase 4) and the persistent host (Phase 5)
+have not landed.
 
 ## Mobile app
 
@@ -122,6 +133,9 @@ Not available on the phone (use the web app or desktop for these):
 
 ### WSL2-specific expectations
 
+- These expectations apply to a WSL2 host. A native Windows host is the
+  separate beta path in [platform-windows.md](platform-windows.md); do not mix
+  the two on one machine.
 - Run `npx bb-app`, source checkout commands such as `pnpm install`,
   `pnpm dev`, `pnpm bb:dev`, and host-daemon commands from a WSL2 shell, not
   from native Windows terminals.
@@ -142,12 +156,12 @@ Not available on the phone (use the web app or desktop for these):
 
 - workspace-owned QA helpers under [`tests/qa/`](../tests/qa/)
 - dev restart internals that are not part of the shipped product path
-- native Windows PowerShell, CMD, and host-daemon runtime flows; the in-progress
-  native port and its measured state are tracked in
-  [platform-windows.md](platform-windows.md). Phase 2 (processes, environment,
-  Git, hooks, open targets) has landed on the `windows-native/phase-2` fork
-  branch; it has not merged to `main` and does not change the supported
-  product path above.
+
+Native Windows is not one of these surfaces: it is a beta host environment
+listed above. [platform-windows.md](platform-windows.md) tracks the port phase
+by phase, including what each phase measured and the limitations that remain.
+Phase 3 (terminals, providers, watcher, native `bb-app`) has landed on the
+`windows-native/phase-3` fork branch and has not merged to `main`.
 
 ## Dependency Policy
 
@@ -195,6 +209,10 @@ rebuild the native dependency, for example `npm rebuild better-sqlite3`.
 - The supported setup hook is POSIX `.bb-env-setup.sh`.
 - The supported teardown hook is POSIX `.bb-env-teardown.sh`.
 - The same shell-based hook contract is used across macOS, Linux, and WSL2.
+- A native Windows host runs `.bb-env-setup.ps1` and `.bb-env-teardown.ps1`
+  through PowerShell instead; there is no Git Bash fallback, and a workspace
+  that ships only the `.sh` hook fails setup with a message naming the `.ps1`
+  contract. See [platform-windows.md](platform-windows.md).
 - No parallel `.bb-env-setup.ts` product-path mechanism is supported.
 - The `.worktreeinclude` copy step runs no shell. It works on every platform,
   including native Windows.
@@ -204,8 +222,10 @@ rebuild the native dependency, for example `npm rebuild better-sqlite3`.
 - The repository enforces LF checkout for supported text files via
   [.gitattributes](../.gitattributes).
 - Supported Linux and WSL2 flows must work with those repository rules applied.
-- Native Windows checkouts are outside the support contract unless we later
-  choose to support a native Windows product path.
+- A native Windows source checkout needs Git for Windows with
+  `core.longpaths true` and `core.symlinks true`; see
+  [platform-windows.md](platform-windows.md) for the full prerequisites. The
+  LF rules above apply to it unchanged.
 
 ## CI And Validation
 
@@ -222,9 +242,10 @@ rebuild the native dependency, for example `npm rebuild better-sqlite3`.
   `Package Smoke (macos-latest, Node 22.x)`. The Node.js 24 and 26 compatibility
   smoke jobs do not run on pull requests and should not be configured as
   required PR checks.
-- Native Windows CI is intentionally not required because Windows support uses
-  the Linux runtime path inside WSL2 rather than a separate native Windows
-  product path.
+- The native Windows job (`windows-x64`) runs the ConPTY smoke, a typecheck
+  and build, a non-blocking per-package test baseline, and the `bb-app`
+  tarball smoke. It is intentionally not a required check while the native
+  Windows path is beta.
 - `apps/mobile` typecheck, lint, and unit tests run inside the Ubuntu
   `Checks` and `Tests (packages)` jobs like every other workspace package. The
   iOS simulator Maestro flows run in `Mobile E2E`

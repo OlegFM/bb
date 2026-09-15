@@ -1045,6 +1045,14 @@ a script that cannot run there.
    decide whether the reason becomes a typed cause plus a URL the app can
    render as a link, rather than a prose sentence every caller must print
    verbatim.
+6. **`installUnavailableReason` is a required key, and adding it was a
+   breaking change.** `ProviderInstallationStatus` declares it as
+   `z.string().min(1).nullable()`, not optional, so a status built by an
+   external bridge compiled against an older SDK fails the parse until that
+   bridge is rebuilt to send `null`. The daemon protocol version was bumped
+   for it. Stabilisation: decide whether a status key added after this point
+   is optional with a server-side default, or whether every bridge is expected
+   to track the protocol version.
 
 ## Windows launch resolution (`experimental_resolveSpawnPlanOrThrow`, `experimental_resolveExecutableSync`, `experimental_readWindowsEnvValue`) (`@get-bb/plugin-sdk/provider-bridge`)
 

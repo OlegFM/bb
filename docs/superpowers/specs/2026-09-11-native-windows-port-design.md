@@ -372,7 +372,7 @@ Protocol: bump if any wire field changes.
 Gate: the in-app terminal handles Ctrl+C, resize and UTF-8 echo; a real Codex
 turn and a real Claude Code turn read and write files under a `C:\` project;
 watcher events fire on NTFS; `npx bb-app` starts from a clean PowerShell
-session; ConPTY smoke 5/5.
+session; ConPTY smoke 6/6 (spawn-echo, utf8, resize, ctrl-c, close, tree).
 
 ### Phase 4 — Windows Desktop
 

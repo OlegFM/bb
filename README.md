@@ -36,10 +36,10 @@ The recommended way to start using bb is the desktop app:
 
 The desktop app supports macOS on Apple Silicon (arm64). The Linux x64 AppImage
 is alpha: expect problems, and please report them. Intel Mac users should run bb
-with `npx` instead. On Windows, run bb inside
-[WSL2 (Windows Subsystem for Linux)](https://learn.microsoft.com/windows/wsl/install):
-install WSL2 first, then run the same `npx` command below from your WSL2 (Linux)
-shell. Native Windows PowerShell and CMD are not supported.
+with `npx` instead. There is no Windows desktop app yet; on Windows, run bb with
+`npx` either inside
+[WSL2 (Windows Subsystem for Linux)](https://learn.microsoft.com/windows/wsl/install)
+or natively (beta) — see below.
 
 Early adopters can install
 **[bb Nightly](https://github.com/get-bb/bb/releases/tag/desktop-nightly)**
@@ -75,6 +75,28 @@ npm config set allow-scripts=better-sqlite3,node-pty,@parcel/watcher --location=
 ```
 
 bb uses the provider CLI you already have authenticated.
+
+#### Windows
+
+The stable Windows path is WSL2: install WSL2 first, then run the `npx` command
+above from your WSL2 (Linux) shell, with Node.js, Git and your provider CLIs
+installed inside that distro.
+
+**Native Windows (beta)** runs bb directly on Windows 11 x64, with no WSL2, from
+PowerShell:
+
+```powershell
+npx bb-app@latest
+```
+
+It needs Node.js 22.19 or newer, Git for Windows, and long paths enabled:
+`LongPathsEnabled` set to `1` under
+`HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, plus
+`git config --global core.longpaths true`. Terminals, provider launch and
+installation, the file watcher and the `bb` CLI all run natively; there is no
+Windows desktop app yet. See
+[docs/platform-windows.md](docs/platform-windows.md) for what has been measured
+and the known limitations.
 
 For install requirements, provider setup, configuration, and package-focused
 docs, start with

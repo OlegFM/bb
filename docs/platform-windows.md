@@ -1,12 +1,16 @@
 <!-- Diátaxis: reference -->
 
-# Native Windows (port in progress)
+# Native Windows (beta)
 
 Native Windows 11 x64 is being ported phase by phase; the design is
 [docs/superpowers/specs/2026-09-11-native-windows-port-design.md](superpowers/specs/2026-09-11-native-windows-port-design.md).
-Until Phase 3 lands, the supported Windows product path stays WSL2 as
-described in [platform-support.md](platform-support.md). This page records
-what has been measured on native Windows and what is known not to work.
+Phase 3 landed terminals, provider launch and installation, the file watcher
+and the native `bb-app` runtime, so the server, the host daemon, terminals and
+providers now run directly on Windows without WSL2. That path is beta: the
+Windows Desktop app (Phase 4) and the persistent host (Phase 5) have not
+landed, and WSL2 stays the stable Windows path described in
+[platform-support.md](platform-support.md). This page records what has been
+measured on native Windows and what is known not to work.
 
 ## Status
 
@@ -15,7 +19,7 @@ what has been measured on native Windows and what is known not to work.
 | 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/` |
 | 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/` |
 | 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/` |
-| 3 ConPTY, providers, watcher, native `bb-app`      | not started                                  |
+| 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/` |
 | 4 Windows Desktop                                  | not started                                  |
 | 5 Persistent host and GA hardening                 | not started                                  |
 
@@ -51,8 +55,9 @@ through a real ConPTY; it runs in the `windows-x64` CI job.
 ## Host identity and paths (Phase 1)
 
 - A native Windows daemon reports `platform: "win32"` (`HOST_DAEMON_PROTOCOL_VERSION`
-  200); WSL daemons keep reporting `wsl`. The Machines settings label it
-  "Windows".
+  201; it was 200 through Phase 2 and Phase 3 bumped it for the provider
+  installation status field described below); WSL daemons keep reporting
+  `wsl`. The Machines settings label it "Windows".
 - Project and environment paths may be drive-absolute (`C:\Users\me\repo`,
   `C:/Users/me/repo`). UNC (`\\server\share`), device (`\\.\`) and
   extended-length (`\\?\`) paths — everything that starts with two
@@ -326,16 +331,193 @@ directly`.
   agent should fail loudly naming the file and the remedy (install Git for
   Windows, or provide a `.ps1`/`.cmd` equivalent).
 
+## Terminals, providers, watcher and native `bb-app` (Phase 3)
+
+- **Terminal shell.** `resolveDefaultTerminalShell`
+  (`apps/host-daemon/src/terminals/terminal-manager.ts`) takes the first of:
+  `pwsh` resolved from `Path`, accepted only when the resolved file is a
+  console image (`.exe` or `.com`); `%ProgramFiles%\PowerShell\7\pwsh.exe`;
+  Windows PowerShell 5.1 at
+  `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`; `ComSpec`;
+  and `%SystemRoot%\System32\cmd.exe`. When none exists the open fails with
+  error code `shell_unavailable` and the message `No terminal shell was found:
+tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
+  message and ignores the code, so the new code needed no protocol bump.
+- **Start modes.** An interactive terminal starts with `-NoLogo` on PowerShell
+  and no arguments at all on `cmd.exe`. There is no `-NoProfile`: the user's
+  profile runs exactly as it does in their own terminal, which also means a
+  profile that emits OSC or CSI sequences emits them into the session. bb
+  answers only the primary device attributes query (DA1) itself, and never
+  replays a query back to the shell; the reply is written as UTF-8 bytes on
+  Windows and as a string on POSIX. `command` mode is
+  `-NoLogo -Command <command>` on PowerShell and `/s /c <command>` on
+  `cmd.exe` (`terminalSpawnArgsForStart`); there is no login-shell equivalent
+  of the POSIX `-lc`.
+- **Console code page.** bb runs no `chcp` bootstrap. pwsh 7 is UTF-8, so
+  non-ASCII input and output round-trip there. Windows PowerShell 5.1 and
+  `cmd.exe` keep whatever console code page the machine has, and non-ASCII
+  text can garble in those two shells.
+- **Terminal environment.** `buildTerminalEnv` merges the sanitized inherited
+  environment, the daemon's resolved shell environment and bb's own terminal
+  variables, then passes the result through `assignPathEnv`, so a Windows
+  terminal child receives exactly one search-path key, `Path`.
+- **Closing a terminal.** node-pty 1.2.0-beta.15 rejects every signal on
+  Windows: `pty.kill(signal)` is deferred, so before the pty is ready it does
+  not throw at the call site but later, as an uncaught
+  `Signals not supported on windows.` The win32 arm therefore never passes a
+  signal — `terminalCloseSupportsForceKill` is false on win32 and close is a
+  single `pty.kill()`. The close grace timer no longer force-kills; it only
+  finishes the session and logs "Terminal did not exit after close; finishing
+  session (single close on this platform)". A user-initiated close reports
+  exit code `-1073741510` (`0xC000013A`), and the app may display it; hiding
+  it in the terminal panel is Phase 4 UX.
+- **Terminal sweep roots.** Once node-pty reports a pid, the PTY is registered
+  with `registerSweepRootProcess` so a later worktree sweep recognises it as
+  `spawn-registry` evidence. `pty.pid` is 0 for roughly 100–200 ms after spawn
+  (90–178 ms measured), so registration retries every 250 ms up to 12 times
+  and warns when the pid never arrives. A detached grandchild survives
+  `pty.kill()` and is reaped only by the worktree sweep, and only when it
+  matches the sweep's evidence rules from "Process sweep" above — never
+  blind.
+- **Failed terminal open.** On Windows a failure after the pty spawned
+  unregisters the sweep root, disposes the listeners and kills the orphan pty.
+  The POSIX arm still leaks that pty; it is a pre-existing upstream finding,
+  not changed by this phase. `node-pty-fd-leak.test.ts` stays POSIX-only
+  because it counts `/dev/ptmx` handles with `lsof`, and ConPTY exposes no
+  equivalent signal yet.
+- **Provider launch.** `resolveSpawnPlan` and `resolveSpawnPlanOrThrow`
+  (`packages/process-utils/src/resolve-executable.ts`) turn the bare command a
+  bridge wants into one `CreateProcess` can start: on win32, the first `Path`
+  entry whose `PATHEXT` candidate exists, with a Node `.cmd`/`.bat` shim
+  rewritten to `node.exe <script>` and the caller's arguments appended.
+  `readNodeCmdShim` recognises npm's own `npm.cmd`/`npx.cmd` launcher shape
+  (`SET "NPM_CLI_JS=%~dp0…"`) as well as the `node_modules\.bin` wrapper
+  shapes. A `.cmd` that is not a Node shim keeps the Phase 2 refusal,
+  `Windows launcher <path> is not a Node shim bb can start directly`
+  (`not_node_shim`); a resolved file that is neither a PE image nor a shim —
+  a `.ps1` reached through `PATHEXT`, for example — is refused as
+  `Windows launcher <path> cannot be started directly` (`not_executable`);
+  and an unresolvable name is `Command <name> was not found on Path`
+  (`not_found`). On every other platform the plan is the identity, computed
+  with no filesystem access at all.
+- **Provider executables.** Codex spawns `codex.exe`; Claude Code resolves
+  `claude` on `Path` first and then the well-known
+  `%USERPROFILE%\.local\bin\claude.exe` and
+  `%USERPROFILE%\.claude\local\claude.exe`; Pi spawns `pi.exe`; ACP agents
+  spawn their own resolved executable. Every win32 provider spawn sets
+  `windowsHide: true`. Pi's five-pipe stdio
+  (`["pipe", "pipe", "pipe", "pipe", "pipe"]`, file descriptors 3 and 4 as the
+  side channel) works on Windows — verified with a Node child, since Pi itself
+  is not installed on the reference desktop. The Claude Agent SDK spawns the
+  resolved `claude.exe` itself; bb installs its own `spawnClaudeCodeProcess`
+  only when provider-bridge recording is on.
+- **Provider environment.** `providerProcessEnvFromShellEnv`
+  (`apps/host-daemon/src/runtime-manager.ts`) now goes through
+  `assignPathEnv`, closing the last pre-`assignPathEnv` PATH site: a provider
+  child on Windows receives a single `Path` key and any other case variant
+  from the shell environment is dropped. The daemon's own internal shell
+  environment still carries `PATH`.
+- **Provider installation.** `streamProviderInstallation`
+  (`apps/host-daemon/src/provider-installation.ts`) runs an install command
+  through ConPTY so the CLI's own progress output reaches the app. On win32
+  the command is resolved with `resolveSpawnPlanOrThrow` before the pty spawn,
+  because ConPTY cannot start a `.cmd` at all; a resolution failure is written
+  to the stream as an `error` event carrying the message above instead of an
+  opaque spawn failure. `npm install -g <package>@latest` therefore runs as
+  `node.exe <npm-cli.js> install -g <package>@latest`. Cancelling calls
+  `pty.kill()` and then `terminateProcessTree` on the reported pid with
+  `graceMs: 0`, so descendants are re-verified by `CreationDate` and killed
+  individually; cancelling inside the ≈100–200 ms window where the pty still
+  reports pid 0 kills only the leader, and the tree sweep runs after the
+  stream closes rather than being awaited.
+- **Install availability.** `ProviderInstallationStatus.installUnavailableReason`
+  is the one sentence the app, the CLI and the SDK show in place of an install
+  button. `experimental_installerUnavailableReason` writes it for a vendor
+  shell installer bb cannot run on Windows — "bb cannot run the Claude Code
+  shell installer on Windows. Install Claude Code from
+  https://claude.com/claude-code, then reload." — which is what the Claude
+  Code bridge and the Cursor ACP dialect use, since
+  `downloadedInstallerCommand` returns `null` on win32. Pi writes its own
+  reason, "bb needs bun or npm on Path to install Pi on Windows. Install
+  Node.js or Bun, then reload."; Codex keeps `null`.
+  `bb machine provider-cli status` prints the reason to stderr. Adding this
+  required key to the bridge status is why `HOST_DAEMON_PROTOCOL_VERSION` is 201.
+- **Watcher.** `@parcel/watcher@2.5.6` resolves its `win32-x64` prebuild and
+  delivers event paths with backslashes, so `normalizeWatchEventPath`
+  (`packages/host-watcher/src/watch-event-path.ts`) resolves a relative event
+  against its root with `path.win32`. Containment
+  (`isWatchPathWithinRoot`), the root-relative key
+  (`toWatchRootRelativeKey`) and `dedupeWatchPathChanges` all fold case on
+  win32, which also collapses the duplicate events an NTFS case-only rename
+  produces. An event path that arrives extended-length (`\\?\`, `\\.\`) is
+  passed through unchanged and its prefix is stripped only for containment
+  comparisons. Glob ignore handling is the POSIX behaviour unchanged. The
+  watch-count ceiling test reads `/proc/self/fdinfo` for `inotify wd:` entries
+  and is Linux-only by design.
+- **Desktop log viewer.** On Windows `createLogTailer`
+  (`apps/desktop/src/log-viewer.ts`) follows each component log by byte
+  offset instead of spawning `tail`: the initial read takes the last 400
+  complete lines and records the offset of the last newline, so a half-written
+  final line is re-read on the next append rather than shown split. Appends
+  are read on the same directory watch and 2-second rotation poll the POSIX
+  path already used, and a file that shrinks — or whose mtime moves while its
+  size is unchanged — is treated as rotated and re-read from zero. The initial
+  refresh is gated on Windows only. POSIX keeps `tail -n 400 -F`.
+- **`bb-app` on Windows.** The tarball smoke
+  (`pnpm exec turbo run smoke:tarball --filter=bb-app`) runs on Windows by
+  launching npm and npx through Node's own bundled CLIs —
+  `node.exe <dirname(node.exe)>\node_modules\npm\bin\npm-cli.js` and
+  `npx-cli.js` (`packages/bb-app/scripts/npm-launch.mjs`) — because npm's
+  `.cmd` shims are not spawnable directly, and it runs the installed
+  package's bin through the JS entry named in that package's `bin` map rather
+  than through npm's `.bin\bb-app` shim. It measured 110 s on the reference
+  desktop. `npx bb-app` from a clean PowerShell session is the Phase 3 gate
+  evidence.
+- **ConPTY smoke.** `apps/desktop/scripts/smoke-windows-conpty.mjs` is the
+  Turbo task `@bb/desktop#smoke:windows-conpty` and has six checks:
+  `spawn-echo`, `utf8`, `resize`, `ctrl-c`, `close`, `tree`. The `close` check
+  accepts exit codes `0` and `-1073741510` and prints the code it saw; the
+  `ctrl-c` check waits for the prompt to reappear before sending its follow-up
+  command, and observes the interrupt as a new prompt rather than as a
+  message. On a non-win32 host it prints `conpty smoke: skipped (not win32)`
+  and exits 0. The gate reads `conpty smoke: 6/6`.
+- **Process capture.** `runCommandCapture` on win32 stops a child through
+  `terminateProcessTree` instead of `SIGKILL`, so a timeout settles only after
+  the CIM enumeration inside that call: about 1–2 s warm, bounded at roughly
+  11 s by the enumeration's own 10-second timeout. Output that fills the byte
+  budget exactly (`=== maxBytes`) still kills the child but reports
+  `truncated: false`, because nothing beyond the budget was ever seen.
+- **Sweep skip reporting.** The worktree and personal-workspace sweeps now
+  wire the `onSkippedProcess` callback: both write
+  `bb sweep left pid <pid> alone: process id reused` to the plugin host's
+  stderr, which the daemon captures, so a recycled-PID skip on those paths is
+  no longer silent.
+- **Skill scripts.** Unchanged from Phase 2 — bb still never spawns an agent
+  skill's own script — with one addition from provider launch: an agent that
+  starts a provider-style CLI on Windows should resolve it through `Path` and
+  `PATHEXT` itself and start a Node `.cmd` shim as `node <script>`, rather
+  than running the shim through `cmd.exe`, which re-parses arguments.
+- **CI.** The `windows-x64` job (`.github/workflows/ci.yml`) installs, loads
+  the native add-ons, runs the ConPTY smoke (teed to
+  `qa-artifacts/conpty-smoke.txt` and uploaded with the Turbo run summaries),
+  typechecks and builds `@bb/domain`, `@bb/process-utils`, `@bb/host-daemon`,
+  `@bb/desktop`, `@bb/scripts` and `bb-app`, records the per-package test
+  baseline, and runs the `bb-app` tarball smoke. Only the test step carries
+  `continue-on-error: true`; the ConPTY and tarball smokes fail the job. The
+  job itself is still not a required check.
+
 ## Known limitations after Phase 0
 
 - Project paths became drive-letter aware in Phase 1 (see "Host identity and
   paths" above); hooks arrived in Phase 2 — see "Processes, hooks, git and
-  open targets (Phase 2)" above — and terminals and provider launch on native
-  Windows arrive in Phase 3.
-- `packages/bb-app` and `apps/desktop` now list `win32` in their `os` fields
-  (spec §7), so `npx bb-app` installs on native Windows but its runtime does
-  not work until Phases 1 to 3 land; the supported product path stays WSL2
-  per [platform-support.md](platform-support.md).
+  open targets (Phase 2)" above — and terminals, provider launch and
+  installation, the watcher and the native `bb-app` runtime arrived in Phase 3
+  (see "Terminals, providers, watcher and native `bb-app` (Phase 3)" above).
+- `packages/bb-app` and `apps/desktop` list `win32` in their `os` fields
+  (spec §7), and since Phase 3 the runtime that `npx bb-app` installs on
+  native Windows works: it is the beta product path described in
+  [platform-support.md](platform-support.md), beside WSL2, which stays the
+  stable one.
 - `scripts/ensure-native-modules.mjs` detaches a pnpm-hardlinked
   `better-sqlite3` binary before repairing it; on the reference desktop that
   binary was not hardlinked (`nlink` = 1 in
@@ -395,7 +577,8 @@ directly`.
 - App views that derive a file name with `split("/")`
   (`environment-queries.ts`, `project-queries.ts`, `api.ts`,
   `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`, `rightPanelFileVisuals.ts`)
-  show the full Windows path until Phase 3.
+  still show the full Windows path. Phase 3 changed no app view; this moves to
+  the Phase 4 Windows Desktop and UI work.
 - The host directory browser cannot switch drives.
 - The native folder picker was macOS-only after Phase 1; Phase 2 adds the
   Windows picker — see "Open targets and picker" above.
@@ -434,10 +617,11 @@ directly`.
   inherited environment; this is a pre-existing upstream finding, not fixed
   in this phase.
 - `provider-maintenance-kit`'s `experimental_resolveExecutablePath` and its
-  PATHEXT-aware installer commands arrive in Phase 3 alongside provider
-  launch.
+  PATHEXT-aware installer commands landed in Phase 3 alongside provider
+  launch — see "Provider launch" and "Install availability" above.
 - Terminal sweep-root registration (`registerSweepRootProcess` wired to
-  node-pty's reported pid) arrives in Phase 3 with ConPTY.
+  node-pty's reported pid) landed in Phase 3 with ConPTY — see "Terminal
+  sweep roots" above.
 - Open targets on Windows use static per-adapter icons; there is no icon
   extraction from the target executable the way some platforms support.
 - JetBrains Toolbox version selection under
@@ -448,16 +632,59 @@ directly`.
   (as macOS `open -a` does), not the editor's exit status. An editor started
   through a `.cmd` shim keeps a hidden, detached `cmd.exe` alive for the
   editor's lifetime.
-- A `pid-reused` skip is reported only where a caller wires the
-  `onSkippedProcess` callback, which today is the environment hook runner
-  alone. Wiring the worktree and personal-workspace sweep's skip callback to
-  the daemon logger is a Phase 3 follow-up; until then those skips are silent
-  and the later `EBUSY` is the only signal.
+- A `pid-reused` skip was reported only where a caller wires the
+  `onSkippedProcess` callback, which through Phase 2 was the environment hook
+  runner alone. Phase 3 wired the worktree and personal-workspace sweeps to
+  write `bb sweep left pid <pid> alone: process id reused` to the plugin
+  host's stderr; the provider runtime stop still does not wire it, so its
+  skips stay silent and the later `EBUSY` is the only signal there.
 - `providerProcessEnvFromShellEnv` in `apps/host-daemon/src/runtime-manager.ts`
-  still overlays a bare `PATH` for provider processes instead of going through
-  `assignPathEnv`, so on Windows a provider child can still receive both `Path`
-  and `PATH`. It is the remaining pre-`assignPathEnv` PATH site; Phase 3
-  converts it alongside provider launch.
+  overlaid a bare `PATH` for provider processes instead of going through
+  `assignPathEnv`, so on Windows a provider child could receive both `Path`
+  and `PATH`. It was the remaining pre-`assignPathEnv` PATH site; Phase 3
+  converted it alongside provider launch.
+
+## Known limitations after Phase 3
+
+- bb runs no `chcp` bootstrap, so a terminal that falls through to Windows
+  PowerShell 5.1 or `cmd.exe` keeps the machine's console code page and
+  non-ASCII text can garble there. Install PowerShell 7 for a UTF-8 terminal.
+- A user-initiated terminal close reports exit code `-1073741510`
+  (`0xC000013A`) because the single `pty.kill()` is the only stop node-pty
+  offers on Windows. The app may show that number; presenting a closed
+  terminal without it is Phase 4 UX.
+- A terminal open that fails after the pty spawned leaks the pty on POSIX. The
+  win32 arm kills the orphan; the POSIX leak is a pre-existing upstream
+  finding and is deliberately not changed here.
+- Pi is not installed on the reference desktop, so Pi's native Windows launch
+  is unverified live. What is verified is the shape: `pi` resolves to
+  `pi.exe`, and the five-pipe stdio the bridge needs works on Windows with a
+  Node child standing in for the CLI.
+- bb does not install `spawnClaudeCodeProcess` on win32 outside provider-bridge
+  recording; the Claude Agent SDK owns that spawn. If
+  `resolveClaudeCodeExecutable` returns a `.cmd` — the npm-global Claude Code
+  install shape — the SDK may be unable to start it, and bb has no seam in
+  front of that spawn to rewrite it to `node.exe <script>`.
+- `readNodeCmdShim` recognises npm's own `npm.cmd`/`npx.cmd` launcher shape
+  and the `node_modules\.bin` wrapper shapes only. A launcher that shells out
+  to python, bun or a native wrapper is refused rather than run through
+  `cmd.exe`; that refusal is deliberate, since `cmd.exe /c` re-parses
+  arguments.
+- Extended-length watch **roots** are not supported: `watchPathRoot` resolves
+  the root with `path.resolve`, which does not preserve a `\\?\` prefix.
+  Extended-length event paths under an ordinary root are handled.
+- The manual Windows QA checklist that spec §10 names, `qa/windows/CHECKLIST.md`,
+  does not exist yet; it is a Phase 5 deliverable.
+- The secrets limitations from Phase 2 stand unchanged:
+  `plugins/account-pool`, `plugins/secrets`, and the host daemon's own
+  `auth-state.ts` and `identity.ts` own their secret files directly and are
+  not ACL-hardened.
+- The Desktop runtime-identity design (`BB_DESKTOP_RUNTIME_ID`,
+  `BB_DESKTOP_PARENT_PID`, a parent-PID watchdog) is still Phase 4 work, as
+  "Known limitations after Phase 2" records.
+- `pnpm dev:stop` still force-kills the pid in a session's pid file after
+  checking only that the pid exists. It is developer tooling, not a product
+  seam, and stays unverified.
 
 ## Evidence
 
@@ -484,3 +711,16 @@ targets opened from Explorer, VS Code and Windows Terminal
 space (`25-bb-from-powershell.md`), process enumeration over-match and
 under-match cases (`26-process-enumeration.md`), the WSL POSIX test run
 (`40-posix-check.md`), and the `windows-x64` CI run (`41-ci-run.md`).
+
+`qa/windows/phase-3/` holds host facts (`00-host.md`), the build/typecheck log
+and per-package test results (`30-build-typecheck.txt`, `31-test-results.md`,
+`31-test-output-tail.txt`), an in-app terminal handling Ctrl+C, resize and
+UTF-8 echo (`20-terminal-ctrl-c-resize-utf8.md`), a real Codex turn and a real
+Claude Code turn writing files under a `C:\` project (`21-codex-turn-on-c.md`,
+`22-claude-code-turn-on-c.md`), watcher events on NTFS including a case-only
+rename (`23-watcher-ntfs.md`), `npx bb-app` started from a clean PowerShell
+session (`24-npx-bb-app-clean-shell.md`), three ConPTY smoke runs
+(`25-conpty-smoke.md`), provider installation status and reasons
+(`26-provider-installation.md`), the WSL POSIX test run (`40-posix-check.md`),
+and the `windows-x64` CI run (`41-ci-run.md`). The gate run that writes this
+directory is the last commit of Phase 3.

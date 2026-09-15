@@ -45,10 +45,33 @@ Run all `bb` commands inside WSL2, install Node.js, Git, and your provider CLIs
 inside that WSL2 distro, and use Linux-style paths such as `/home/me/repo` or
 `/mnt/c/Users/me/repo`.
 
-Native Windows PowerShell, CMD, drive-letter paths, and UNC paths are not
-supported product paths. Repos inside the WSL filesystem are recommended;
-`/mnt/c/...` is intentionally supported so you can keep an existing Windows
-checkout, but it is slower and less reliable for file watching.
+This is the stable Windows path. Repos inside the WSL filesystem are
+recommended; `/mnt/c/...` is intentionally supported so you can keep an existing
+Windows checkout, but it is slower and less reliable for file watching. UNC
+paths (`\\server\share`) are not a supported product path on any host.
+
+</details>
+
+<details>
+<summary>Native Windows (beta)</summary>
+
+bb also runs directly on Windows 11 x64, with no WSL2. From PowerShell:
+
+```powershell
+npx bb-app@latest
+```
+
+Prerequisites: Node.js 22.19 or newer, Git for Windows, and long paths enabled —
+`LongPathsEnabled` set to `1` under
+`HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, plus
+`git config --global core.longpaths true`. Use drive-letter project paths such
+as `C:\Users\me\repo`; install your provider CLIs on Windows, not inside WSL2.
+
+Terminals (PowerShell through ConPTY), provider launch and installation, the
+file watcher and the `bb` CLI all run natively. It is beta: there is no Windows
+desktop app yet, and
+[docs/platform-windows.md](https://github.com/get-bb/bb/blob/main/docs/platform-windows.md)
+lists what has been measured and the known limitations.
 
 </details>
 
@@ -156,15 +179,15 @@ targets (see the remote-access note below). Scripts launched by bb already recei
 
 bb uses whichever providers you have configured. Common providers:
 
-| Provider       | Setup                                                                                                                                                                                     |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codex`        | Install the [Codex CLI](https://developers.openai.com/codex/cli). Then run `codex login` or configure credentials per the Codex docs.                                                     |
-| `claude-code`  | Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and authenticate per its docs.                                                                                      |
-| `cursor`       | Install [Cursor's agent CLI](https://cursor.com/cli) (`cursor-agent`) and authenticate per Cursor's docs.                                                                                 |
-| `pi`           | Install [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) with `npm install -g @earendil-works/pi-coding-agent` (0.84.0 or newer) and authenticate per its docs; BB can run the install from Settings.          |
-| `opencode`     | Install [opencode](https://opencode.ai/) and authenticate per its docs.                                                                                                                   |
-| `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                               |
-| `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.    |
+| Provider       | Setup                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codex`        | Install the [Codex CLI](https://developers.openai.com/codex/cli). Then run `codex login` or configure credentials per the Codex docs.                                                                                           |
+| `claude-code`  | Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and authenticate per its docs.                                                                                                                            |
+| `cursor`       | Install [Cursor's agent CLI](https://cursor.com/cli) (`cursor-agent`) and authenticate per Cursor's docs.                                                                                                                       |
+| `pi`           | Install [Pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) with `npm install -g @earendil-works/pi-coding-agent` (0.84.0 or newer) and authenticate per its docs; BB can run the install from Settings. |
+| `opencode`     | Install [opencode](https://opencode.ai/) and authenticate per its docs.                                                                                                                                                         |
+| `grok`         | Install [Grok Build](https://docs.x.ai/build/overview) and authenticate with `grok login` or `XAI_API_KEY`.                                                                                                                     |
+| `hermes-agent` | Install [Hermes Agent](https://hermes-agent.nousresearch.com/docs/getting-started/installation), configure credentials with `hermes model`, then verify ACP with `hermes acp --check`.                                          |
 
 BB indexes the documented native skill roots for Codex, Claude Code, Pi,
 Cursor, OpenCode, omp, Grok Build, and Hermes Agent. It includes user roots,

@@ -274,6 +274,13 @@ Claude Code with `--chrome`. The host needs the Claude in Chrome extension and a
 claude.ai login; API-key sessions keep Chrome off. A change restarts the thread's
 Claude process before its next turn and keeps the conversation.
 
+Set `BB_CLAUDE_CODE_EXECUTABLE` in the host environment to point bb at a
+specific Claude CLI instead of the one it finds on `PATH`. On native Windows the
+extension is optional: the value is resolved through `PATHEXT`, so
+`C:\tools\claude` finds `C:\tools\claude.exe`. The search path there is read
+from the `Path` key, and bb refuses a value it cannot resolve to an executable
+rather than failing later at spawn time.
+
 Outside an open typeahead menu, Shift+Enter inserts a newline. On
 coarse-pointer touch devices, the software-keyboard Return path inserts a
 newline and the submit button sends.
