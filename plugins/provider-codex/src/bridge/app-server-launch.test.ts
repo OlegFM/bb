@@ -85,7 +85,7 @@ describe("Codex app-server spawn resolution", () => {
     ).resolves.toEqual({ command: "codex", args: ["app-server"] });
   });
 
-  it("reports why the Windows launch is unavailable instead of spawning", async () => {
+  it("gives the install guidance when Windows has no Codex CLI at all", async () => {
     const binDirectory = makeBinDirectory();
 
     await expect(
@@ -93,7 +93,19 @@ describe("Codex app-server spawn resolution", () => {
         env: { Path: binDirectory, PATHEXT: ".EXE;.CMD" },
         platform: "win32",
       }),
-    ).rejects.toThrow("Command codex was not found on Path");
+    ).rejects.toThrow("bb could not find the Codex CLI on this machine");
+  });
+
+  it("keeps the launcher-specific reason when Windows finds an unusable codex", async () => {
+    const binDirectory = makeBinDirectory();
+    const scriptPath = writeExecutable(binDirectory, "codex.ps1");
+
+    await expect(
+      resolveCodexAppServerLaunch({
+        env: { Path: binDirectory, PATHEXT: ".EXE;.CMD;.PS1" },
+        platform: "win32",
+      }),
+    ).rejects.toThrow(`Windows launcher ${scriptPath} cannot be started`);
   });
 
   it.runIf(onWindows)(

@@ -7,6 +7,7 @@ import {
   type DynamicTool,
   type PromptInput,
   type ThreadDelta,
+  experimental_resolveExecutableSync as resolveExecutableSync,
   experimental_resolveSpawnPlanOrThrow as resolveSpawnPlanOrThrow,
   sanitizeInheritedChildProcessEnv,
   BRIDGE_INBOUND_REQUEST_METHODS,
@@ -380,12 +381,21 @@ export async function resolveCodexAppServerLaunch(args: {
   if (platform !== "win32") {
     return launch;
   }
-  return resolveSpawnPlanOrThrow({
-    command: launch.command,
-    args: launch.args,
-    env,
-    platform,
-  });
+  try {
+    return await resolveSpawnPlanOrThrow({
+      command: launch.command,
+      args: launch.args,
+      env,
+      platform,
+    });
+  } catch (error) {
+    if (
+      resolveExecutableSync({ command: launch.command, env, platform }) === null
+    ) {
+      throw new Error(MISSING_CODEX_CLI_GUIDANCE);
+    }
+    throw error;
+  }
 }
 
 function appServerLaunchEnv(
