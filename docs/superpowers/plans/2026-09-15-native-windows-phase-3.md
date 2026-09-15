@@ -264,7 +264,7 @@ Use `process.execPath` with `-e` scripts (portable on every platform, no PATH de
 - timeout: `-e "setTimeout(()=>{}, 60000)"` with `timeoutMs: 300` → `timedOut: true`, `exitCode` null or non-zero, the promise settles within 5 s.
 - cap: `-e "process.stdout.write('x'.repeat(200000))"` with `maxBytes: 1024` → `truncated: true`, `stdout.length <= 1024`.
 - unavailable command on win32: `it.runIf(process.platform === "win32")` — `command: "definitely-missing-tool-xyz"` rejects with `SpawnPlanUnavailableError` whose `reason` is `not_found`.
-- POSIX unavailable: `it.skipIf(win32)` — `command: "definitely-missing-tool-xyz"` resolves with `exitCode: null` and an `error` field? No — keep the contract simple: on POSIX a spawn `error` event resolves the promise with `{ stdout: "", stderr: "", exitCode: null, signal: null, timedOut: false, truncated: false, spawnError: "<message>" }`; add `spawnError: string | null` to `CommandCaptureResult` and assert `spawnError` contains `ENOENT`.
+- POSIX unavailable: `it.skipIf(win32)` — `command: "definitely-missing-tool-xyz"` resolves (does not reject) with `{ stdout: "", stderr: "", exitCode: null, signal: null, timedOut: false, truncated: false, spawnError: "<message>" }`; assert `spawnError` contains `ENOENT`. `CommandCaptureResult` therefore carries `spawnError: string | null` (`null` when the child started).
 
 - [ ] **Step 14: Run to verify failure**, then **Step 15: Implement `run-command-capture.ts`**
 
