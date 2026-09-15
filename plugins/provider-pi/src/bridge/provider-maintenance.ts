@@ -199,7 +199,7 @@ async function piGlobalInstallCommand(
   ) {
     return bunGlobalInstallCommand(PI_NPM_PACKAGE);
   }
-  const npm = npmCommand(context.platform);
+  const npm = npmCommand();
   return (await commandOutput(npm, ["--version"], context)) === null
     ? null
     : npmGlobalInstallCommand(PI_NPM_PACKAGE, context.platform);

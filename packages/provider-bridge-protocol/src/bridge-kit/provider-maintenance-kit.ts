@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { access } from "node:fs/promises";
-import path, { posix as posixPath, win32 as win32Path } from "node:path";
+import { posix as posixPath, win32 as win32Path } from "node:path";
 import { promisify } from "node:util";
 import { resolveExecutable, resolveSpawnPlan } from "@bb/process-utils";
 import { z } from "zod";
@@ -35,6 +35,12 @@ async function windowsSpawnPlan(
   });
 }
 
+function windowsExecEnv(
+  env: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv | undefined {
+  return env === undefined ? undefined : { ...process.env, ...env };
+}
+
 export async function resolveExecutablePath(
   command: string,
   options: KitPlatformOptions = {},
@@ -44,7 +50,7 @@ export async function resolveExecutablePath(
   if (platform === "win32") {
     return resolveExecutable({ command, env, platform });
   }
-  if (path.isAbsolute(command)) {
+  if (posixPath.isAbsolute(command)) {
     try {
       await access(command, fsConstants.X_OK);
       return command;
@@ -55,6 +61,7 @@ export async function resolveExecutablePath(
   try {
     const { stdout } = await execFileAsync("which", [command], {
       timeout: CLI_PROBE_TIMEOUT_MS,
+      env: options.env,
     });
     return (
       stdout
@@ -92,7 +99,7 @@ export async function commandOutput(
     const { stdout, stderr } = await execFileAsync(plan.command, plan.args, {
       timeout: INSTALLATION_CHECK_TIMEOUT_MS,
       windowsHide: true,
-      env: options.env,
+      env: windowsExecEnv(options.env),
     });
     return `${stdout}\n${stderr}`.trim();
   } catch {
@@ -134,7 +141,7 @@ export async function readCliVersion(
     const { stdout, stderr } = await execFileAsync(plan.command, plan.args, {
       timeout: CLI_PROBE_TIMEOUT_MS,
       windowsHide: true,
-      env: options.env,
+      env: windowsExecEnv(options.env),
     });
     return (
       `${stdout}\n${stderr}`.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/u)?.[0] ??
@@ -169,9 +176,7 @@ export function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-export function npmCommand(
-  platform: NodeJS.Platform = process.platform,
-): string {
+export function npmCommand(): string {
   return "npm";
 }
 
@@ -192,7 +197,7 @@ export function npmGlobalInstallCommand(
   npmPackage: string,
   platform: NodeJS.Platform = process.platform,
 ): ProviderInstallationCommand {
-  const command = npmCommand(platform);
+  const command = npmCommand();
   const args = ["install", "-g", `${npmPackage}@latest`];
   return { command, args, displayCommand: formatCommand(command, args) };
 }
@@ -201,13 +206,8 @@ export async function npmLatestVersion(
   npmPackage: string,
   options: KitPlatformOptions = {},
 ): Promise<string | null> {
-  const platform = options.platform ?? process.platform;
   return versionFrom(
-    await commandOutput(
-      npmCommand(platform),
-      ["view", npmPackage, "version"],
-      options,
-    ),
+    await commandOutput(npmCommand(), ["view", npmPackage, "version"], options),
   );
 }
 
@@ -221,7 +221,7 @@ export async function probeNpmGlobalPackage(
   options: KitPlatformOptions = {},
 ): Promise<NpmGlobalPackageProbe> {
   const platform = options.platform ?? process.platform;
-  const npm = npmCommand(platform);
+  const npm = npmCommand();
   const [prefixOutput, listOutput] = await Promise.all([
     commandOutput(npm, ["prefix", "-g"], options),
     commandOutput(
@@ -237,7 +237,7 @@ export async function probeNpmGlobalPackage(
         ? null
         : platform === "win32"
           ? npmPrefix
-          : path.join(npmPrefix, "bin"),
+          : posixPath.join(npmPrefix, "bin"),
     npmGlobalPackageVersion: npmGlobalPackageVersion(listOutput, npmPackage),
   };
 }

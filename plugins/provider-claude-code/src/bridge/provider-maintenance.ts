@@ -141,7 +141,7 @@ export async function getClaudeProviderInstallationStatus(
     resolveExecutablePath(command, probeOptions),
     commandOutput(command, ["--version"], probeOptions),
     commandOutput(
-      npmCommand(platform),
+      npmCommand(),
       ["view", CLAUDE_NPM_PACKAGE, "dist-tags", "--json"],
       probeOptions,
     ),

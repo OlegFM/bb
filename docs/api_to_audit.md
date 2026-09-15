@@ -971,11 +971,12 @@ whether `retryable` should be per kind (only `sessionArchived` and
 **What it does.** The host-local probes and install-action plumbing behind a
 bridge's `provider/health`, `provider/usage` and `provider/installation/*`
 answers when its provider is a user-installed CLI. The probes:
-`experimental_resolveExecutablePath` (the command's absolute path — the path
-itself when given absolute and executable, else the first `which` hit on
-posix or a `Path`/`PATHEXT` walk on win32, null when absent; 5 s),
-`experimental_readCliVersion` (`<command> --version`, the first `x.y.z[-pre]`
-on stdout or stderr; 5 s),
+`experimental_resolveExecutablePath` (the command's absolute path — on POSIX
+the path itself when given absolute and executable, else the first `which`
+hit; on win32 a `Path`/`PATHEXT` walk that also completes and existence-checks
+an absolute path rather than checking it executable directly; null when
+absent; 5 s), `experimental_readCliVersion` (`<command> --version`, the first
+`x.y.z[-pre]` on stdout or stderr; 5 s),
 `experimental_commandOutput` (any command's trimmed stdout+stderr or null on
 failure; 15 s), `experimental_versionFrom` (the first version token in a
 banner), `experimental_npmLatestVersion` (`npm view <package> version`) and
@@ -990,7 +991,8 @@ status saw, or by any change when the registry was unreachable). The
 actions: `experimental_npmGlobalInstallCommand` (`npm install -g
 <package>@latest` with its display string), `experimental_downloadedInstallerCommand`
 (a vendor's `curl | bash` script run from a temp file),
-`experimental_npmCommand` (`npm`, every platform) and
+`experimental_npmCommand()` (`npm`, unconditionally — the function takes no
+arguments) and
 `experimental_formatCommand` (a display command line with shell-unsafe
 arguments single-quoted). `experimental_installerUnavailableReason` writes
 the one sentence a bridge puts in
@@ -1007,15 +1009,17 @@ dist-tag and `doctor` parsing) beside them.
 **Platform injection.** `experimental_resolveExecutablePath`,
 `experimental_commandOutput`, `experimental_readCliVersion`,
 `experimental_npmLatestVersion`, `experimental_probeNpmGlobalPackage`,
-`experimental_npmGlobalInstallSource`, `experimental_npmCommand`,
-`experimental_npmGlobalInstallCommand` and
-`experimental_downloadedInstallerCommand` all accept an optional `platform`
-(default `process.platform`) and, on the functions that spawn a process, an
-optional `env`. On win32 a command is resolved through `Path` and `PATHEXT`
-rather than `where.exe`, and a Node `.cmd`/`.bat` shim (npm's launcher
-included) is started as `node.exe <script>` instead of being executed
-directly. `experimental_npmCommand` returns `npm` on every platform — the
-host daemon resolves the real win32 launcher — and
+`experimental_npmGlobalInstallSource`, `experimental_npmGlobalInstallCommand`
+and `experimental_downloadedInstallerCommand` all accept an optional
+`platform` (default `process.platform`) and, on the functions that spawn a
+process, an optional `env`; `experimental_npmCommand()` takes no arguments
+and always returns `npm` — the host daemon resolves the real win32 launcher.
+On win32 a command is resolved through `Path` and `PATHEXT` rather than
+`where.exe`, and a Node `.cmd`/`.bat` shim (npm's launcher included) is
+started as `node.exe <script>` instead of being executed directly. A supplied
+`env` is passed through verbatim on POSIX; on win32 it is merged over
+`process.env` so a caller-supplied partial environment still carries
+`SystemRoot`/`TEMP` and the child stays runnable.
 `experimental_downloadedInstallerCommand` returns `null` on win32 instead of
 a script that cannot run there.
 

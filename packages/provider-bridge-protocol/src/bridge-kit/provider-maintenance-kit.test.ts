@@ -108,9 +108,7 @@ describe("provider maintenance kit: platform injection", () => {
   });
 
   it("resolves npm on every platform (the daemon resolves the real launcher)", () => {
-    expect(npmCommand("linux")).toBe("npm");
-    expect(npmCommand("darwin")).toBe("npm");
-    expect(npmCommand("win32")).toBe("npm");
+    expect(npmCommand()).toBe("npm");
   });
 
   it("builds the same npm global install command on posix and win32", () => {

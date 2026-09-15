@@ -1996,6 +1996,7 @@ describe("dispatchCommand", () => {
           args: ["update"],
           displayCommand: "codex update",
         },
+        platform: process.platform,
       }),
     );
     expect(staleRuntime.shutdown).toHaveBeenCalledOnce();
