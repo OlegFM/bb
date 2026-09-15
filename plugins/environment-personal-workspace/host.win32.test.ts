@@ -71,19 +71,20 @@ describe.runIf(process.platform === "win32")(
         pathKey: "thr_busy",
       });
 
-      const originalWrite = process.stderr.write.bind(process.stderr);
       const calls: unknown[] = [];
-      process.stderr.write = ((chunk: unknown) => {
-        calls.push(chunk);
-        return true;
-      }) as typeof process.stderr.write;
+      const stderrWriteSpy = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation((chunk) => {
+          calls.push(chunk);
+          return true;
+        });
       try {
         await harness.experimental_call("removeWorkspace", {
           pathKey: "thr_busy",
           path: created.path,
         });
       } finally {
-        process.stderr.write = originalWrite;
+        stderrWriteSpy.mockRestore();
       }
 
       expect(calls).toContain(

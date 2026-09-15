@@ -81,8 +81,9 @@ provider that ships only a shell installer on native Windows, or a Pi install
 with neither bun nor npm on `Path` — the status carries an
 `installUnavailableReason` instead of an action. `bb updates status` prints it
 under the table as `<machine> · <provider>: <reason>`; `bb machine provider-cli
-status` prints `<provider>: <reason>` on stderr and keeps stdout a single JSON
-document; and both `--json` forms carry the field.
+status` prints `<provider>: <reason>` on stderr in its default (non-`--json`)
+output and keeps stdout a single JSON document; and both `--json` forms carry
+the field.
 
 Machine selectors accept either an exact machine ID or an unambiguous machine
 name. `--host` is an alias for `--machine`.

@@ -397,7 +397,7 @@ function createInstalledBinInvocation(binDir, bin, args) {
   // managed process's readiness budget before that process even starts.
   if (process.platform === "win32") {
     return {
-      args: [resolveInstalledBinEntry(binDir, bin), ...args],
+      args: [resolveInstalledBinEntry(binDir, "bb-app", bin), ...args],
       command: process.execPath,
     };
   }

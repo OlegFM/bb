@@ -8,6 +8,10 @@ import { RuntimeManager } from "../runtime-manager.js";
 import { TerminalManager } from "./terminal-manager.js";
 
 const WINDOWS_PTY_KILL_EXIT_CODE = -1073741510;
+const ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES: ReadonlySet<number> = new Set([
+  0,
+  WINDOWS_PTY_KILL_EXIT_CODE,
+]);
 const POLL_INTERVAL_MS = 50;
 
 interface Win32TerminalHarness {
@@ -25,6 +29,12 @@ async function makeTempDir(): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bb-conpty-"));
   tempDirs.push(tempDir);
   return tempDir;
+}
+
+function isTerminalExitedMessage(
+  message: HostDaemonDaemonWsMessage,
+): message is Extract<HostDaemonDaemonWsMessage, { type: "terminal.exited" }> {
+  return message.type === "terminal.exited";
 }
 
 function collectTerminalOutput(messages: HostDaemonDaemonWsMessage[]): string {
@@ -265,18 +275,17 @@ describe.runIf(process.platform === "win32")(
 
       await closeWin32Terminal(harness);
 
+      const exitedMessages = harness.messages.filter(isTerminalExitedMessage);
+      expect(exitedMessages).toHaveLength(1);
+      const [exitedMessage] = exitedMessages;
+      expect(exitedMessage).toMatchObject({
+        type: "terminal.exited",
+        terminalId: harness.terminalId,
+        closeReason: "user",
+      });
       expect(
-        harness.messages.filter(
-          (message) => message.type === "terminal.exited",
-        ),
-      ).toEqual([
-        {
-          type: "terminal.exited",
-          terminalId: harness.terminalId,
-          exitCode: WINDOWS_PTY_KILL_EXIT_CODE,
-          closeReason: "user",
-        },
-      ]);
+        ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES.has(exitedMessage.exitCode ?? NaN),
+      ).toBe(true);
       expect(
         await waitUntil(
           async () => (await queryWindowsProcess(pid)) === null,

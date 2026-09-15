@@ -22,6 +22,12 @@ export interface KitPlatformOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+function windowsExecEnv(
+  env: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv | undefined {
+  return env === undefined ? undefined : { ...process.env, ...env };
+}
+
 async function windowsSpawnPlan(
   command: string,
   args: readonly string[],
@@ -30,15 +36,9 @@ async function windowsSpawnPlan(
   return resolveSpawnPlan({
     command,
     args,
-    env: options.env ?? process.env,
+    env: windowsExecEnv(options.env) ?? process.env,
     platform: "win32",
   });
-}
-
-function windowsExecEnv(
-  env: NodeJS.ProcessEnv | undefined,
-): NodeJS.ProcessEnv | undefined {
-  return env === undefined ? undefined : { ...process.env, ...env };
 }
 
 export async function resolveExecutablePath(

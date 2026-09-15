@@ -130,25 +130,29 @@ function classifyCommonDirPath(
 
 export function collectWorkspaceStatusChanges(args: {
   events: ParcelWatcherEventBatch;
+  platform?: NodeJS.Platform;
   spec: WatchSubscriptionSpec;
 }): WorkspaceStatusChangeEvent | null {
+  const platform = args.platform ?? process.platform;
   const changedPaths = new Set<string>();
   const changeKinds = new Set<
     WorkspaceStatusChangeEvent["changeKinds"][number]
   >();
 
-  for (const event of dedupeWatchPathChanges(args.events)) {
+  for (const event of dedupeWatchPathChanges(args.events, platform)) {
     const candidatePath = normalizeWatchEventPath(
       args.spec.rootPath,
       event.path,
+      platform,
     );
-    if (!isWatchPathWithinRoot(args.spec.rootPath, candidatePath)) {
+    if (!isWatchPathWithinRoot(args.spec.rootPath, candidatePath, platform)) {
       continue;
     }
 
     const relativePath = toWatchRootRelativeKey(
       args.spec.rootPath,
       candidatePath,
+      platform,
     );
     const eventChangeKinds: WorkspaceStatusChangeEvent["changeKinds"][number][] =
       [];

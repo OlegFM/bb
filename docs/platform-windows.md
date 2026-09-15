@@ -446,8 +446,9 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `downloadedInstallerCommand` returns `null` on win32. Pi writes its own
   reason, "bb needs bun or npm on Path to install Pi on Windows. Install
   Node.js or Bun, then reload."; Codex keeps `null`.
-  `bb machine provider-cli status` prints the reason to stderr. Adding this
-  required key to the bridge status is why `HOST_DAEMON_PROTOCOL_VERSION` is 201.
+  `bb machine provider-cli status` prints the reason to stderr in its default
+  (non-`--json`) output. Adding this required key to the bridge status is why
+  `HOST_DAEMON_PROTOCOL_VERSION` is 201.
 - **Watcher.** `@parcel/watcher@2.5.6` resolves its `win32-x64` prebuild and
   delivers event paths with backslashes, so `normalizeWatchEventPath`
   (`packages/host-watcher/src/watch-event-path.ts`) resolves a relative event
@@ -488,12 +489,6 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   command, and observes the interrupt as a new prompt rather than as a
   message. On a non-win32 host it prints `conpty smoke: skipped (not win32)`
   and exits 0. The gate reads `conpty smoke: 6/6`.
-- **Process capture.** `runCommandCapture` on win32 stops a child through
-  `terminateProcessTree` instead of `SIGKILL`, so a timeout settles only after
-  the CIM enumeration inside that call: about 1–2 s warm, bounded at roughly
-  11 s by the enumeration's own 10-second timeout. Output that fills the byte
-  budget exactly (`=== maxBytes`) still kills the child but reports
-  `truncated: false`, because nothing beyond the budget was ever seen.
 - **Sweep skip reporting.** The worktree and personal-workspace sweeps now
   wire the `onSkippedProcess` callback: both write
   `bb sweep left pid <pid> alone: process id reused` to the plugin host's

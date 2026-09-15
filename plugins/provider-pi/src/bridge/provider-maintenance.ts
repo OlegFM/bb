@@ -183,7 +183,7 @@ async function isBunManagedPi(
   );
 }
 
-async function piGlobalInstallCommand(
+export async function piGlobalInstallCommand(
   executablePath: string | null,
   context: PiMaintenanceContext,
 ): Promise<ProviderInstallationCommand | null> {
@@ -459,5 +459,3 @@ export function getPiInstallGate(): Promise<PiInstallGate> {
 export function resetPiInstallGateForTests(): void {
   installGateMemo.clear();
 }
-
-export const __testing = { piGlobalInstallCommand };

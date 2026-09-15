@@ -52,8 +52,8 @@ export function resolveLaunchForLabel(label, command, args, options) {
   }
 }
 
-export function resolveInstalledBinEntry(binDir, bin) {
-  const packageDir = join(binDir, "..", "bb-app");
+export function resolveInstalledBinEntry(binDir, packageName, bin) {
+  const packageDir = join(binDir, "..", packageName);
   const packageJson = JSON.parse(
     readFileSync(join(packageDir, "package.json"), "utf8"),
   );

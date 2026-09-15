@@ -257,7 +257,6 @@
     },
     "@bb/desktop#smoke:windows-conpty": {
       "cache": false,
-      "inputs": ["scripts/smoke-windows-conpty.mjs"],
       "outputs": [],
       "passThroughEnv": ["*"]
     },

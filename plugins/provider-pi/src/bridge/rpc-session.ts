@@ -264,7 +264,9 @@ export class PiRpcSession {
           }
         : undefined,
     }).catch((error: unknown) => {
-      for (const file of scratchFiles) rmSync(file, { force: true });
+      if (process.platform === "win32") {
+        for (const file of scratchFiles) rmSync(file, { force: true });
+      }
       throw error;
     });
     this.child = child;

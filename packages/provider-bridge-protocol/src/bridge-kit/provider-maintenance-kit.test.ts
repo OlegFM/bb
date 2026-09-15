@@ -1,7 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { resolveSpawnPlan } from "@bb/process-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   commandOutput,
   compareVersions,
@@ -15,6 +16,11 @@ import {
   resolveExecutablePath,
   versionFrom,
 } from "./provider-maintenance-kit.js";
+
+vi.mock("@bb/process-utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@bb/process-utils")>();
+  return { ...actual, resolveSpawnPlan: vi.fn(actual.resolveSpawnPlan) };
+});
 
 describe("provider maintenance kit", () => {
   it("compares the numeric core of CLI versions, prerelease below release", () => {
@@ -194,6 +200,28 @@ describe("provider maintenance kit: platform injection", () => {
         env: { Path: root },
       }),
     ).resolves.toBeNull();
+  });
+
+  it("resolves a win32 command with the Path from options.env merged over process.env", async () => {
+    const root = await makeRoot();
+    await writeFile(
+      path.join(root, "probe.cmd"),
+      "@echo off\r\necho probe-ok\r\n",
+    );
+    vi.mocked(resolveSpawnPlan).mockClear();
+
+    await commandOutput("probe", [], {
+      platform: "win32",
+      env: { Path: root },
+    });
+
+    expect(resolveSpawnPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "probe",
+        env: { ...process.env, Path: root },
+        platform: "win32",
+      }),
+    );
   });
 
   it.runIf(process.platform === "win32")(

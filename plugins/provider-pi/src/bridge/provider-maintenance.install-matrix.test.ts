@@ -36,9 +36,9 @@ vi.mock("./rpc-child.js", () => ({
 }));
 
 import {
-  __testing,
   getPiProviderInstallationRun,
   getPiProviderInstallationStatus,
+  piGlobalInstallCommand,
 } from "./provider-maintenance.js";
 
 const PI_WINDOWS_REASON =
@@ -60,7 +60,7 @@ describe("Pi install command matrix", () => {
     probeState.outputs.set("bun pm bin -g", WINDOWS_BUN_BIN);
 
     expect(
-      await __testing.piGlobalInstallCommand(`${WINDOWS_BUN_BIN}\\pi.exe`, {
+      await piGlobalInstallCommand(`${WINDOWS_BUN_BIN}\\pi.exe`, {
         platform: "win32",
         env: {},
       }),
@@ -75,13 +75,10 @@ describe("Pi install command matrix", () => {
     probeState.outputs.set("bun pm bin -g", WINDOWS_BUN_BIN);
 
     expect(
-      await __testing.piGlobalInstallCommand(
-        "c:\\USERS\\dev\\.bun\\BIN\\pi.exe",
-        {
-          platform: "win32",
-          env: {},
-        },
-      ),
+      await piGlobalInstallCommand("c:\\USERS\\dev\\.bun\\BIN\\pi.exe", {
+        platform: "win32",
+        env: {},
+      }),
     ).toMatchObject({ command: "bun" });
   });
 
@@ -89,7 +86,7 @@ describe("Pi install command matrix", () => {
     probeState.outputs.set("bun pm bin -g", POSIX_BUN_BIN);
 
     expect(
-      await __testing.piGlobalInstallCommand(`${POSIX_BUN_BIN}/pi`, {
+      await piGlobalInstallCommand(`${POSIX_BUN_BIN}/pi`, {
         platform: "linux",
         env: {},
       }),
@@ -100,7 +97,7 @@ describe("Pi install command matrix", () => {
     probeState.executables.set("bun", "C:\\Users\\dev\\.bun\\bin\\bun.exe");
 
     expect(
-      await __testing.piGlobalInstallCommand(null, {
+      await piGlobalInstallCommand(null, {
         platform: "win32",
         env: {},
       }),
@@ -112,7 +109,7 @@ describe("Pi install command matrix", () => {
     probeState.outputs.set("npm --version", "10.9.3");
 
     expect(
-      await __testing.piGlobalInstallCommand(null, {
+      await piGlobalInstallCommand(null, {
         platform: "win32",
         env: {},
       }),
@@ -121,7 +118,7 @@ describe("Pi install command matrix", () => {
 
   it("has no install command on win32 without bun or npm", async () => {
     expect(
-      await __testing.piGlobalInstallCommand(null, {
+      await piGlobalInstallCommand(null, {
         platform: "win32",
         env: {},
       }),
@@ -133,7 +130,7 @@ describe("Pi install command matrix", () => {
     probeState.outputs.set("bun pm bin -g", WINDOWS_BUN_BIN);
 
     expect(
-      await __testing.piGlobalInstallCommand("C:\\Program Files\\pi\\pi.exe", {
+      await piGlobalInstallCommand("C:\\Program Files\\pi\\pi.exe", {
         platform: "win32",
         env: {},
       }),
@@ -144,7 +141,7 @@ describe("Pi install command matrix", () => {
     probeState.executables.set("bun", "/home/dev/.bun/bin/bun");
 
     expect(
-      await __testing.piGlobalInstallCommand(null, {
+      await piGlobalInstallCommand(null, {
         platform: "linux",
         env: {},
       }),

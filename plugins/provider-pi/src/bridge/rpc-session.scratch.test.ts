@@ -42,16 +42,33 @@ function makeSession(): { session: PiRpcSession; scratchDir: string } {
   return { session, scratchDir };
 }
 
-it("removes the scratch files when the launch plan cannot be built", async () => {
-  vi.stubEnv(PI_BRIDGE_COMMAND_ENV, "bb-pi-that-does-not-exist");
-  vi.stubEnv(PI_BRIDGE_ARGS_ENV, "[1]");
-  const { session, scratchDir } = makeSession();
+it.runIf(onWindows)(
+  "removes the scratch files on win32 when the launch plan cannot be built",
+  async () => {
+    vi.stubEnv(PI_BRIDGE_COMMAND_ENV, "bb-pi-that-does-not-exist");
+    vi.stubEnv(PI_BRIDGE_ARGS_ENV, "[1]");
+    const { session, scratchDir } = makeSession();
 
-  await expect(session.start()).rejects.toThrow(
-    `${PI_BRIDGE_ARGS_ENV} must be a JSON array of strings`,
-  );
-  expect(readdirSync(scratchDir)).toEqual([]);
-});
+    await expect(session.start()).rejects.toThrow(
+      `${PI_BRIDGE_ARGS_ENV} must be a JSON array of strings`,
+    );
+    expect(readdirSync(scratchDir)).toEqual([]);
+  },
+);
+
+it.skipIf(onWindows)(
+  "leaves the scratch files on POSIX when the launch plan cannot be built, matching pre-existing behaviour",
+  async () => {
+    vi.stubEnv(PI_BRIDGE_COMMAND_ENV, "bb-pi-that-does-not-exist");
+    vi.stubEnv(PI_BRIDGE_ARGS_ENV, "[1]");
+    const { session, scratchDir } = makeSession();
+
+    await expect(session.start()).rejects.toThrow(
+      `${PI_BRIDGE_ARGS_ENV} must be a JSON array of strings`,
+    );
+    expect(readdirSync(scratchDir).length).toBeGreaterThan(0);
+  },
+);
 
 it.runIf(onWindows)(
   "removes the scratch files when Windows cannot resolve the launcher",

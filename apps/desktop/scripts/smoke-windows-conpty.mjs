@@ -173,11 +173,13 @@ function fileExistsSync(candidate) {
   }
 }
 
+const windowsConsoleImageExtensions = new Set([".com", ".exe"]);
+
 function findPwshOnPath(env) {
   const pathValue = readWindowsEnvValue(env, "Path") ?? "";
   const extensions = windowsExecutableExtensions(
     readWindowsEnvValue(env, "PATHEXT"),
-  );
+  ).filter((extension) => windowsConsoleImageExtensions.has(extension));
   for (const rawEntry of pathValue.split(";")) {
     const entry = rawEntry.trim().replace(/^"+|"+$/gu, "");
     if (entry === "") {

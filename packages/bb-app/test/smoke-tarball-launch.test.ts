@@ -146,10 +146,10 @@ describe("resolveInstalledBinEntry", () => {
     }
   });
 
-  function createInstall(packageJson: object) {
+  function createInstall(packageJson: object, packageName = "bb-app") {
     installRoot = mkdtempSync(join(tmpdir(), "bb-app-installed-bin-"));
     const binDir = join(installRoot, "node_modules", ".bin");
-    const packageDir = join(installRoot, "node_modules", "bb-app");
+    const packageDir = join(installRoot, "node_modules", packageName);
     mkdirSync(binDir, { recursive: true });
     mkdirSync(packageDir, { recursive: true });
     writeFileSync(
@@ -164,7 +164,7 @@ describe("resolveInstalledBinEntry", () => {
       name: "bb-app",
       bin: { "bb-app": "bin/bb-app.js", bb: "bin/bb.js" },
     });
-    expect(resolveInstalledBinEntry(binDir, "bb")).toBe(
+    expect(resolveInstalledBinEntry(binDir, "bb-app", "bb")).toBe(
       join(packageDir, "bin/bb.js"),
     );
   });
@@ -174,8 +174,21 @@ describe("resolveInstalledBinEntry", () => {
       name: "bb-app",
       bin: "bin/bb-app.js",
     });
-    expect(resolveInstalledBinEntry(binDir, "bb-app")).toBe(
+    expect(resolveInstalledBinEntry(binDir, "bb-app", "bb-app")).toBe(
       join(packageDir, "bin/bb-app.js"),
+    );
+  });
+
+  it("resolves the bin entry under a caller-supplied package name", () => {
+    const { binDir, packageDir } = createInstall(
+      {
+        name: "@scope/tool",
+        bin: { "scoped-tool": "bin/scoped-tool.js" },
+      },
+      "@scope/tool",
+    );
+    expect(resolveInstalledBinEntry(binDir, "@scope/tool", "scoped-tool")).toBe(
+      join(packageDir, "bin/scoped-tool.js"),
     );
   });
 
@@ -184,7 +197,9 @@ describe("resolveInstalledBinEntry", () => {
       name: "bb-app",
       bin: { "bb-app": "bin/bb-app.js" },
     });
-    expect(() => resolveInstalledBinEntry(binDir, "bb-server")).toThrowError(
+    expect(() =>
+      resolveInstalledBinEntry(binDir, "bb-app", "bb-server"),
+    ).toThrowError(
       "Installed bb-app package.json has no bin entry for bb-server",
     );
   });

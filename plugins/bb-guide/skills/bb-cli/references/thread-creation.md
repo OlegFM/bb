@@ -88,8 +88,9 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
   instead (for example a shell-only installer on native Windows, or a Pi
   install with neither bun nor npm on `Path`). `bb updates status` prints it
   under the table as `<machine> · <provider>: <reason>`; `bb machine
-  provider-cli status` prints `<provider>: <reason>` on stderr so its stdout
-  stays one parseable JSON document; `--json` carries the field on both.
+  provider-cli status` prints `<provider>: <reason>` on stderr in its default
+  (non-`--json`) output so its stdout stays one parseable JSON document;
+  `--json` carries the field on both.
 - Use `bb project create --name <name> --root <path> --machine <id-or-name>`
   to bind a new project's local path to a connected enrolled machine. Use
   `--host` as an alias. Without a selector, the CLI asks its local host daemon.

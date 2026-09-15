@@ -52,12 +52,13 @@ describe.runIf(process.platform === "win32")(
       const workspacePath = join(root, "workspace");
       await mkdir(workspacePath, { recursive: true });
 
-      const originalWrite = process.stderr.write.bind(process.stderr);
       const calls: unknown[] = [];
-      process.stderr.write = ((chunk: unknown) => {
-        calls.push(chunk);
-        return true;
-      }) as typeof process.stderr.write;
+      const stderrWriteSpy = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation((chunk) => {
+          calls.push(chunk);
+          return true;
+        });
       try {
         await removeWorktree({
           path: workspacePath,
@@ -65,7 +66,7 @@ describe.runIf(process.platform === "win32")(
           force: true,
         });
       } finally {
-        process.stderr.write = originalWrite;
+        stderrWriteSpy.mockRestore();
       }
 
       expect(calls).toContain(

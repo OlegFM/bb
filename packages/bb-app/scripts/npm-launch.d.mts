@@ -26,4 +26,8 @@ export function resolveLaunchForLabel(
   options?: ResolveLaunchOptions,
 ): ResolvedNpmLaunch;
 
-export function resolveInstalledBinEntry(binDir: string, bin: string): string;
+export function resolveInstalledBinEntry(
+  binDir: string,
+  packageName: string,
+  bin: string,
+): string;
