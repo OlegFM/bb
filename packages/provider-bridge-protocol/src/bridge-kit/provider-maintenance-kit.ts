@@ -195,7 +195,6 @@ export function formatCommand(
 
 export function npmGlobalInstallCommand(
   npmPackage: string,
-  platform: NodeJS.Platform = process.platform,
 ): ProviderInstallationCommand {
   const command = npmCommand();
   const args = ["install", "-g", `${npmPackage}@latest`];

@@ -12,3 +12,18 @@ export interface ResolvedNpmLaunch {
 }
 
 export function resolveNpmLaunch(args: ResolveNpmLaunchArgs): ResolvedNpmLaunch;
+
+export interface ResolveLaunchOptions {
+  execPath?: string;
+  existsSync?: (path: string) => boolean;
+  platform?: NodeJS.Platform;
+}
+
+export function resolveLaunchForLabel(
+  label: string,
+  command: string,
+  args: string[],
+  options?: ResolveLaunchOptions,
+): ResolvedNpmLaunch;
+
+export function resolveInstalledBinEntry(binDir: string, bin: string): string;

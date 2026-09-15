@@ -117,8 +117,7 @@ describe("provider maintenance kit: platform injection", () => {
       args: ["install", "-g", "@openai/codex@latest"],
       displayCommand: "npm install -g @openai/codex@latest",
     };
-    expect(npmGlobalInstallCommand("@openai/codex", "linux")).toEqual(expected);
-    expect(npmGlobalInstallCommand("@openai/codex", "win32")).toEqual(expected);
+    expect(npmGlobalInstallCommand("@openai/codex")).toEqual(expected);
   });
 
   it("keeps the POSIX downloaded-installer script byte-identical and refuses on win32", () => {

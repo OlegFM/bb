@@ -191,7 +191,7 @@ async function piGlobalInstallCommand(
     return bunGlobalInstallCommand(PI_NPM_PACKAGE);
   }
   if (context.platform !== "win32") {
-    return npmGlobalInstallCommand(PI_NPM_PACKAGE, context.platform);
+    return npmGlobalInstallCommand(PI_NPM_PACKAGE);
   }
   if (
     executablePath === null &&
@@ -202,7 +202,7 @@ async function piGlobalInstallCommand(
   const npm = npmCommand();
   return (await commandOutput(npm, ["--version"], context)) === null
     ? null
-    : npmGlobalInstallCommand(PI_NPM_PACKAGE, context.platform);
+    : npmGlobalInstallCommand(PI_NPM_PACKAGE);
 }
 
 async function runPiVersionProbe(

@@ -27,16 +27,14 @@ function outputTail(output) {
 
 async function pollUntil({ check, deadlineMs, intervalMs = pollIntervalMs }) {
   const deadline = Date.now() + deadlineMs;
-  for (;;) {
+  while (Date.now() <= deadline) {
     const value = await check();
     if (value) {
       return value;
     }
-    if (Date.now() > deadline) {
-      return null;
-    }
     await sleep(intervalMs);
   }
+  return null;
 }
 
 async function waitForPattern(getOutput, pattern, timeoutMs) {

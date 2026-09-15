@@ -1,6 +1,6 @@
 import { fork, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import {
   copyFile,
   mkdir,
@@ -13,7 +13,10 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveNpmLaunch } from "./npm-launch.mjs";
+import {
+  resolveInstalledBinEntry,
+  resolveLaunchForLabel,
+} from "./npm-launch.mjs";
 
 const HTTP_WAIT_TIMEOUT_MS = 60_000;
 const HTTP_WAIT_INTERVAL_MS = 250;
@@ -118,27 +121,6 @@ function waitForProcessExit(childProcess) {
       resolvePromise({ code, signal });
     });
   });
-}
-
-function resolveLaunch(command, args) {
-  if (command !== "npm" && command !== "npx") {
-    return { args, command };
-  }
-  return resolveNpmLaunch({
-    args,
-    command,
-    execPath: process.execPath,
-    platform: process.platform,
-  });
-}
-
-function resolveLaunchForLabel(label, command, args) {
-  try {
-    return resolveLaunch(command, args);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${label}: ${message}`);
-  }
 }
 
 async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
@@ -407,25 +389,6 @@ async function stopManagedProcess(processRef) {
     }
     await waitForProcessExit(processRef.childProcess);
   }
-}
-
-function resolveInstalledBinEntry(binDir, bin) {
-  const packageDir = join(binDir, "..", "bb-app");
-  const packageJson = JSON.parse(
-    readFileSync(join(packageDir, "package.json"), "utf8"),
-  );
-  const entry =
-    typeof packageJson.bin === "string"
-      ? packageJson.name === bin
-        ? packageJson.bin
-        : undefined
-      : packageJson.bin?.[bin];
-  if (typeof entry !== "string") {
-    throw new Error(
-      `Installed ${packageJson.name ?? "package"} package.json has no bin entry for ${bin}`,
-    );
-  }
-  return join(packageDir, entry);
 }
 
 function createInstalledBinInvocation(binDir, bin, args) {

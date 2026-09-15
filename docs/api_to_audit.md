@@ -1009,12 +1009,13 @@ dist-tag and `doctor` parsing) beside them.
 **Platform injection.** `experimental_resolveExecutablePath`,
 `experimental_commandOutput`, `experimental_readCliVersion`,
 `experimental_npmLatestVersion`, `experimental_probeNpmGlobalPackage`,
-`experimental_npmGlobalInstallSource`, `experimental_npmGlobalInstallCommand`
-and `experimental_downloadedInstallerCommand` all accept an optional
-`platform` (default `process.platform`) and, on the functions that spawn a
-process, an optional `env`; `experimental_npmCommand()` takes no arguments
-and always returns `npm` — the host daemon resolves the real win32 launcher.
-On win32 a command is resolved through `Path` and `PATHEXT` rather than
+`experimental_npmGlobalInstallSource` and
+`experimental_downloadedInstallerCommand` all accept an optional `platform`
+(default `process.platform`) and, on the functions that spawn a process, an
+optional `env`; `experimental_npmCommand()` and
+`experimental_npmGlobalInstallCommand()` take no `platform` argument and
+always build the `npm` form — the host daemon resolves the real win32
+launcher. On win32 a command is resolved through `Path` and `PATHEXT` rather than
 `where.exe`, and a Node `.cmd`/`.bat` shim (npm's launcher included) is
 started as `node.exe <script>` instead of being executed directly. A supplied
 `env` is passed through verbatim on POSIX; on win32 it is merged over
