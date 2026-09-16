@@ -1,0 +1,202 @@
+Phase 4 gate, Step 7 — raw console transcript (N = 0.42.1 -> N+1 = 0.42.2).
+
+=== the N+1 build, in a scratch worktree of the same commit ===
+PS> git worktree add C:\Users\olege\Work\bb-phase4-n1 11dfe15db
+Preparing worktree (detached HEAD 11dfe15db)
+Updating files: 100% (6264/6264), done.
+HEAD is now at 11dfe15db Correct the Windows docs on the stop bound, the tray and the reserves
+WORKTREE_EXIT=0
+11dfe15db7d21c1f4526b23ee4762975fcd2123f
+
+PS> node -e "<lockstep patch bump of apps/desktop/package.json and packages/bb-app/package.json>"
+apps/desktop/package.json -> 0.42.2
+packages/bb-app/package.json -> 0.42.2
+BUMP_EXIT=0
+
+PS> git -C C:\Users\olege\Work\bb-phase4-n1 status --short
+ M apps/desktop/package.json
+ M packages/bb-app/package.json
+(never committed; the worktree was removed at the end of the gate)
+
+PS> pnpm install --offline --config.confirmModulesPurge=false
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-reset-bb-data. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-request-dev-restart. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-run-cli. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-run-dev-app. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-run-dev-app-session-host. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-run-host-daemon. ENOENT … .js.EXE
+ WARN  Failed to create bin at …\apps\server\node_modules\.bin\bb-script-seed-perf-db. ENOENT … .js.EXE
+Done in 1m 15.8s
+INSTALL_EXIT=0
+
+PS> node -e "console.log('desktop', require('./apps/desktop/package.json').version, 'bb-app', require('./packages/bb-app/package.json').version)"
+desktop 0.42.2 bb-app 0.42.2
+
+PS> pnpm --filter @bb/desktop run dist:windows
+  • building        target=nsis file=release\bb-0.42.2-x64.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\bb-0.42.2-x64.__uninstaller.exe
+  • signing with signtool.exe  path=release\bb-0.42.2-x64.exe
+  • building block map  blockMapFile=release\bb-0.42.2-x64.exe.blockmap
+N1_DIST_EXIT=0
+
+PS> pnpm run desktop:version-feed    (in C:\Users\olege\Work\bb-phase4-n1\apps\desktop)
+> tsx scripts/generate-version-feed.mts
+Wrote C:\Users\olege\Work\bb-phase4-n1\apps\desktop\release\desktop-version-windows.json
+N1_FEED_EXIT=0
+
+PS> Get-ChildItem C:\Users\olege\Work\bb-phase4-n1\apps\desktop\release -File
+Name                            Length
+bb-0.42.2-x64.exe            161914035
+bb-0.42.2-x64.exe.blockmap      168090
+builder-debug.yml                 7742
+desktop-version-windows.json       595
+latest.yml                         332
+
+=== the N+1 feed, copied to <scratch>\feed-n1 ===
+PS> Get-Content <scratch>\feed-n1\latest.yml -Raw
+version: 0.42.2
+files:
+  - url: bb-0.42.2-x64.exe
+    sha512: oI6Cj0upcX5VcPozfHDtMlPrAZvFoqjdEHxdfd8NkLswvm4ebmRMQCtKSmnMS/e7t9EpT15tu6N1s8ntZT4PWg==
+    size: 161914035
+path: bb-0.42.2-x64.exe
+sha512: oI6Cj0upcX5VcPozfHDtMlPrAZvFoqjdEHxdfd8NkLswvm4ebmRMQCtKSmnMS/e7t9EpT15tu6N1s8ntZT4PWg==
+releaseDate: '2026-09-16T11:56:59.213Z'
+
+PS> Get-Content <scratch>\feed-n1\desktop-version-windows.json -Raw
+{
+  "schemaVersion": 1,
+  "channel": "latest",
+  "platform": "windows",
+  "version": "0.42.2",
+  "releaseDate": "2026-09-16T11:56:59.213Z",
+  "releaseName": "bb desktop 0.42.2",
+  "releaseNotes": null,
+  "minimumSystemVersion": null,
+  "files": [
+    { "url": "bb-0.42.2-x64.exe",
+      "sha512": "oI6Cj0upcX5VcPozfHDtMlPrAZvFoqjdEHxdfd8NkLswvm4ebmRMQCtKSmnMS/e7t9EpT15tu6N1s8ntZT4PWg==",
+      "size": 161914035 }
+  ],
+  "path": "bb-0.42.2-x64.exe",
+  "sha512": "oI6Cj0upcX5VcPozfHDtMlPrAZvFoqjdEHxdfd8NkLswvm4ebmRMQCtKSmnMS/e7t9EpT15tu6N1s8ntZT4PWg==",
+  "stagingPercentage": null
+}
+
+=== the local feed server ===
+PS> node <scratch>\feed-server.mjs <scratch>\feed-n1 47000
+feed server on http://127.0.0.1:47000/ serving …\feed-n1
+
+PS> (Invoke-WebRequest -Uri "http://127.0.0.1:47000/latest.yml" -UseBasicParsing).Content
+version: 0.42.2
+…
+PS> (Invoke-WebRequest -Uri "http://127.0.0.1:47000/desktop-version-windows.json" -UseBasicParsing).StatusCode
+200
+
+=== the installed copy's app-update.yml, before and after the edit ===
+PS> Get-Content "$env:LOCALAPPDATA\Programs\bb\resources\app-update.yml" -Raw
+channel: latest
+provider: generic
+url: https://github.com/get-bb/bb/releases/download/desktop-latest/
+updaterCacheDirName: '@bbdesktop-updater'
+
+PS> Set-Content -Path … -Value "channel: latest`nprovider: generic`nurl: http://127.0.0.1:47000/`nupdaterCacheDirName: '@bbdesktop-updater'`n"
+PS> Get-Content "$env:LOCALAPPDATA\Programs\bb\resources\app-update.yml" -Raw
+channel: latest
+provider: generic
+url: http://127.0.0.1:47000/
+updaterCacheDirName: '@bbdesktop-updater'
+
+=== launch N against the local feeds ===
+PS> Start-Process -FilePath "$env:LOCALAPPDATA\Programs\bb\bb.exe" -WorkingDirectory "$env:LOCALAPPDATA\Programs\bb" `
+      -RedirectStandardOutput <scratch>\app2-stdout.log -RedirectStandardError <scratch>\app2-stderr.log `
+      -Environment @{ BB_DESKTOP_VERSION_FEED_URL = "http://127.0.0.1:47000/desktop-version-windows.json"; BB_DESKTOP_QUIT_REQUEST_FILE = <flag> }
+APP_PID=49144
+HEALTH_OK=True
+
+=== what the feed server actually received across every launch of this step ===
+feed server on http://127.0.0.1:47000/ serving …\feed-n1
+2026-09-16T12:03:50.677Z GET /latest.yml -> 200 (332 bytes)
+2026-09-16T12:03:50.745Z GET /desktop-version-windows.json -> 200 (595 bytes)
+2026-09-16T12:04:02.433Z GET /desktop-version-windows.json -> 200 (595 bytes)
+2026-09-16T12:07:30.922Z GET /desktop-version-windows.json -> 200 (595 bytes)
+2026-09-16T12:11:11.034Z GET /desktop-version-windows.json -> 200 (595 bytes)
+(no request for bb-0.42.2-x64.exe or its .blockmap, ever)
+
+=== the electron-updater half, from the app's stderr ===
+Checking for update
+Error: Error: Cannot find channel "latest.yml" update info: HttpError: 404
+"method: GET url: https://github.com/get-bb/bb/releases/download/desktop-latest/latest.yml?noCache=1k2l21ips\n\nPlease double check that your authentication token is correct. Due to security reasons, actual status maybe not reported, but 404.\n"
+Headers: {
+  …
+  "server": "github.com",
+  "x-github-request-id": "FF4B:32F50:C304382:B26FBBD:6AAA875F",
+  …
+}
+    at createHttpError (…\resources\app.asar\dist\main.js:3486:14)
+    at newError (…\resources\app.asar\dist\main.js:2622:23)
+    at async NsisUpdater.getUpdateInfoAndProvider (…\resources\app.asar\dist\main.js:13965:17)
+    at async NsisUpdater.doCheckForUpdates (…\resources\app.asar\dist\main.js:13978:24)
+    at async checkForUpdates (…\resources\app.asar\dist\main.js:41380:14)
+Desktop auto-update error; preserving current update state. Cannot check for updates: …
+Desktop auto-update check failed; update installation remains disabled until a later check succeeds: …
+
+=== quit N: the tree is gone before any installer runs ===
+PS> tasklist /FI "IMAGENAME eq bb.exe" /FO CSV
+"Image Name","PID","Session Name","Session#","Mem Usage"
+"bb.exe","49144","Console","1","137 312 K"
+"bb.exe","47868","Console","1","148 092 K"
+"bb.exe","38728","Console","1","52 940 K"
+"bb.exe","40276","Console","1","92 140 K"
+"bb.exe","17480","Console","1","289 324 K"
+"bb.exe","48788","Console","1","147 344 K"
+"bb.exe","23780","Console","1","171 996 K"
+"bb.exe","34592","Console","1","100 988 K"
+"bb.exe","38816","Console","1","112 504 K"
+"bb.exe","42828","Console","1","112 364 K"
+"bb.exe","34368","Console","1","115 184 K"
+COUNT_BEFORE=19
+
+PS> Set-Content -Path <BB_DESKTOP_QUIT_REQUEST_FILE> -Value "quit"   # the tray-Quit code path
+QUIT_SECONDS=4,57
+PS> tasklist /FI "IMAGENAME eq bb.exe" /FO CSV
+INFO: No tasks are running which match the specified criteria.
+COUNT_AFTER=0
+listeners on 38886/38887: 0
+
+=== install N+1 silently, with no bb.exe alive ===
+PS> Start-Process -Wait -FilePath <scratch>\feed-n1\bb-0.42.2-x64.exe -ArgumentList "/S"
+INSTALL_SECONDS=112,0
+PS> tasklist /FI "IMAGENAME eq bb.exe" /FO CSV
+INFO: No tasks are running which match the specified criteria.
+
+=== N+1 in place ===
+PS> (Get-Item "$env:LOCALAPPDATA\Programs\bb\bb.exe").VersionInfo.FileVersion
+0.42.2
+PS> (Get-Content "$env:LOCALAPPDATA\Programs\bb\resources\app.asar.unpacked\node_modules\bb-app\package.json" -Raw | ConvertFrom-Json).version
+0.42.2
+PS> Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | Where-Object DisplayName -like "bb*"
+DisplayName     : bb 0.42.2
+DisplayVersion  : 0.42.2
+UninstallString : "C:\Users\olege\AppData\Local\Programs\bb\Uninstall bb.exe" /currentuser
+
+PS> Get-Content "$env:LOCALAPPDATA\Programs\bb\resources\app-update.yml" -Raw
+channel: latest
+provider: generic
+url: https://github.com/get-bb/bb/releases/download/desktop-latest/
+updaterCacheDirName: '@bbdesktop-updater'
+(the N+1 installer replaced the edited file with the shipped one)
+
+=== relaunch N+1 ===
+PS> Start-Process -FilePath "$env:LOCALAPPDATA\Programs\bb\bb.exe" …
+DESKTOP_PID=49552
+HEALTH_OK=True
+{"ok":true,"launchId":"0269915c-358a-434f-ae31-8e2f17939e45"}
+PS> (Get-Item "$env:LOCALAPPDATA\Programs\bb\bb.exe").VersionInfo.FileVersion
+0.42.2
+
+=== the updater cache the NSIS installers maintain ===
+PS> Get-ChildItem "$env:LOCALAPPDATA\@bbdesktop-updater" -Recurse
+Name             Length
+installer.exe 161924387     (after the N install — N's own installer)
+installer.exe 161914035     (after the N+1 install — N+1's own installer)

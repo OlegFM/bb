@@ -1,0 +1,102 @@
+Phase 4 gate, Step 8 — raw console transcript (installed build N+1 = 0.42.2, and release/win-unpacked for the smokes).
+
+=== bystander + app ===
+PS> $bystander = Start-Process -FilePath "C:\nvm4w\nodejs\node.exe" -ArgumentList "-e","setInterval(()=>{},1000)" -PassThru -WindowStyle Hidden
+BYSTANDER_PID=37240
+PS> $app = Start-Process -FilePath "$env:LOCALAPPDATA\Programs\bb\bb.exe" -WorkingDirectory "$env:LOCALAPPDATA\Programs\bb" `
+      -RedirectStandardOutput <scratch>\app3-stdout.log -RedirectStandardError <scratch>\app3-stderr.log `
+      -Environment @{ BB_DESKTOP_QUIT_REQUEST_FILE = <flag> }
+APP_PID=49552
+HEALTH_OK=True
+{"ok":true,"launchId":"0269915c-358a-434f-ae31-8e2f17939e45"}
+PS> (Get-Item "$env:LOCALAPPDATA\Programs\bb\bb.exe").VersionInfo.FileVersion
+0.42.2
+
+=== before / quit / after ===
+PS> tasklist /FO CSV > before.csv
+BEFORE_BB=9
+BEFORE_NODE=16
+BYSTANDER_ALIVE_BEFORE=1
+
+PS> Set-Content -Path <BB_DESKTOP_QUIT_REQUEST_FILE> -Value "quit"     # same code path as tray Quit
+PS> Start-Sleep -Seconds 5
+PS> tasklist /FO CSV > after.csv
+AFTER_BB=0
+AFTER_NODE=16
+BYSTANDER_ALIVE_AFTER=1
+ELAPSED=5,95
+
+PS> node.exe pids, before vs after
+before: 4592,31708,28308,33576,25792,17360,43988,39052,34012,44556,26176,4964,36752,30380,35916,37240
+after : 4592,31708,28308,33576,25792,17360,43988,39052,34012,44556,26176,4964,36752,30380,35916,37240
+
+PS> Invoke-WebRequest http://127.0.0.1:38886/health
+health unreachable: Подключение не установлено, т.к. конечный компьютер отверг запрос на подключение. (127.0.0.1:38886)
+
+=== earlier quits, same path, timed the same way ===
+QUIT_SECONDS=4,59    (build N, Step 7 preparation)
+QUIT_SECONDS=4,57    (build N, immediately before the N+1 install)
+QUIT_SECONDS=4,14    (build N+1, Step 9)
+QUIT_SECONDS=4,39    (build N+1, end of Step 9)
+QUIT_FILE_STILL_EXISTS=True   (the app never deletes the flag)
+
+=== packaged smoke ===
+PS> pnpm exec turbo run smoke:packaged --filter=@bb/desktop --force --output-logs=new-only
+@bb/desktop:smoke:packaged: > node scripts/smoke-packaged-app.mjs
+@bb/desktop:smoke:packaged: Packaged desktop smoke passed: C:\Users\olege\Work\bb\apps\desktop\release\win-unpacked\bb.exe
+ Tasks:    1 successful, 1 total
+  Time:    3.562s
+SMOKE_PACKAGED_EXIT=0
+
+=== process-hygiene smoke, three runs ===
+PS> $turboArgs = @('run','smoke:windows-processes','--filter=@bb/desktop','--force','--output-logs=new-only','--','--evidence-dir',$dir)
+PS> pnpm exec turbo @turboArgs
+
+run 1:
+@bb/desktop:smoke:windows-processes: > node scripts/smoke-windows-processes.mjs "--evidence-dir" "C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run1"
+@bb/desktop:smoke:windows-processes: Process hygiene smoke: bystander pid 30932.
+@bb/desktop:smoke:windows-processes: Process hygiene smoke: app pid 37416 → http://127.0.0.1:60635
+@bb/desktop:smoke:windows-processes: Process hygiene smoke: 6 descendant processes while running.
+@bb/desktop:smoke:windows-processes: Process hygiene smoke passed: no leaked processes.
+ Tasks:    1 successful, 1 total
+  Time:    17.856s
+HYGIENE_RUN1_EXIT=0
+
+run 2:
+@bb/desktop:smoke:windows-processes: Process hygiene smoke: 7 descendant processes while running.
+@bb/desktop:smoke:windows-processes: Process hygiene smoke passed: no leaked processes.
+ Tasks:    1 successful, 1 total
+  Time:    14.702s
+HYGIENE_RUN2_EXIT=0
+
+run 3:
+@bb/desktop:smoke:windows-processes: Process hygiene smoke: 8 descendant processes while running.
+@bb/desktop:smoke:windows-processes: Process hygiene smoke passed: no leaked processes.
+ Tasks:    1 successful, 1 total
+  Time:    13.777s
+HYGIENE_RUN3_EXIT=0
+
+=== a first attempt that failed on shell quoting, not on the product ===
+PS> pnpm exec turbo run smoke:windows-processes --filter=@bb/desktop --force --output-logs=new-only -- --evidence-dir $dir
+    --anon-profile [<ANON_PROFILE>]
+    --summarize [<SUMMARIZE>]
+    --parallel <PARALLEL>
+For more information, try '--help'.
+HYGIENE_RUN1_EXIT=1
+(PowerShell dropped the bare `--`, so turbo parsed `--evidence-dir` as one of its own options.
+ Passing the argument vector as an array, with '--' as an element, is what works.)
+
+=== simulated Desktop crash: taskkill /F on the Desktop process ===
+PS> $app = Start-Process -FilePath "$env:LOCALAPPDATA\Programs\bb\bb.exe" -WorkingDirectory "$env:LOCALAPPDATA\Programs\bb" -PassThru -RedirectStandardOutput … -RedirectStandardError …
+DESKTOP_PID=1844
+HEALTH_OK=True
+TREE_COUNT=7
+BRIDGE_PID=47224
+SERVER_LOG_LINES_BEFORE=282
+
+PS> taskkill /PID 1844 /F
+SUCCESS: The process with PID 1844 has been terminated.
+TASKKILL_EXIT=0
+BBCOUNT_NOW=0
+RUNTIME_GONE_SECONDS=0,62
+health unreachable

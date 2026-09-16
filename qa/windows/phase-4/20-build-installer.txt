@@ -1,0 +1,103 @@
+
+> @bb/desktop@0.42.1 dist:windows C:\Users\olege\Work\bb\apps\desktop
+> pnpm run prepare-runtime && pnpm run desktop:build:windows
+
+
+> @bb/desktop@0.42.1 prepare-runtime C:\Users\olege\Work\bb\apps\desktop
+> pnpm exec turbo run build --filter=bb-app --output-logs=new-only
+
+• turbo 2.10.12
+
+   • Packages in scope: bb-app
+   • Running build in 1 packages
+   • Remote caching disabled
+
+@bb/templates:generate:plugin-scaffold: cache hit, suppressing logs f6aabafde1c22c45
+@bb/server:generate:bb-official-marketplace: cache hit, suppressing logs b8b0b6e0b57abf3a
+@bb/plugin-build:generate: cache hit, suppressing logs d5e0fb534e6b0adf
+@bb/templates:generate:templates: cache hit, suppressing logs 2eaab3dd8c1a114d
+@bb/plugin-build:build: cache hit, suppressing logs 4eabc640e5b887a6
+@bb/sdk:build: cache hit, suppressing logs cf76b758ef611a87
+@get-bb/plugin-sdk:build:types: cache hit, suppressing logs 4f761b4630a70ab2
+@bb/cli:build: cache hit, suppressing logs 6a379c0617f3edc4
+@get-bb/plugin-sdk:build: cache hit, suppressing logs 8f3be2689dda29d3
+@bb/host-daemon:build: cache hit, suppressing logs 99d4d2746fcd1d35
+bb-plugin-ask-user-question:prepare:bundled: cache hit, suppressing logs cec92214d7e23c7d
+bb-plugin-pdf-preview:prepare:bundled: cache hit, suppressing logs 76eb61d2f9b1cd2c
+bb-plugin-plugin-api-docs:prepare:bundled: cache hit, suppressing logs d289cc031235abb2
+bb-plugin-account-pool:prepare:bundled: cache hit, suppressing logs 47a284cf51296513
+bb-plugin-workflows:prepare:bundled: cache hit, suppressing logs c5986cba54b5a133
+bb-plugin-provider-claude-code:prepare:bundled: cache hit, suppressing logs 68dc8f6cc90d6a35
+bb-plugin-browser-automation:prepare:bundled: cache hit, suppressing logs 999ac9c1feffbec9
+bb-plugin-provider-usage:prepare:bundled: cache hit, suppressing logs 12655a99d99b5f7b
+bb-plugin-keep-awake:prepare:bundled: cache hit, suppressing logs d6528f5f7a6d0bb4
+bb-plugin-provider-codex:prepare:bundled: cache hit, suppressing logs 0effc8b32821785c
+bb-plugin-inline-vis:prepare:bundled: cache hit, suppressing logs b49e1c8381c50e75
+@bb/server:build: cache hit, suppressing logs daaf42964ad0884a
+bb-plugin-provider-pi:prepare:bundled: cache hit, suppressing logs 01010b10205df937
+bb-plugin-environment-personal-workspace:prepare:bundled: cache hit, suppressing logs 94370b6973cdc87c
+bb-plugin-provider-acp:prepare:bundled: cache hit, suppressing logs df31c10691d21c0f
+bb-plugin-provider-retry:prepare:bundled: cache hit, suppressing logs 6053314d90707102
+bb-plugin-secrets:prepare:bundled: cache hit, suppressing logs 02c542ef11d40ef7
+bb-plugin-side-chat:prepare:bundled: cache hit, suppressing logs a7f0714879841ee4
+bb-plugin-scheduled-send:prepare:bundled: cache hit, suppressing logs 11f8b6f03e62c1c4
+bb-plugin-push-notifications:prepare:bundled: cache hit, suppressing logs f45174a4f3450f76
+bb-plugin-simple-notes:prepare:bundled: cache hit, suppressing logs c2827d5c86f54d65
+bb-plugin-tasks:prepare:bundled: cache hit, suppressing logs fa02c6c68a9a5de2
+bb-plugin-theme-preview:prepare:bundled: cache hit, suppressing logs 355363b46bf529e2
+bb-plugin-connect:prepare:bundled: cache hit, suppressing logs 3acd123c2e1f6f1a
+bb-plugin-github:prepare:bundled: cache hit, suppressing logs 1df67b1fdfbb9346
+bb-plugin-automations:prepare:bundled: cache hit, suppressing logs 8e7417986605810b
+bb-plugin-environment-git-worktree:prepare:bundled: cache hit, suppressing logs 58af07d9b029bda5
+bb-plugin-monaco-editor:prepare:bundled: cache hit, suppressing logs cc5f03a0b9e04bf6
+bb-plugin-custom-instructions:prepare:bundled: cache hit, suppressing logs 6e176706198e5577
+bb-plugin-environment-project-checkout:prepare:bundled: cache hit, suppressing logs f5cc2e4ec88faede
+bb-plugin-plugin-api-tester:prepare:bundled: cache hit, suppressing logs d52741ba423e25f0
+bb-plugin-concurrency-limit:prepare:bundled: cache hit, suppressing logs d1da34ee95be31f2
+bb-plugin-memory:prepare:bundled: cache hit, suppressing logs e2276612c6553215
+bb-plugin-bb-guide:prepare:bundled: cache hit, suppressing logs 8430a383d9a4aeaa
+@bb/bundled-plugins:build: cache hit, suppressing logs c10164276cb1be68
+@bb/app:build: cache hit, suppressing logs b7cc62479c41d3dc
+bb-app:build: cache hit, suppressing logs abaaf711be71bd8a
+
+ Tasks:    47 successful, 47 total
+Cached:    47 cached, 47 total
+  Time:    739ms >>> FULL TURBO
+
+
+> @bb/desktop@0.42.1 desktop:build:windows C:\Users\olege\Work\bb\apps\desktop
+> pnpm run build && node scripts/run-electron-builder.mjs --win --x64 --publish never
+
+
+> @bb/desktop@0.42.1 build C:\Users\olege\Work\bb\apps\desktop
+> node scripts/build.mjs
+
+@bb/desktop: built Electron entries
+Windows signing skipped: no Azure Trusted Signing secrets found. The installer will be unsigned and SmartScreen will warn on first launch.
+  • electron-builder  version=26.15.7 os=10.0.26200
+  • loaded configuration  file=C:\Users\olege\Work\bb\apps\desktop\.electron-builder.generated.json
+  • author is missed in the package.json  appPackageFile=C:\Users\olege\Work\bb\apps\desktop\package.json
+  • packageManager not detected by file, falling back to environment detection  resolvedPackageManager=pnpm detected=C:\Users\olege\Work\bb\apps\desktop
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=win32 arch=x64 electron=41.7.0 appOutDir=release\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=C:\Users\olege\Work\bb\apps\desktop\release\win-unpacked
+  • searching for node modules  pm=pnpm searchDir=C:\Users\olege\Work\bb\apps\desktop
+  • platform-specific optional dependencies not bundled — add them to your project's optionalDependencies if your app requires them (pnpm 10+ does not auto-install transitive platform binaries)  dependencies=["@parcel/watcher-android-arm64@2.5.6","@parcel/watcher-darwin-arm64@2.5.6","@parcel/watcher-darwin-x64@2.5.6","@parcel/watcher-freebsd-x64@2.5.6","@parcel/watcher-linux-arm-glibc@2.5.6","@parcel/watcher-linux-arm-musl@2.5.6","@parcel/watcher-linux-arm64-glibc@2.5.6","@parcel/watcher-linux-arm64-musl@2.5.6","@parcel/watcher-linux-x64-glibc@2.5.6","@parcel/watcher-linux-x64-musl@2.5.6","@parcel/watcher-win32-ia32@2.5.6"]
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\bb.exe
+  • signing with signtool.exe  path=release\win-unpacked\bb.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\app.asar.unpacked\node_modules\node-pty\third_party\conpty\1.25.260303002\win10-x64\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\app.asar.unpacked\node_modules\node-pty\third_party\conpty\1.25.260303002\win10-arm64\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64\conpty\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-arm64\conpty\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\app.asar.unpacked\node_modules\node-pty\build\Release\conpty\OpenConsole.exe
+  • building        target=nsis file=release\bb-0.42.1-x64.exe archs=x64 oneClick=false perMachine=false
+  • downloaded      label=nsis-3.0.4.1.7z progress=100%
+  • downloaded      label=7zip-win-x64.tar.gz progress=100%
+  • directory rename failed, retrying  src=C:\Users\olege\AppData\Local\electron-builder\Cache\nsis-3.0.4.1\nsis-3.0.4.1-1mx3n.tmp dest=C:\Users\olege\AppData\Local\electron-builder\Cache\nsis-3.0.4.1\nsis-3.0.4.1-1mx3n code=EPERM
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • downloaded      label=nsis-resources-3.4.1.7z progress=100%
+  • signing with signtool.exe  path=release\bb-0.42.1-x64.__uninstaller.exe
+  • signing with signtool.exe  path=release\bb-0.42.1-x64.exe
+  • building block map  blockMapFile=release\bb-0.42.1-x64.exe.blockmap
+DIST_WINDOWS_EXIT=0

@@ -1,0 +1,226 @@
+Phase 4 gate, Step 6 — raw console transcript (installed app, build N = 0.42.1).
+Every EXIT= line is $LASTEXITCODE read in the same shell immediately after the command.
+
+=== launch ===
+PS> "BBCOUNT_BEFORE=" + (@(Get-Process bb -ErrorAction SilentlyContinue).Count)
+PS> Get-NetTCPConnection -State Listen -LocalPort 38886,38887
+PS> Remove-Item Env:BB_DESKTOP_VERSION_FEED_URL -ErrorAction SilentlyContinue
+PS> $app = Start-Process -FilePath "$env:LOCALAPPDATA\Programs\bb\bb.exe" -PassThru
+PS> <poll http://127.0.0.1:38886/health until 200, 150 s budget>
+BBCOUNT_BEFORE=0
+(no listeners)
+APP_PID=42468
+HEALTH_OK=True elapsedTo=2026-09-16T14:57:47.5172847+03:00
+{"ok":true,"launchId":"e7643fd5-b2eb-42de-b624-c280336f6717"}
+
+=== process tree ===
+PS> Get-CimInstance Win32_Process | Where-Object { $_.Name -like "bb*.exe" -or $_.CommandLine -like "*bb-app-bridge*" }
+
+ProcessId ParentProcessId Name   CommandLine (truncated)
+    42468           41408 bb.exe "C:\Users\olege\AppData\Local\Programs\bb\bb.exe"
+    48348           42468 bb.exe "…\bb.exe" --type=gpu-process --user-data-dir="C:\Users\olege\AppData\Roaming\bb" …
+    47644           42468 bb.exe "…\bb.exe" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=ru …
+    15352           42468 bb.exe …\bb.exe …\resources\app.asar.unpacked\dist\bb-app-bridge.mjs
+    29248           15352 bb.exe …\bb.exe …\resources\app.asar.unpacked\node_modules\bb-app\server\dist\i…
+    45436           42468 bb.exe "…\bb.exe" --type=renderer --user-data-dir="…\Roaming\bb" --app-user-model-id=dev.bb.deskt…
+    39408           15352 bb.exe …\bb.exe …\resources\app.asar.unpacked\node_modules\bb-app\host-daemon\d…
+    44756           39408 bb.exe …\bb.exe …\resources\app.asar.unpacked\node_modules\bb-app\host-daemon\d…
+    42060           39408 bb.exe …\bb.exe …\resources\app.asar.unpacked\node_modules\bb-app\host-daemon\d…
+
+PS> @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like "*bb*" -and $_.CommandLine -notlike "*Codex*" }).Count
+0
+
+PS> Get-NetTCPConnection -State Listen -LocalPort 38886,38887
+LocalPort OwningProcess
+    38887         39408
+    38886         29248
+
+PS> Get-Process bb | Select-Object Id,MainWindowTitle
+   Id MainWindowTitle
+15352
+29248
+39408
+42060
+42468 bb
+44756
+45436
+47644
+48348
+
+=== owned-runtime.json ===
+PS> Get-Content "$env:APPDATA\bb\owned-runtime.json" -Raw
+{
+  "bridgePath": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\resources\\app.asar.unpacked\\dist\\bb-app-bridge.mjs",
+  "pid": 15352,
+  "serverUrl": "http://127.0.0.1:38886",
+  "startedAt": "2026-09-16T11:57:40.298Z"
+}
+
+=== CLI against the installed app's server ===
+PS> $env:BB_SERVER_URL = "http://127.0.0.1:38886"
+PS> node apps/cli/dist/index.js machine list --json
+[
+  {
+    "id": "host_ag23qwqrfb",
+    "name": "OMEN",
+    "status": "connected",
+    "type": "persistent",
+    "maxPermissionMode": "full",
+    "lastSeenAt": 1789559891626,
+    "lastRejectedProtocolVersion": null,
+    "createdAt": 1789539871159,
+    "updatedAt": 1789559891626
+  }
+]
+MACHINE_EXIT=0
+
+PS> node apps/cli/dist/index.js --version
+0.42.1
+
+PS> node apps/cli/dist/index.js provider list --json | … codex row …
+{
+  "id": "codex",
+  "available": true
+}
+PROVIDER_EXIT=0
+
+=== project create ===
+PS> node apps/cli/dist/index.js project create --name phase4-gate --root C:\Users\olege\Work\phase4-gate --machine OMEN --json
+PROJECT_EXIT=0
+{
+  "id": "proj_jfy2xm4a6x",
+  "kind": "standard",
+  "name": "phase4-gate",
+  "gitRemoteUrl": null,
+  "createdAt": 1789559909530,
+  "updatedAt": 1789559909530,
+  "sources": [
+    {
+      "id": "src_bjwat4z3qy",
+      "projectId": "proj_jfy2xm4a6x",
+      "type": "local_path",
+      "hostId": "host_ag23qwqrfb",
+      "path": "C:\\Users\\olege\\Work\\phase4-gate",
+      "isDefault": true,
+      "createdAt": 1789559909530,
+      "updatedAt": 1789559909530
+    }
+  ]
+}
+
+=== thread spawn: backslash path refused by the CLI flag parser ===
+PS> node apps/cli/dist/index.js thread spawn --project proj_jfy2xm4a6x --provider codex --environment "C:\Users\olege\Work\phase4-gate" --prompt "Create gate.txt containing 'phase 4'" --json
+Error: Invalid ID from --environment flag: "C:\Users\olege\Work\phase4-gate". IDs must contain only letters, digits, hyphens, and underscores.
+SPAWN_EXIT=1
+
+=== thread spawn: forward-slash drive-absolute path accepted ===
+PS> node apps/cli/dist/index.js thread spawn --project proj_jfy2xm4a6x --provider codex --environment "C:/Users/olege/Work/phase4-gate" --prompt "Create gate.txt containing 'phase 4'" --json
+SPAWN_EXIT=0
+{
+  "id": "thr_5b6g7c66wx",
+  "projectId": "proj_jfy2xm4a6x",
+  "environmentId": null,
+  "providerId": "codex",
+  "title": null,
+  "titleFallback": "Create gate.txt containing 'phase 4'",
+  "status": "starting",
+  "visibility": "visible",
+  "createdAt": 1789559926156,
+  "updatedAt": 1789559926177,
+  "runtime": { "displayStatus": "starting", "hostReconnectGraceExpiresAt": null },
+  "activeBackgroundAgentCount": 0,
+  "canSpawnChild": true,
+  "queuedMessageCount": 0
+}
+
+=== thread wait + the file the agent wrote ===
+PS> node apps/cli/dist/index.js thread wait thr_5b6g7c66wx --status idle --timeout 420 --json
+{
+  "threadId": "thr_5b6g7c66wx",
+  "matched": true,
+  "target": { "kind": "status", "status": "idle" }
+}
+WAIT_EXIT=0
+
+PS> Test-Path "C:\Users\olege\Work\phase4-gate\gate.txt"
+True
+PS> Get-Content "C:\Users\olege\Work\phase4-gate\gate.txt" -Raw
+phase 4
+
+PS> Get-ChildItem "C:\Users\olege\Work\phase4-gate" -Recurse -File
+FullName                                 Length
+C:\Users\olege\Work\phase4-gate\gate.txt      7
+
+=== terminal create / show / close ===
+PS> node apps/cli/dist/index.js terminal create --machine OMEN --cwd "C:/Users/olege/Work/phase4-gate" --title "phase4-gate terminal" --json
+TERM_CREATE_EXIT=0
+{
+  "id": "term_tspsq8dcib",
+  "hostId": "host_ag23qwqrfb",
+  "title": "phase4-gate terminal",
+  "initialCwd": "C:/Users/olege/Work/phase4-gate",
+  "cols": 80,
+  "rows": 24,
+  "status": "running",
+  "exitCode": null,
+  "closeReason": null,
+  "createdAt": 1789559967014,
+  "updatedAt": 1789559967085,
+  "lastUserInputAt": null
+}
+
+PS> node apps/cli/dist/index.js terminal show term_tspsq8dcib --json
+{ … "status": "running", "exitCode": null, "closeReason": null … }
+SHOW_EXIT=0
+
+PS> node apps/cli/dist/index.js terminal close term_tspsq8dcib --json
+{
+  "id": "term_tspsq8dcib",
+  "hostId": "host_ag23qwqrfb",
+  "title": "phase4-gate terminal",
+  "initialCwd": "C:/Users/olege/Work/phase4-gate",
+  "cols": 80,
+  "rows": 24,
+  "status": "exited",
+  "exitCode": null,
+  "closeReason": "user",
+  "createdAt": 1789559967014,
+  "updatedAt": 1789559978714,
+  "lastUserInputAt": null
+}
+CLOSE_EXIT=0
+
+PS> node apps/cli/dist/index.js terminal show term_tspsq8dcib --json
+{ … "status": "exited", "exitCode": null, "closeReason": "user" … }
+SHOW_EXIT=0
+
+PS> node apps/cli/dist/index.js terminal list --machine OMEN --json
+{ "sessions": [] }
+LIST_EXIT=0
+
+=== window chrome and the caption overlay ===
+PS> <PrintWindow capture of the bb main window>
+TARGET HWND=9375260 PID=42468 TITLE=bb
+PRINTSHOT …\win-print.png ok=True rect=91,100,1621,1135
+
+PS> (Get-ItemProperty "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" -Name AppsUseLightTheme).AppsUseLightTheme
+0
+PS> Set-ItemProperty … -Name AppsUseLightTheme -Value 1
+1
+PS> <PrintWindow capture again after 4 s>
+PRINTSHOT …\win-light.png ok=True rect=91,100,1621,1135
+PS> Set-ItemProperty … -Name AppsUseLightTheme -Value 0
+0
+PS> <PrintWindow capture again after 4 s>
+PRINTSHOT …\win-dark2.png ok=True rect=91,100,1621,1135
+
+PS> <sample the captured bitmaps inside the caption overlay band and on the close glyph>
+dark-initial   (1450,8)=#1F1F1F (1500,8)=#1F1F1F (1550,8)=#1F1F1F (1610,8)=#1F1F1F   closeGlyph(1584,30)=#E8E8E8
+os-light       (1450,8)=#F6F6F6 (1500,8)=#F6F6F6 (1550,8)=#F6F6F6 (1610,8)=#F6F6F6   closeGlyph(1584,30)=#1F1F1F
+dark-restored  (1450,8)=#1F1F1F (1500,8)=#1F1F1F (1550,8)=#1F1F1F (1610,8)=#1F1F1F   closeGlyph(1584,30)=#E8E8E8
+
+=== installed version ===
+PS> (Get-Item "$env:LOCALAPPDATA\Programs\bb\bb.exe").VersionInfo.FileVersion
+0.42.1
+PS> (Get-Content "$env:LOCALAPPDATA\Programs\bb\resources\app.asar.unpacked\node_modules\bb-app\package.json" -Raw | ConvertFrom-Json).version
+0.42.1

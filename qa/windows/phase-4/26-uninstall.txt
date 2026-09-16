@@ -1,0 +1,101 @@
+Phase 4 gate, Step 10 — raw console transcript.
+
+=== pre-gate state of %APPDATA%\bb, and how it was set aside (before Step 5) ===
+PS> "BEFORE: exists=" + (Test-Path "$env:APPDATA\bb")
+BEFORE: exists=True
+PS> Rename-Item "$env:APPDATA\bb" -NewName "bb.pre-gate-20260916-145139"
+PS> "AFTER: appdata-bb exists=" + (Test-Path "$env:APPDATA\bb")
+AFTER: appdata-bb exists=False
+PS> Get-ChildItem "$env:APPDATA" -Filter "bb*"
+Name                        LastWriteTime
+bb.pre-gate-20260916-145139 16.09.2026 12:07:57
+
+=== pre-uninstall ===
+PS> "Programs\bb exists=" + (Test-Path "$env:LOCALAPPDATA\Programs\bb")
+Programs\bb exists=True
+PS> "APPDATA\bb exists=" + (Test-Path "$env:APPDATA\bb")
+APPDATA\bb exists=True
+PS> "USERPROFILE\.bb exists=" + (Test-Path "$env:USERPROFILE\.bb")
+USERPROFILE\.bb exists=True
+PS> "BBCOUNT=" + (@(Get-Process bb -ErrorAction SilentlyContinue).Count)
+BBCOUNT=0
+
+=== silent uninstall ===
+PS> Start-Process -Wait -FilePath "$env:LOCALAPPDATA\Programs\bb\Uninstall bb.exe" -ArgumentList "/S"
+UNINSTALL_SECONDS=9,6
+
+=== post-uninstall ===
+PS> "Programs\bb exists=" + (Test-Path "$env:LOCALAPPDATA\Programs\bb")
+Programs\bb exists=False
+PS> Get-ChildItem "$env:LOCALAPPDATA\Programs\bb"
+(empty)
+PS> @(Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | Where-Object { $_.DisplayName -like "bb*" }).Count
+registry rows: 0
+PS> Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\bb.lnk"
+start menu shortcut exists=False
+PS> Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "bb.lnk")
+desktop shortcut exists=False
+PS> "APPDATA\bb exists=" + (Test-Path "$env:APPDATA\bb")
+APPDATA\bb exists=True
+PS> "USERPROFILE\.bb exists=" + (Test-Path "$env:USERPROFILE\.bb")
+USERPROFILE\.bb exists=True
+PS> "updater cache exists=" + (Test-Path "$env:LOCALAPPDATA\@bbdesktop-updater")
+updater cache exists=True
+
+=== what survived, in detail ===
+PS> Get-ChildItem "$env:APPDATA\bb"
+Name              Length
+blob_storage
+Cache
+Code Cache
+DawnGraphiteCache
+DawnWebGPUCache
+GPUCache
+Local Storage
+Network
+Session Storage
+Shared Dictionary
+WebStorage
+.updaterId        36
+DIPS              36864
+Local State       490
+Preferences       54
+SharedStorage     4096
+window-state.json 20
+PS> (Get-ChildItem "$env:APPDATA\bb" -Recurse -File | Measure-Object Length -Sum).Sum
+14757122
+
+PS> Get-ChildItem "$env:LOCALAPPDATA\@bbdesktop-updater" -Recurse
+Name             Length
+installer.exe 161914035
+
+=== the gate removes its own leftovers ===
+PS> Remove-Item "$env:APPDATA\bb" -Recurse -Force
+APPDATA\bb exists=False
+PS> Remove-Item "$env:LOCALAPPDATA\@bbdesktop-updater" -Recurse -Force
+updater cache exists=False
+
+=== the pre-gate userData is put back ===
+PS> Rename-Item "$env:APPDATA\bb.pre-gate-20260916-145139" -NewName "bb"
+APPDATA\bb exists=True
+PS> Get-ChildItem "$env:APPDATA" -Filter "bb*"
+Name LastWriteTime
+bb   16.09.2026 12:07:57
+PS> Get-ChildItem "$env:APPDATA\bb"
+Name              Length
+blob_storage
+Cache
+Code Cache
+DawnGraphiteCache
+DawnWebGPUCache
+GPUCache
+Local Storage
+Network
+Session Storage
+Shared Dictionary
+.updaterId        36
+DIPS              36864
+Local State       490
+Preferences       270
+SharedStorage     4096
+window-state.json 223

@@ -528,12 +528,17 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `scripts/run-electron-builder.mjs` starts electron-builder as
   `node electron-builder/cli.js` (resolved through `createRequire`), because
   `node_modules/.bin/electron-builder` is a `.cmd` shim that `spawn` cannot
-  start without a shell; POSIX keeps the `.bin` spawn unchanged. The first
-  build downloads `winCodeSign` — and `nsis` for a full `dist:windows` — into
-  `%LOCALAPPDATA%\electron-builder\Cache`, which is why even an unsigned
-  `--dir` package pays for that cache miss once. `package:windows` was
-  measured at a few minutes on the reference desktop, the first run being the
-  slow one. Icons are the checked-in PNGs (`assets/icon.png`,
+  start without a shell; POSIX keeps the `.bin` spawn unchanged. A full
+  `dist:windows` downloads `nsis`, `7zip` and `nsis-resources` into
+  `%LOCALAPPDATA%\electron-builder\Cache` on a cold cache; an unsigned `--dir`
+  `package:windows` downloads neither those nor `winCodeSign`, only the
+  Electron zip and the icon tool. `winCodeSign` is **not** fetched on a
+  Windows host at all — electron-builder signs through the system
+  `signtool.exe` there, and the `winCodeSign` bundle exists for cross-building
+  Windows targets from macOS and Linux
+  (`qa/windows/phase-4/20-build-installer.md` measures the cache before and
+  after). `package:windows` was measured at a few minutes on the reference
+  desktop, the first run being the slow one. Icons are the checked-in PNGs (`assets/icon.png`,
   `assets/icon-nightly.png`); app-builder-lib converts them to `.ico` itself
   and no `.ico` is checked in. Two log lines are expected noise rather than
   findings: electron-builder reports "signing with signtool.exe" even with no
@@ -561,11 +566,15 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   keys. With none of them set the build is unsigned and
   `publisherName` is deliberately left unset — `publisherName` is written only
   in signed mode. No certificate exists today, so every build produced so far
-  is unsigned, and an unsigned installer raises SmartScreen's "Windows
-  protected your PC" dialog, which the user clears with More info → Run
-  anyway; the gate records the exact dialog in
-  `qa/windows/phase-4/21-install-standard-user.md` with a screenshot. A stable
-  publish withholds unsigned Windows binaries and always publishes
+  is unsigned. An unsigned installer is the case SmartScreen's "Windows
+  protected your PC" dialog exists for, and a user who meets it clears it with
+  More info → Run anyway — but the Phase 4 gate could not reproduce the dialog
+  on the reference desktop: a locally built installer carrying a synthetic
+  `Zone.Identifier` (`ZoneId=3`) ran straight through with SmartScreen enabled
+  and its host process live. `qa/windows/phase-4/21-install-standard-user.md`
+  records that measurement, the SmartScreen settings behind it and what is
+  still needed to capture the dialog; there is no screenshot of it yet. A
+  stable publish withholds unsigned Windows binaries and always publishes
   `desktop-version-windows.json`.
 - **Native modules.** node-pty's Windows prebuild is ConPTY-only: four files,
   `conpty.node`, `conpty_console_list.node`, `conpty/conpty.dll` and
@@ -671,10 +680,17 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   installer. An unsigned build updates to the next unsigned build because
   `publisherName` is unset: electron-updater's NSIS signature verification
   accepts a download when no publisher name is configured, which is also why
-  setting a publisher without a certificate would break every update. To point
-  an installed build at a test feed there is no environment knob for the
-  electron-updater half — edit `url:` in `resources/app-update.yml` inside the
-  installed copy; the JSON half still follows `BB_DESKTOP_VERSION_FEED_URL`.
+  setting a publisher without a certificate would break every update. The JSON
+  half follows `BB_DESKTOP_VERSION_FEED_URL`, and a packaged build's
+  electron-updater half **cannot be pointed at a test feed at all**: the
+  desktop calls `autoUpdater.setFeedURL()` with the built-in
+  `https://github.com/get-bb/bb/releases/download/<tag>/` base at startup,
+  which takes precedence over `resources/app-update.yml`, and
+  `forceDevUpdateConfig` is gated on an unpackaged run. Editing
+  `app-update.yml` inside an installed copy therefore has no effect —
+  `qa/windows/phase-4/23-update-n-to-n1.md` measures the resulting requests
+  going to `github.com` — so the electron-updater path can only be exercised
+  against a real `desktop-latest` or `desktop-nightly` release.
 - **App file names.** File names shown in the app come from `hostPathBasename`
   (`apps/app/src/lib/host-path.ts`): a drive-absolute (`C:\`, `C:/`) or UNC
   (`\\`) path splits on either separator, and every other input splits on `/`
@@ -916,8 +932,11 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 ## Known limitations after Phase 4
 
 - No Windows code-signing certificate exists, so every installer built so far
-  is unsigned and SmartScreen warns on first launch. Users clear it with More
-  info → Run anyway. A stable publish withholds the unsigned `.exe` and
+  is unsigned and SmartScreen may warn on first launch; users clear that with
+  More info → Run anyway. The Phase 4 gate did not reproduce the warning on the
+  reference desktop, so how often a real download trips it is unmeasured
+  (`qa/windows/phase-4/21-install-standard-user.md`). A stable publish
+  withholds the unsigned `.exe` and
   publishes only `desktop-version-windows.json`, so there is no published
   Windows download yet; maintainers build one with
   `pnpm --filter @bb/desktop run dist:windows`. Because that is the permanent
@@ -952,7 +971,23 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `qa/windows/phase-4/24-quit-orphans.md`.
 - Uninstall leaves `%APPDATA%\bb` behind by design, so a reinstall keeps the
   window layout, the owned-runtime record and the cached Connect credential.
-  Removing it is a manual step.
+  Removing it is a manual step. It also leaves
+  `%LOCALAPPDATA%\@bbdesktop-updater\installer.exe` — a ~154 MiB copy of the
+  installer that last ran, which the NSIS target seeds so a later differential
+  update has its base file. That directory holds no user data and is safe to
+  delete; `qa/windows/phase-4/26-uninstall.md` measures both.
+- Closing the first window of an app session raises an Electron "A JavaScript
+  error occurred in the main process" box:
+  `TypeError: Object has been destroyed` thrown by `instanceForWindow` in
+  `apps/desktop/src/desktop-browser-broker.ts`, reached from `releaseWindow`
+  in the window's own `closed` handler, which reads `entry.window.webContents`
+  on a window that is already destroyed. The tray parking around it is
+  correct — the runtime keeps running and `/health` keeps answering — and later
+  closes in the same session are clean, but the first one is the close every
+  user performs. The broker code is unchanged by Phase 4; what Phase 4 changed
+  is that Windows now reaches it with the app still alive.
+  `qa/windows/phase-4/25-close-to-tray.md` has the stack, the reproduction and
+  the shape of a fix.
 - The caption overlay's height and colours are fixed values — 48 px and one
   colour pair per theme — rather than being derived from the app's theme
   tokens, so a theme whose chrome row or surface colour differs from those
@@ -1010,16 +1045,18 @@ directory is the last commit of Phase 3.
 and per-package test results (`30-build-typecheck.txt`, `31-test-results.md`,
 `31-test-output-tail.txt`), the NSIS installer build with the release listing
 and signature state (`20-build-installer.md` and `.txt`), the standard-user
-install including the SmartScreen dialog and the installer screens
-(`21-install-standard-user.md`, `21-smartscreen.png`, `21-installer.png`), the
-installed app creating a project and running a provider turn
-(`22-use-installed-app.md` and `.txt`), an N → N+1 update against a local feed
-(`23-update-n-to-n1.md` and `.txt`), the Quit orphan diff with the three
-process-hygiene smoke runs (`24-quit-orphans.md`, `.txt` and
-`process-hygiene/*.json`), closing the last window to the tray
-(`25-close-to-tray.md`), uninstall and what it leaves behind (`26-uninstall.md`
-and `.txt`), the caption overlay over the app chrome (`27-window-chrome.png`),
-the WSL POSIX test run and the macOS/Linux config diff (`40-posix-check.md`),
-the `windows-x64` CI run (`41-ci-run.md`) and the `build-desktop.yml` run
-(`42-build-desktop-run.md`). The gate run that writes this directory is the
-last commit of Phase 4.
+install with the installer's finish page and the SmartScreen measurement
+(`21-install-standard-user.md`, `21-installer.png`; there is no
+`21-smartscreen.png`, and that file says why), the installed app creating a
+project and running a provider turn (`22-use-installed-app.md` and `.txt`), the
+N → N+1 update and the local-feed finding (`23-update-n-to-n1.md` and `.txt`),
+the Quit orphan diff with the three process-hygiene smoke runs
+(`24-quit-orphans.md`, `.txt` and `process-hygiene/run{1,2,3}/*.json`), closing
+the last window to the tray with the defect it exposed (`25-close-to-tray.md`,
+`25-close-to-tray-error.png`), uninstall and what it leaves behind
+(`26-uninstall.md` and `.txt`), the caption overlay over the app chrome
+(`27-window-chrome.png` and `27-window-chrome-light-overlay.png`), the WSL POSIX
+test run and the macOS/Linux config diff (`40-posix-check.md`), the
+`windows-x64` CI run (`41-ci-run.md`) and why `build-desktop.yml` could not be
+dispatched on the fork (`42-build-desktop-run.md`). The gate run that writes
+this directory is the last commit of Phase 4.

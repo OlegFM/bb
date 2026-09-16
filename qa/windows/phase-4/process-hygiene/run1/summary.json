@@ -1,0 +1,10 @@
+{
+  "appBinary": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe",
+  "appPid": 37416,
+  "bystanderPid": 30932,
+  "descendantsWhileRunning": 6,
+  "failures": [],
+  "serverUrl": "http://127.0.0.1:60635",
+  "strays": [],
+  "survivors": []
+}

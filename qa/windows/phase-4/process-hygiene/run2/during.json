@@ -1,0 +1,51 @@
+[
+  {
+    "commandLine": "\"C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe\" --type=gpu-process --user-data-dir=\"C:\\Users\\olege\\AppData\\Local\\Temp\\bb-win-process-smoke-mRoaNd\\user-data\" --gpu-preferences=SAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAAQAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --field-trial-handle=1704,i,3814295516170474131,16680335092703889645,262144 --enable-features=EnableTransparentHwndEnlargement,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=1728,i,3705784608752209156,5829470676627072921,4 --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=1696 /prefetch:2",
+    "creationDate": "2026-09-16T15:16:59.9701950+03:00",
+    "name": "bb.exe",
+    "parentPid": 42928,
+    "pid": 47364
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=ru --service-sandbox-type=none --user-data-dir=\"C:\\Users\\olege\\AppData\\Local\\Temp\\bb-win-process-smoke-mRoaNd\\user-data\" --field-trial-handle=1704,i,3814295516170474131,16680335092703889645,262144 --enable-features=EnableTransparentHwndEnlargement,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=1728,i,3705784608752209156,5829470676627072921,4 --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=1880 /prefetch:11",
+    "creationDate": "2026-09-16T15:16:59.9757710+03:00",
+    "name": "bb.exe",
+    "parentPid": 42928,
+    "pid": 43552
+  },
+  {
+    "commandLine": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar.unpacked\\dist\\bb-app-bridge.mjs",
+    "creationDate": "2026-09-16T15:17:00.4698380+03:00",
+    "name": "bb.exe",
+    "parentPid": 42928,
+    "pid": 5472
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe\" --type=renderer --user-data-dir=\"C:\\Users\\olege\\AppData\\Local\\Temp\\bb-win-process-smoke-mRoaNd\\user-data\" --app-user-model-id=dev.bb.desktop --app-path=\"C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\" --enable-sandbox --video-capture-use-gpu-memory-buffer --lang=ru --device-scale-factor=1.25 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=5 --time-ticks-at-unix-epoch=-1789423305814480 --launch-time-ticks=137716902636 --field-trial-handle=1704,i,3814295516170474131,16680335092703889645,262144 --enable-features=EnableTransparentHwndEnlargement,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,NetworkServiceSandbox,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=1728,i,3705784608752209156,5829470676627072921,4 --trace-process-track-uuid=3190708990997080739 --mojo-platform-channel-handle=3636 /prefetch:1",
+    "creationDate": "2026-09-16T15:17:02.7723910+03:00",
+    "name": "bb.exe",
+    "parentPid": 42928,
+    "pid": 35976
+  },
+  {
+    "commandLine": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar.unpacked\\node_modules\\bb-app\\server\\dist\\index.js",
+    "creationDate": "2026-09-16T15:17:00.6769640+03:00",
+    "name": "bb.exe",
+    "parentPid": 5472,
+    "pid": 17520
+  },
+  {
+    "commandLine": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar.unpacked\\node_modules\\bb-app\\host-daemon\\dist\\daemon-bundle.mjs",
+    "creationDate": "2026-09-16T15:17:02.4514710+03:00",
+    "name": "bb.exe",
+    "parentPid": 5472,
+    "pid": 26776
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo -Command \"Write-Output '__BB_SHELL_ENV_START__'; Get-ChildItem Env: | ForEach-Object { Write-Output ($_.Name + '=' + [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($_.Value))) }; Write-Output '__BB_SHELL_ENV_END__'\"",
+    "creationDate": "2026-09-16T15:17:03.4383960+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 26776,
+    "pid": 16580
+  }
+]

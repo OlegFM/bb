@@ -1,0 +1,200 @@
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/lifecycle.test.ts > fake provider smoke lifecycle integration > creates a managed worktree and registers it as a git worktree
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/lifecycle.test.ts:59:3
+@bb/integration-tests:test:      57|     }));
+@bb/integration-tests:test:      58|
+@bb/integration-tests:test:      59|   it("creates a managed worktree and registers it as a git worktree", …
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      60|     withHarness(
+@bb/integration-tests:test:      61|       { builtinPlugins: ["environment-git-worktree"] },
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/lifecycle.test.ts > fake provider smoke lifecycle integration > starts parent and child threads with the shared runtime config
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/lifecycle.test.ts:92:3
+@bb/integration-tests:test:      90|     ));
+@bb/integration-tests:test:      91|
+@bb/integration-tests:test:      92|   it("starts parent and child threads with the shared runtime config",…
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      93|     const record = await recordScriptedEchoRequests();
+@bb/integration-tests:test:      94|     try {
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/reuse-and-reprovision.test.ts > fake provider smoke reuse integration > moves a thread to error and records failure events when environment provisioning fails
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/reuse-and-reprovision.test.ts:41:3
+@bb/integration-tests:test:      39|
+@bb/integration-tests:test:      40| describe.sequential("fake provider smoke reuse integration", () => {
+@bb/integration-tests:test:      41|   it("moves a thread to error and records failure events when environm…
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      42|     withHarness(async (harness) => {
+@bb/integration-tests:test:      43|       const project = await createProjectFixture(
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/reuse-and-reprovision.test.ts > fake provider smoke reuse integration > reuses the same unmanaged environment when two host threads target the same path
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/reuse-and-reprovision.test.ts > fake provider smoke reuse integration > creates a reuse thread without provisioning a second environment
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/reuse-and-reprovision.test.ts > fake provider smoke reuse integration > re-attaches a checkout whose row lost its path when the thread is sent to
+@bb/integration-tests:test: Error: EPERM: operation not permitted, rename 'C:\Users\olege\Work\bb\plugins\provider-claude-code\dist\.host-stage-FGhzIj\host.js' -> 'C:\Users\olege\Work\bb\plugins\provider-claude-code\dist\host.js'
+@bb/integration-tests:test:  ❯ buildPluginHost ../../packages/plugin-build/src/build-plugin-host.ts:538:5
+@bb/integration-tests:test:     536|       ) + "\n",
+@bb/integration-tests:test:     537|     );
+@bb/integration-tests:test:     538|     await rename(stagedJsPath, jsPath);
+@bb/integration-tests:test:        |     ^
+@bb/integration-tests:test:     539|     await rename(join(stageDir, "host.js.map"), mapPath);
+@bb/integration-tests:test:     540|     await rename(stagedMetaPath, metaPath);
+@bb/integration-tests:test:  ❯ buildFirstPartyBridgeArtifact ../../apps/server/test/helpers/provider-registry.ts:189:17
+@bb/integration-tests:test:  ❯ recordFirstPartyProviderBridgeArtifacts ../../apps/server/test/helpers/provider-registry.ts:208:22
+@bb/integration-tests:test:  ❯ startIntegrationServer helpers/harness.ts:265:3
+@bb/integration-tests:test:  ❯ createIntegrationHarness helpers/harness.ts:538:14
+@bb/integration-tests:test:  ❯ withHarness helpers/harness.ts:592:19
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/theme-resolve.test.ts > theme resolve integration > resolves a theme by id without activating it
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/theme-resolve.test.ts:10:3
+@bb/integration-tests:test:       8|
+@bb/integration-tests:test:       9| describe.sequential("theme resolve integration", () => {
+@bb/integration-tests:test:      10|   it("resolves a theme by id without activating it", () =>
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      11|     withHarness(async (harness) => {
+@bb/integration-tests:test:      12|       const themeDir = path.join(
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/theme-resolve.test.ts > theme resolve integration > rejects unknown and malformed theme ids
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/theme-resolve.test.ts:54:3
+@bb/integration-tests:test:      52|     }));
+@bb/integration-tests:test:      53|
+@bb/integration-tests:test:      54|   it("rejects unknown and malformed theme ids", () =>
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      55|     withHarness(async (harness) => {
+@bb/integration-tests:test:      56|       const missing = await harness.api.settings.themes[":id"].$get({
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/tool-calls.test.ts > fake provider tool-call integration > resolves unresolved provider turn ids before tool results unblock the provider
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/tool-calls.test.ts:16:3
+@bb/integration-tests:test:      14|
+@bb/integration-tests:test:      15| describe.sequential("fake provider tool-call integration", () => {
+@bb/integration-tests:test:      16|   it("resolves unresolved provider turn ids before tool results unbloc…
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      17|     withHarness(async (harness) => {
+@bb/integration-tests:test:      18|       const project = await createProjectFixture(
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  FAIL  |@bb/integration-tests| fake/smoke/user-questions.test.ts > fake provider user-question integration > pauses for a user question and resumes with the answer
+@bb/integration-tests:test: Error: Test timed out in 60000ms.
+@bb/integration-tests:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+@bb/integration-tests:test:  ❯ fake/smoke/user-questions.test.ts:45:3
+@bb/integration-tests:test:      43|
+@bb/integration-tests:test:      44| describe.sequential("fake provider user-question integration", () => {
+@bb/integration-tests:test:      45|   it("pauses for a user question and resumes with the answer", () =>
+@bb/integration-tests:test:        |   ^
+@bb/integration-tests:test:      46|     withHarness(async (harness) => {
+@bb/integration-tests:test:      47|       const project = await createProjectFixture(
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/57]⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test: Vitest caught 2 unhandled errors during the test run.
+@bb/integration-tests:test: This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+@bb/integration-tests:test: WorkspaceError: .bb-env-setup.sh is a POSIX shell script; on Windows bb runs .bb-env-setup.ps1 instead (pwsh.exe or powershell.exe)
+@bb/integration-tests:test:  ❯ runLifecycleScript ../../apps/host-daemon/src/environment-lifecycle-script.ts:216:11
+@bb/integration-tests:test:  ❯ RuntimeManager.createEntry ../../apps/host-daemon/src/runtime-manager.ts:1230:7
+@bb/integration-tests:test:  ❯ Object.provisionEnvironment [as environment.attach] ../../apps/host-daemon/src/command-handlers/environment.ts:43:19
+@bb/integration-tests:test:  ❯ dispatchCommand ../../apps/host-daemon/src/command-dispatch.ts:844:12
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+@bb/integration-tests:test: Serialized Error: { code: 'setup_script_failed' }
+@bb/integration-tests:test: This error originated in "fake/environments/environment-attach-recovery.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+@bb/integration-tests:test: The latest test that might've caused the error is "cancels an in-flight setup script before attaching the workspace". It might mean one of the following:
+@bb/integration-tests:test: - The error was thrown, while Vitest was running this test.
+@bb/integration-tests:test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+@bb/integration-tests:test: WorkspaceError: .bb-env-setup.sh is a POSIX shell script; on Windows bb runs .bb-env-setup.ps1 instead (pwsh.exe or powershell.exe)
+@bb/integration-tests:test:  ❯ runLifecycleScript ../../apps/host-daemon/src/environment-lifecycle-script.ts:216:11
+@bb/integration-tests:test:  ❯ RuntimeManager.createEntry ../../apps/host-daemon/src/runtime-manager.ts:1230:7
+@bb/integration-tests:test:  ❯ Object.provisionEnvironment [as environment.attach] ../../apps/host-daemon/src/command-handlers/environment.ts:43:19
+@bb/integration-tests:test:  ❯ dispatchCommand ../../apps/host-daemon/src/command-dispatch.ts:844:12
+@bb/integration-tests:test: 
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+@bb/integration-tests:test: Serialized Error: { code: 'setup_script_failed' }
+@bb/integration-tests:test: This error originated in "fake/environments/environment-attach-recovery.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+@bb/integration-tests:test: The latest test that might've caused the error is "coalesces a repeated attach while setup is still running". It might mean one of the following:
+@bb/integration-tests:test: - The error was thrown, while Vitest was running this test.
+@bb/integration-tests:test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+@bb/integration-tests:test: ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+@bb/integration-tests:test: 
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  Test Files  19 failed | 10 passed (29)
+@bb/integration-tests:test:       Tests  57 failed | 24 passed (81)
+@bb/integration-tests:test:      Errors  2 errors
+@bb/integration-tests:test:    Start at  14:24:32
+@bb/integration-tests:test:    Duration  454.45s (transform 1457.43s, setup 0ms, import 2348.48s, tests 2974.55s, environment 14ms)
+@bb/integration-tests:test: 
+@bb/integration-tests:test:  ELIFECYCLE  Test failed. See above for more details.
+@bb/integration-tests#test:  WARNING  command finished with error, but continuing...
+bb-plugin-browser-automation#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\browser-automation) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-app#test:  ERROR  command (C:\Users\olege\Work\bb\packages\bb-app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/config#test:  ERROR  command (C:\Users\olege\Work\bb\packages\config) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-theme-preview#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\theme-preview) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-echo-provider#test:  ERROR  command (C:\Users\olege\Work\bb\examples\plugins\echo-provider) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/provider-bridge-protocol#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-bridge-protocol) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/logger#test:  ERROR  command (C:\Users\olege\Work\bb\packages\logger) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/sdk#test:  ERROR  command (C:\Users\olege\Work\bb\packages\sdk) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/provider-parity#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-parity) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/provider-bridge-acp#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-bridge-acp) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-pi#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-pi) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-claude-code#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-claude-code) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/qa#test:  ERROR  command (C:\Users\olege\Work\bb\tests\qa) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-automations#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\automations) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/plugin-build#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-build) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/local-open-targets#test:  ERROR  command (C:\Users\olege\Work\bb\packages\local-open-targets) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/scripts#test:  ERROR  command (C:\Users\olege\Work\bb\packages\scripts) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/db#test:  ERROR  command (C:\Users\olege\Work\bb\packages\db) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/connect#test:  ERROR  command (C:\Users\olege\Work\bb\apps\connect) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/cli#test:  ERROR  command (C:\Users\olege\Work\bb\apps\cli) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-workflows#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\workflows) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-codex#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-codex) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-environment-project-checkout#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\environment-project-checkout) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/mobile#test:  ERROR  command (C:\Users\olege\Work\bb\apps\mobile) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/desktop#test:  ERROR  command (C:\Users\olege\Work\bb\apps\desktop) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-environment-personal-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\environment-personal-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\packages\host-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/templates#test:  ERROR  command (C:\Users\olege\Work\bb\packages\templates) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/agent-runtime#test:  ERROR  command (C:\Users\olege\Work\bb\packages\agent-runtime) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-account-pool#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\account-pool) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@get-bb/plugin-sdk#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-sdk) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-github#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\github) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-watcher#test:  ERROR  command (C:\Users\olege\Work\bb\packages\host-watcher) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/plugin-registry#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-registry) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-tasks#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\tasks) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/server#test:  ERROR  command (C:\Users\olege\Work\bb\apps\server) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/app#test:  ERROR  command (C:\Users\olege\Work\bb\apps\app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/integration-tests#test:  ERROR  command (C:\Users\olege\Work\bb\tests\integration) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+
+  Tasks:    53 successful, 91 total
+ Cached:    7 cached, 91 total
+   Time:    22m48.259s 
+Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JPMcIG91zBYiywtqrqC0eOUDfh.json
+ Failed:    @bb/agent-runtime#test, @bb/app#test, @bb/cli#test, @bb/config#test, @bb/connect#test, @bb/db#test, @bb/desktop#test, @bb/host-watcher#test, @bb/host-workspace#test, @bb/integration-tests#test, @bb/local-open-targets#test, @bb/logger#test, @bb/mobile#test, @bb/plugin-build#test, @bb/plugin-registry#test, @bb/provider-bridge-acp#test, @bb/provider-bridge-protocol#test, @bb/provider-parity#test, @bb/qa#test, @bb/scripts#test, @bb/sdk#test, @bb/server#test, @bb/templates#test, @get-bb/plugin-sdk#test, bb-app#test, bb-plugin-account-pool#test, bb-plugin-automations#test, bb-plugin-browser-automation#test, bb-plugin-echo-provider#test, bb-plugin-environment-personal-workspace#test, bb-plugin-environment-project-checkout#test, bb-plugin-github#test, bb-plugin-provider-claude-code#test, bb-plugin-provider-codex#test, bb-plugin-provider-pi#test, bb-plugin-tasks#test, bb-plugin-theme-preview#test, bb-plugin-workflows#test
+
+ ERROR  run failed: command  exited (1)
+TEST_TURBO_EXIT=1

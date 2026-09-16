@@ -1,0 +1,506 @@
+[
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+    "creationDate": "2026-09-15T08:26:58.4978000+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 11912,
+    "pid": 12252
+  },
+  {
+    "commandLine": "\"C:\\WINDOWS\\system32\\cmd.exe\" /C \"C:\\Program Files\\AMD\\CNext\\CNext\\AMDRSServ.exe\"",
+    "creationDate": "2026-09-15T08:27:33.4155120+03:00",
+    "name": "cmd.exe",
+    "parentPid": 15768,
+    "pid": 9852
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T08:27:33.4262590+03:00",
+    "name": "conhost.exe",
+    "parentPid": 9852,
+    "pid": 14648
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /d /s /c \"\"C:\\Users\\olege\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\ChromeNativeHost\\chrome-native-host.exe\" chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/ --parent-window=0\" < \\\\.\\pipe\\chrome.nativeMessaging.in.d47d200347a13f31 > \\\\.\\pipe\\chrome.nativeMessaging.out.d47d200347a13f31",
+    "creationDate": "2026-09-15T08:27:46.7556560+03:00",
+    "name": "cmd.exe",
+    "parentPid": 15324,
+    "pid": 17928
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T08:27:46.9006730+03:00",
+    "name": "conhost.exe",
+    "parentPid": 17928,
+    "pid": 17948
+  },
+  {
+    "commandLine": "",
+    "creationDate": "2026-09-15T08:28:55.6369710+03:00",
+    "name": "conhost.exe",
+    "parentPid": 8236,
+    "pid": 14412
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T08:29:24.9767410+03:00",
+    "name": "conhost.exe",
+    "parentPid": 29308,
+    "pid": 29436
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T08:29:52.6953040+03:00",
+    "name": "conhost.exe",
+    "parentPid": 31620,
+    "pid": 31664
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T08:30:03.1529620+03:00",
+    "name": "conhost.exe",
+    "parentPid": 31260,
+    "pid": 29916
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+    "creationDate": "2026-09-15T10:33:30.3780630+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 11912,
+    "pid": 16700
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T10:46:55.9577140+03:00",
+    "name": "conhost.exe",
+    "parentPid": 34284,
+    "pid": 24084
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T10:46:59.9401780+03:00",
+    "name": "conhost.exe",
+    "parentPid": 22708,
+    "pid": 20572
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T10:47:00.0981030+03:00",
+    "name": "conhost.exe",
+    "parentPid": 13540,
+    "pid": 21744
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T10:47:00.1114280+03:00",
+    "name": "conhost.exe",
+    "parentPid": 27760,
+    "pid": 30568
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T10:47:00.1143700+03:00",
+    "name": "conhost.exe",
+    "parentPid": 35784,
+    "pid": 7484
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-15T13:34:08.6029300+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 4592
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" \"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.908.4834.0_x64__2p2nqsd0c76g0\\app\\resources\\artifact-template-picker\\server.mjs\"",
+    "creationDate": "2026-09-15T13:34:08.6077650+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 31708
+  },
+  {
+    "commandLine": "\"C:\\WINDOWS\\system32\\cmd.exe\" /d /s /c call ./scripts/launch_codex_app_tools_mcp.cmd ./server.mjs",
+    "creationDate": "2026-09-15T13:34:08.6183200+03:00",
+    "name": "cmd.exe",
+    "parentPid": 31620,
+    "pid": 6132
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\"  ./server.mjs",
+    "creationDate": "2026-09-15T13:34:08.6532220+03:00",
+    "name": "node.exe",
+    "parentPid": 6132,
+    "pid": 28308
+  },
+  {
+    "commandLine": "C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe --experimental-vm-modules --eval \"// Node's emulated realpath walks every ancestor. Windows may allow the target\n// while denying metadata on an ancestor (notably AppData). Keep normal Node\n// resolution, including symlink identity, and retry that failure using a handle\n// to the target. This grants no access and does not bypass reads or trust checks.\nconst fs = require(\\\"node:fs\\\");\nconst originalRealpathSync = fs.realpathSync;\nfs.realpathSync = Object.assign(\n  function realpathSync(path, options) {\n    try {\n      return originalRealpathSync(path, options);\n    } catch (error) {\n      if (\n        error?.syscall !== \\\"lstat\\\" ||\n        (error.code !== \\\"EPERM\\\" && error.code !== \\\"EACCES\\\")\n      ) {\n        throw error;\n      }\n      try {\n        return originalRealpathSync.native(path, options);\n      } catch {\n        throw error;\n      }\n    }\n  },\n  { native: originalRealpathSync.native },\n);\n\n// --eval leaves the script at argv[1]. Use Node's ordinary main-module loader\n// so argv, require.main, and relative imports keep their normal meaning.\nrequire(\\\"node:module\\\").runMain();\n\" C:\\Users\\olege\\AppData\\Local\\Temp\\.tmpcs0CP6\\kernel.js --session-id 2d79558308b74d1db9c366b35ff450d5 --working-dir C:\\Users\\olege\\Work\\PolyM\\GeoDocs",
+    "creationDate": "2026-09-15T13:58:21.8241000+03:00",
+    "name": "node.exe",
+    "parentPid": 6316,
+    "pid": 33576
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T13:58:21.8332620+03:00",
+    "name": "conhost.exe",
+    "parentPid": 33576,
+    "pid": 33076
+  },
+  {
+    "commandLine": "C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe --experimental-vm-modules --eval \"// Node's emulated realpath walks every ancestor. Windows may allow the target\n// while denying metadata on an ancestor (notably AppData). Keep normal Node\n// resolution, including symlink identity, and retry that failure using a handle\n// to the target. This grants no access and does not bypass reads or trust checks.\nconst fs = require(\\\"node:fs\\\");\nconst originalRealpathSync = fs.realpathSync;\nfs.realpathSync = Object.assign(\n  function realpathSync(path, options) {\n    try {\n      return originalRealpathSync(path, options);\n    } catch (error) {\n      if (\n        error?.syscall !== \\\"lstat\\\" ||\n        (error.code !== \\\"EPERM\\\" && error.code !== \\\"EACCES\\\")\n      ) {\n        throw error;\n      }\n      try {\n        return originalRealpathSync.native(path, options);\n      } catch {\n        throw error;\n      }\n    }\n  },\n  { native: originalRealpathSync.native },\n);\n\n// --eval leaves the script at argv[1]. Use Node's ordinary main-module loader\n// so argv, require.main, and relative imports keep their normal meaning.\nrequire(\\\"node:module\\\").runMain();\n\" C:\\Users\\olege\\AppData\\Local\\Temp\\.tmpcs0CP6\\trusted-worker.js C:\\Users\\olege\\Work\\PolyM\\GeoDocs",
+    "creationDate": "2026-09-15T13:58:21.8458170+03:00",
+    "name": "node.exe",
+    "parentPid": 4348,
+    "pid": 25792
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T13:58:21.8547530+03:00",
+    "name": "conhost.exe",
+    "parentPid": 25792,
+    "pid": 21168
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-15T21:18:08.4965300+03:00",
+    "name": "conhost.exe",
+    "parentPid": 40780,
+    "pid": 40196
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /C call C:\\Users\\olege\\.pyenv\\pyenv-win\\bin/pyenv.bat exec python -",
+    "creationDate": "2026-09-15T21:18:08.7904840+03:00",
+    "name": "cmd.exe",
+    "parentPid": 25652,
+    "pid": 29288
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /C call C:\\Users\\olege\\.pyenv\\pyenv-win\\bin/pyenv.bat exec python -",
+    "creationDate": "2026-09-16T02:35:23.7365080+03:00",
+    "name": "cmd.exe",
+    "parentPid": 45896,
+    "pid": 43452
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T02:53:27.2232090+03:00",
+    "name": "conhost.exe",
+    "parentPid": 46416,
+    "pid": 11832
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T02:53:27.4120060+03:00",
+    "name": "conhost.exe",
+    "parentPid": 33696,
+    "pid": 39912
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T02:53:58.5181630+03:00",
+    "name": "conhost.exe",
+    "parentPid": 40136,
+    "pid": 45852
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T09:35:08.3276340+03:00",
+    "name": "conhost.exe",
+    "parentPid": 41940,
+    "pid": 46996
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T10:31:54.7216770+03:00",
+    "name": "conhost.exe",
+    "parentPid": 39136,
+    "pid": 42536
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T10:32:15.7662750+03:00",
+    "name": "conhost.exe",
+    "parentPid": 37932,
+    "pid": 43540
+  },
+  {
+    "commandLine": "powershell.exe -NoExit -ExecutionPolicy Bypass -File C:\\Users\\olege\\AppData\\Local\\Programs\\PyCharm\\plugins\\terminal\\shell-integrations\\powershell\\powershell-integration.ps1",
+    "creationDate": "2026-09-16T10:33:19.7700440+03:00",
+    "name": "powershell.exe",
+    "parentPid": 27464,
+    "pid": 35348
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T10:33:20.0232480+03:00",
+    "name": "conhost.exe",
+    "parentPid": 39228,
+    "pid": 16212
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T10:33:20.4316160+03:00",
+    "name": "conhost.exe",
+    "parentPid": 39324,
+    "pid": 21812
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+    "creationDate": "2026-09-16T10:50:51.6787500+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 11912,
+    "pid": 42172
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-16T10:59:06.0198120+03:00",
+    "name": "node.exe",
+    "parentPid": 16508,
+    "pid": 17360
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-16T11:31:27.1992810+03:00",
+    "name": "node.exe",
+    "parentPid": 16508,
+    "pid": 43988
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+    "creationDate": "2026-09-16T11:37:44.9280130+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 11912,
+    "pid": 43544
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T11:38:12.3014040+03:00",
+    "name": "conhost.exe",
+    "parentPid": 9556,
+    "pid": 24608
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-16T12:17:37.2068490+03:00",
+    "name": "node.exe",
+    "parentPid": 16508,
+    "pid": 39052
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" \"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.908.4834.0_x64__2p2nqsd0c76g0\\app\\resources\\artifact-template-picker\\server.mjs\"",
+    "creationDate": "2026-09-16T13:06:51.0662440+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 34012
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-16T13:06:51.0907220+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 44556
+  },
+  {
+    "commandLine": "\"C:\\WINDOWS\\system32\\cmd.exe\" /d /s /c call ./scripts/launch_codex_app_tools_mcp.cmd ./server.mjs",
+    "creationDate": "2026-09-16T13:06:51.1057560+03:00",
+    "name": "cmd.exe",
+    "parentPid": 31620,
+    "pid": 37896
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\"  ./server.mjs",
+    "creationDate": "2026-09-16T13:06:51.1467790+03:00",
+    "name": "node.exe",
+    "parentPid": 37896,
+    "pid": 26176
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node_modules\\@oai\\cua-repl\\bin\\cua-repl.mjs",
+    "creationDate": "2026-09-16T14:14:46.5130520+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 4964
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\" \"C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.908.4834.0_x64__2p2nqsd0c76g0\\app\\resources\\artifact-template-picker\\server.mjs\"",
+    "creationDate": "2026-09-16T14:14:46.5268440+03:00",
+    "name": "node.exe",
+    "parentPid": 31620,
+    "pid": 36752
+  },
+  {
+    "commandLine": "\"C:\\WINDOWS\\system32\\cmd.exe\" /d /s /c call ./scripts/launch_codex_app_tools_mcp.cmd ./server.mjs",
+    "creationDate": "2026-09-16T14:14:46.5488890+03:00",
+    "name": "cmd.exe",
+    "parentPid": 31620,
+    "pid": 46092
+  },
+  {
+    "commandLine": "\"C:\\Users\\olege\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\a708e72b10c27b59\\bin\\node.exe\"  ./server.mjs",
+    "creationDate": "2026-09-16T14:14:46.7109060+03:00",
+    "name": "node.exe",
+    "parentPid": 46092,
+    "pid": 30380
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T14:33:18.0409650+03:00",
+    "name": "conhost.exe",
+    "parentPid": 9324,
+    "pid": 49892
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /C call C:\\Users\\olege\\.pyenv\\pyenv-win\\bin/pyenv.bat exec python -",
+    "creationDate": "2026-09-16T14:33:18.3229580+03:00",
+    "name": "cmd.exe",
+    "parentPid": 45448,
+    "pid": 47056
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\System32\\cmd.exe /d /s /c \"\"C:\\WINDOWS\\System32\\chcp.com\" 65001 >nul & \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript\" > \"C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\tasks\\blra07fvm.output\" 2>&1\"",
+    "creationDate": "2026-09-16T15:03:40.3689570+03:00",
+    "name": "cmd.exe",
+    "parentPid": 13580,
+    "pid": 45492
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:03:40.3887720+03:00",
+    "name": "conhost.exe",
+    "parentPid": 45492,
+    "pid": 38052
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"  -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript\" ",
+    "creationDate": "2026-09-16T15:03:40.4302840+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 45492,
+    "pid": 48820
+  },
+  {
+    "commandLine": "\"C:\\nvm4w\\nodejs\\node.exe\" C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\scratchpad\\feed-server.mjs C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\scratchpad\\feed-n1 47000",
+    "creationDate": "2026-09-16T15:03:40.9020300+03:00",
+    "name": "node.exe",
+    "parentPid": 48820,
+    "pid": 35916
+  },
+  {
+    "commandLine": "\"C:\\nvm4w\\nodejs\\node.exe\" -e setInterval(()=>{},1000)",
+    "creationDate": "2026-09-16T15:14:48.0455190+03:00",
+    "name": "node.exe",
+    "parentPid": 46980,
+    "pid": 37240
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:14:48.0596940+03:00",
+    "name": "conhost.exe",
+    "parentPid": 37240,
+    "pid": 32532
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\System32\\cmd.exe /d /s /c \"\"C:\\WINDOWS\\System32\\chcp.com\" 65001 >nul & \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript\" > \"C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\tasks\\b8hgzq1mn.output\" 2>&1\"",
+    "creationDate": "2026-09-16T15:16:56.8960360+03:00",
+    "name": "cmd.exe",
+    "parentPid": 13580,
+    "pid": 24036
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:16:56.9144380+03:00",
+    "name": "conhost.exe",
+    "parentPid": 24036,
+    "pid": 34264
+  },
+  {
+    "commandLine": "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"  -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript\" ",
+    "creationDate": "2026-09-16T15:16:56.9464970+03:00",
+    "name": "pwsh.exe",
+    "parentPid": 24036,
+    "pid": 39732
+  },
+  {
+    "commandLine": "\"C:\\nvm4w\\nodejs\\node.exe\" C:\\nvm4w\\nodejs/node_modules/corepack/dist/pnpm.js exec turbo run smoke:windows-processes --filter=@bb/desktop --force --output-logs=new-only -- --evidence-dir C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run3",
+    "creationDate": "2026-09-16T15:17:12.7716030+03:00",
+    "name": "node.exe",
+    "parentPid": 39732,
+    "pid": 42876
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /q /d /s /c \"turbo ^^^\"run^^^\" ^^^\"smoke:windows-processes^^^\" ^^^\"--filter=@bb/desktop^^^\" ^^^\"--force^^^\" ^^^\"--output-logs=new-only^^^\" ^^^\"--^^^\" ^^^\"--evidence-dir^^^\" ^^^\"C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run3^^^\"\"",
+    "creationDate": "2026-09-16T15:17:13.1651360+03:00",
+    "name": "cmd.exe",
+    "parentPid": 42876,
+    "pid": 44804
+  },
+  {
+    "commandLine": "node   \"C:\\Users\\olege\\Work\\bb\\node_modules\\.bin\\\\..\\turbo\\bin\\turbo\" \"run\" \"smoke:windows-processes\" \"--filter=@bb/desktop\" \"--force\" \"--output-logs=new-only\" \"--\" \"--evidence-dir\" \"C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run3\"",
+    "creationDate": "2026-09-16T15:17:13.1921070+03:00",
+    "name": "node.exe",
+    "parentPid": 44804,
+    "pid": 42720
+  },
+  {
+    "commandLine": "cmd.exe /e:ON /v:OFF /d /c \"\"C:\\nvm4w\\nodejs\\pnpm.CMD\" run smoke:windows-processes --evidence-dir C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run3\"",
+    "creationDate": "2026-09-16T15:17:13.4044120+03:00",
+    "name": "cmd.exe",
+    "parentPid": 43228,
+    "pid": 47924
+  },
+  {
+    "commandLine": "\"C:\\nvm4w\\nodejs\\\\node.exe\"   \"C:\\nvm4w\\nodejs\\\\node_modules\\corepack\\dist\\pnpm.js\" run smoke:windows-processes --evidence-dir C:\\Users\\olege\\Work\\bb\\qa\\windows\\phase-4\\process-hygiene\\run3",
+    "creationDate": "2026-09-16T15:17:13.5033210+03:00",
+    "name": "node.exe",
+    "parentPid": 47924,
+    "pid": 10548
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /d /s /c node scripts/smoke-windows-processes.mjs \"--evidence-dir\" \"C:\\\\Users\\\\olege\\\\Work\\\\bb\\\\qa\\\\windows\\\\phase-4\\\\process-hygiene\\\\run3\"",
+    "creationDate": "2026-09-16T15:17:13.9459520+03:00",
+    "name": "cmd.exe",
+    "parentPid": 10548,
+    "pid": 39360
+  },
+  {
+    "commandLine": "node  scripts/smoke-windows-processes.mjs \"--evidence-dir\" \"C:\\\\Users\\\\olege\\\\Work\\\\bb\\\\qa\\\\windows\\\\phase-4\\\\process-hygiene\\\\run3\"",
+    "creationDate": "2026-09-16T15:17:13.9660320+03:00",
+    "name": "node.exe",
+    "parentPid": 39360,
+    "pid": 39444
+  },
+  {
+    "commandLine": "C:\\nvm4w\\nodejs\\node.exe -e \"setInterval(() => undefined, 1000)\"",
+    "creationDate": "2026-09-16T15:17:14.0475810+03:00",
+    "name": "node.exe",
+    "parentPid": 39444,
+    "pid": 28596
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:17:14.0606990+03:00",
+    "name": "conhost.exe",
+    "parentPid": 28596,
+    "pid": 9984
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:17:26.1060830+03:00",
+    "name": "conhost.exe",
+    "parentPid": 23832,
+    "pid": 15560
+  },
+  {
+    "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, Name, CommandLine, @{ Name = 'CreationDate'; Expression = { $_.CreationDate.ToString('o') } }) | ConvertTo-Json -Compress -Depth 2\"",
+    "creationDate": "2026-09-16T15:17:26.3507340+03:00",
+    "name": "powershell.exe",
+    "parentPid": 39444,
+    "pid": 23840
+  },
+  {
+    "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4",
+    "creationDate": "2026-09-16T15:17:26.3554000+03:00",
+    "name": "conhost.exe",
+    "parentPid": 23840,
+    "pid": 40328
+  }
+]
