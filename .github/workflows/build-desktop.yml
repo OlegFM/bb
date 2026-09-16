@@ -211,11 +211,145 @@ jobs:
             apps/desktop/release/desktop-version-linux.json
           if-no-files-found: error
 
+  windows:
+    name: Windows x64 desktop artifacts
+    # Pinned rather than windows-latest so the NSIS/Electron toolchain the
+    # installer is measured against changes only when we choose it.
+    runs-on: windows-2025
+    timeout-minutes: 60
+    outputs:
+      has_windows_signing_secrets: ${{ steps.windows_signing.outputs.has_windows_signing_secrets }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Typecheck desktop and launcher
+        run: pnpm exec turbo run typecheck --filter=@bb/desktop --filter=bb-app --output-logs=new-only
+
+      - name: Build desktop
+        run: pnpm exec turbo run build --filter=@bb/desktop --output-logs=new-only
+
+      - name: Test desktop and launcher
+        run: pnpm exec turbo run test --filter=@bb/desktop --filter=bb-app --force --output-logs=new-only
+
+      - name: Validate Windows signing secrets
+        id: windows_signing
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_SIGNING_ACCOUNT_NAME }}
+          AZURE_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.AZURE_SIGNING_CERTIFICATE_PROFILE }}
+          WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: |
+          $required = @(
+            "AZURE_TENANT_ID",
+            "AZURE_CLIENT_ID",
+            "AZURE_CLIENT_SECRET",
+            "AZURE_SIGNING_ENDPOINT",
+            "AZURE_SIGNING_ACCOUNT_NAME",
+            "AZURE_SIGNING_CERTIFICATE_PROFILE",
+            "WINDOWS_PUBLISHER_NAME"
+          )
+          $present = @($required | Where-Object { -not [string]::IsNullOrWhiteSpace((Get-Item -Path "Env:$_" -ErrorAction SilentlyContinue).Value) })
+          $missing = @($required | Where-Object { $present -notcontains $_ })
+          $has = "false"
+          if ($present.Count -eq 0) {
+            Write-Output "::warning::Windows signing secrets are not configured; building an unsigned NSIS installer that a publish run will withhold. The Windows version feed still publishes."
+          } elseif ($missing.Count -eq 0) {
+            Write-Output "Windows signing secrets are complete; the installer will be signed with Azure Trusted Signing."
+            $has = "true"
+          } else {
+            Write-Output "::error::Incomplete Windows signing secret set. Present: $($present -join ', '). Missing: $($missing -join ', ')."
+            exit 1
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "has_windows_signing_secrets=$has"
+
+      - name: Package x64 NSIS installer
+        # No --force, for the same reason the Linux leg gives: the packaging
+        # task is already cache: false, and forcing rebuilds its cached
+        # bb-app/@bb/desktop dependencies a second time.
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_SIGNING_ACCOUNT_NAME }}
+          AZURE_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.AZURE_SIGNING_CERTIFICATE_PROFILE }}
+          WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: |
+          pnpm exec turbo run desktop:build:windows --filter=@bb/desktop --output-logs=new-only
+          exit $LASTEXITCODE
+
+      # The NSIS build leaves release/win-unpacked behind, so both smokes run
+      # against the very bits the installer wraps; no separate --dir package.
+      - name: Smoke test packaged desktop app
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
+        run: |
+          New-Item -ItemType Directory -Force "$env:TEMP" | Out-Null
+          pnpm exec turbo run smoke:packaged --filter=@bb/desktop --force --output-logs=new-only
+          exit $LASTEXITCODE
+
+      - name: Smoke test Windows process hygiene
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
+        run: |
+          pnpm exec turbo run smoke:windows-processes --filter=@bb/desktop --output-logs=new-only -- --evidence-dir qa-artifacts/process-hygiene
+          exit $LASTEXITCODE
+
+      - name: Generate desktop version feed
+        run: pnpm --dir apps/desktop run desktop:version-feed
+
+      - name: Upload desktop workflow artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bb-desktop-windows-x64
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest.yml
+            apps/desktop/release/desktop-version-windows.json
+          if-no-files-found: error
+
+      # Kept out of bb-desktop-windows-x64 on purpose: upload-artifact roots an
+      # artifact at the least common ancestor of its matched paths, and the
+      # publish job reads the release files from the top level of that download.
+      - name: Upload Windows process hygiene evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bb-desktop-windows-x64-process-hygiene
+          path: apps/desktop/qa-artifacts/process-hygiene/*.json
+          if-no-files-found: warn
+
   publish:
     name: Publish stable desktop release
     needs:
       - macos
       - linux
+      - windows
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     permissions:
@@ -231,6 +365,7 @@ jobs:
         id: release_plan
         env:
           HAS_SIGNING_SECRETS: ${{ needs.macos.outputs.has_signing_secrets }}
+          HAS_WINDOWS_SIGNING_SECRETS: ${{ needs.windows.outputs.has_windows_signing_secrets }}
           INPUT_PUBLISH: ${{ inputs.publish }}
           RELEASE_CHANNEL: ${{ inputs.release_channel }}
         run: |
@@ -256,11 +391,21 @@ jobs:
             echo "::warning::macOS signing/notarization secrets are missing; publishing the version feeds and Linux AppImage only, and withholding unsigned .dmg/.zip artifacts."
           fi
 
+          # An unsigned NSIS installer trips SmartScreen, so the Windows
+          # binaries wait on the Azure Trusted Signing secrets the same way.
+          PUBLISH_WINDOWS_BINARIES="false"
+          if [[ "$HAS_WINDOWS_SIGNING_SECRETS" == "true" ]]; then
+            PUBLISH_WINDOWS_BINARIES="true"
+          elif [[ "$SHOULD_PUBLISH" == "true" ]]; then
+            echo "::warning::Windows signing secrets are missing; publishing the Windows version feed only and withholding the unsigned .exe installer."
+          fi
+
           {
             echo "version=$VERSION"
             echo "is_prerelease=$IS_PRERELEASE"
             echo "should_publish=$SHOULD_PUBLISH"
             echo "publish_macos_binaries=$PUBLISH_MACOS_BINARIES"
+            echo "publish_windows_binaries=$PUBLISH_WINDOWS_BINARIES"
           } >> "$GITHUB_OUTPUT"
 
       - name: Download macOS desktop artifacts
@@ -277,12 +422,20 @@ jobs:
           name: bb-desktop-linux-x64
           path: release/linux
 
+      - name: Download Windows desktop artifacts
+        if: steps.release_plan.outputs.should_publish == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bb-desktop-windows-x64
+          path: release/windows
+
       - name: Publish stable desktop release feed
         if: steps.release_plan.outputs.should_publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.release_plan.outputs.version }}
           PUBLISH_MACOS_BINARIES: ${{ steps.release_plan.outputs.publish_macos_binaries }}
+          PUBLISH_WINDOWS_BINARIES: ${{ steps.release_plan.outputs.publish_windows_binaries }}
         run: |
           set -euo pipefail
 
@@ -290,6 +443,7 @@ jobs:
           LATEST_TAG="desktop-latest"
           MACOS_DIR="release/macos"
           LINUX_DIR="release/linux"
+          WINDOWS_DIR="release/windows"
 
           RELEASE_ASSETS=()
 
@@ -320,6 +474,15 @@ jobs:
           add_required_glob "$LINUX_DIR"/*.AppImage
           # AppImage embeds its block map, so a sidecar file is not guaranteed.
           add_optional_glob "$LINUX_DIR"/*.blockmap
+
+          add_required_glob "$WINDOWS_DIR/desktop-version-windows.json"
+          if [[ "$PUBLISH_WINDOWS_BINARIES" == "true" ]]; then
+            add_required_glob "$WINDOWS_DIR/latest.yml"
+            add_required_glob "$WINDOWS_DIR"/*.exe
+            add_required_glob "$WINDOWS_DIR"/*.blockmap
+          else
+            echo "Windows signing gate is closed; publishing the Windows version feed without the installer."
+          fi
 
           if [[ "$PUBLISH_MACOS_BINARIES" == "true" ]]; then
             add_required_glob "$MACOS_DIR/latest-mac.yml"
@@ -375,6 +538,7 @@ jobs:
         env:
           IS_PRERELEASE: ${{ steps.release_plan.outputs.is_prerelease }}
           PUBLISH_MACOS_BINARIES: ${{ steps.release_plan.outputs.publish_macos_binaries }}
+          PUBLISH_WINDOWS_BINARIES: ${{ steps.release_plan.outputs.publish_windows_binaries }}
           SHOULD_PUBLISH: ${{ steps.release_plan.outputs.should_publish }}
           VERSION: ${{ steps.release_plan.outputs.version }}
         run: |
@@ -383,10 +547,13 @@ jobs:
             echo
             echo "- arm64 macOS .dmg, .zip, latest-mac.yml, and desktop-version.json uploaded as workflow artifacts"
             echo "- x64 Linux .AppImage, latest-linux.yml, and desktop-version-linux.json uploaded as workflow artifacts"
+            echo "- x64 Windows .exe, latest.yml, and desktop-version-windows.json uploaded as workflow artifacts"
             echo "- version: ${VERSION}"
             echo "- prerelease version: ${IS_PRERELEASE}"
             echo "- stable release publication requested and allowed: ${SHOULD_PUBLISH}"
             echo "- macOS release binary upload enabled: ${PUBLISH_MACOS_BINARIES}"
+            echo "- Windows release binary upload enabled: ${PUBLISH_WINDOWS_BINARIES}"
             echo "- macOS feed URL: https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version.json"
             echo "- Linux feed URL: https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version-linux.json"
+            echo "- Windows feed URL: https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version-windows.json"
           } >> "$GITHUB_STEP_SUMMARY"
