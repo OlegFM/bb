@@ -1,8 +1,8 @@
 # @bb/desktop
 
-macOS and Linux Electron shell for bb. The desktop app loads the existing bb
-web UI and uses the packaged `bb-app` launcher for server and host-daemon
-lifecycle.
+macOS, Linux and Windows Electron shell for bb. The desktop app loads the
+existing bb web UI and uses the packaged `bb-app` launcher for server and
+host-daemon lifecycle.
 
 ## Development
 
@@ -69,6 +69,34 @@ pnpm exec turbo run build --filter=@bb/desktop
 pnpm exec turbo run test --filter=@bb/desktop --filter=bb-app --force
 pnpm exec turbo run dev --filter=@bb/desktop
 ```
+
+### Windows
+
+Two smokes run against a packaged Windows build and must both pass before a
+Windows change is called done. Package first — either `package:windows` for an
+unpacked tree or `dist:windows` for the installer, which leaves the same
+`release/win-unpacked/` behind — then:
+
+```powershell
+pnpm exec turbo run smoke:packaged --filter=@bb/desktop --force
+pnpm exec turbo run smoke:windows-processes --filter=@bb/desktop
+```
+
+`smoke:packaged` launches `release/win-unpacked/bb.exe` against a stub server,
+checks the preload surface and then quits the app through the quit-request
+file described under Debugging, force-killing the tree only as a last resort
+that also fails the smoke.
+
+`smoke:windows-processes` is the orphan check. It starts an unrelated
+bystander process, snapshots `Win32_Process` through
+`Get-CimInstance`, launches the packaged app with a scratch data directory and
+free ports, waits for the owned runtime's `/health`, records the app's whole
+descendant set, quits through the quit-request file, and then fails if any
+descendant survives with the same pid and creation date, if any new bb-looking
+process mentions the scratch directories or the bridge, or if the bystander
+was killed. It writes `before.json`, `during.json`, `after.json` and
+`summary.json` to `--evidence-dir` (default `qa-artifacts/process-hygiene`);
+under Turbo that path resolves against `apps/desktop`, not the repo root.
 
 ## Packaging
 
@@ -153,6 +181,73 @@ requires the replacement to satisfy the running app's code-signing
 requirement. Write access to the release assets is therefore sufficient to
 push code to Linux clients. Treat the release token accordingly.
 
+### Windows (NSIS, x64)
+
+Windows packaging targets Windows 11 x64. No compiler is needed: node-pty
+ships a ConPTY-only N-API prebuild and `better-sqlite3` has an Electron-ABI
+prebuild for `win32-x64`.
+
+From the repo root, build an unpacked app or the installer with:
+
+```powershell
+pnpm --filter @bb/desktop run package:windows
+pnpm --filter @bb/desktop run dist:windows
+```
+
+`dist:windows` writes `release/bb-<version>-x64.exe`, its `.blockmap`,
+`release/latest.yml` and `release/win-unpacked/`; the nightly channel names
+them `bb-nightly-<version>-x64.exe` and `nightly.yml`. Both scripts go through
+`scripts/run-electron-builder.mjs`, which on Windows starts electron-builder
+as `node electron-builder/cli.js` because `node_modules/.bin/electron-builder`
+is a `.cmd` shim that cannot be spawned without a shell. The first build on a
+machine downloads the `winCodeSign` toolchain — and `nsis` for the installer —
+into `%LOCALAPPDATA%\electron-builder\Cache`, so budget several minutes for it
+and much less for later builds. The window icon comes from the checked-in
+`assets/icon.png`; app-builder-lib converts it to `.ico` itself, so no `.ico`
+is checked in. Expect electron-builder to log "signing with signtool.exe" even
+without signing secrets: it is a no-op and the executable stays unsigned.
+
+The installer is assisted rather than one-click and per-user rather than
+per-machine, so a standard account installs it without elevation. It defaults
+to `%LOCALAPPDATA%\Programs\bb`, lets the user change that, and creates a
+desktop shortcut. `%APPDATA%\bb` — Electron's `userData`, holding the
+owned-runtime record, the window state and the cached Connect credential —
+deliberately survives uninstall, and `%USERPROFILE%\.bb`, bb's own runtime
+data directory, is never touched by the installer or the uninstaller.
+
+Closing the last window on Windows does not quit the app: it parks in the
+tray with the owned `bb-app` runtime still running. The tray menu offers
+`Open bb` and `Quit bb`, and Quit stops the whole runtime process tree —
+identity-verified, never a blind `taskkill` — before the app exits. Windows
+logoff and shutdown run that same stop.
+
+### Windows signing
+
+Windows artifacts are signed through Azure Trusted Signing when all seven of
+these are set, and are unsigned otherwise:
+
+| Secret                              | Value                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `AZURE_TENANT_ID`                   | Entra tenant for the signing account; read by Azure's own credential chain, never by bb. |
+| `AZURE_CLIENT_ID`                   | Service principal application id.                                                        |
+| `AZURE_CLIENT_SECRET`               | Service principal secret.                                                                |
+| `AZURE_SIGNING_ENDPOINT`            | Trusted Signing account endpoint URL.                                                    |
+| `AZURE_SIGNING_ACCOUNT_NAME`        | Trusted Signing account name.                                                            |
+| `AZURE_SIGNING_CERTIFICATE_PROFILE` | Certificate profile inside that account.                                                 |
+| `WINDOWS_PUBLISHER_NAME`            | Publisher common name; also written as `publisherName`.                                  |
+
+A partial set is a build failure, not a silent unsigned build: the script
+aborts with `Incomplete Windows signing environment`, naming what is present
+and what is missing. In unsigned mode `publisherName` is deliberately left
+unset, which is what lets one unsigned build update to the next — see
+Auto-update below.
+
+No certificate exists today, so local and CI builds are unsigned and Windows
+SmartScreen shows "Windows protected your PC" on first launch; clearing it
+takes More info → Run anyway. Because of that, the publish job withholds the
+unsigned `.exe` from `desktop-latest` and publishes only the Windows version
+feed.
+
 ## Releasing
 
 `bb-app` and `@bb/desktop` versions are LOCKED in lockstep. The desktop package
@@ -176,20 +271,37 @@ release; use `scripts/bump-version.mjs` so both files move together.
 The desktop release tag uses the locked version: `desktop-v<version>` for
 immutable releases and `desktop-latest` for the moving pointer.
 
-`build-desktop.yml` builds macOS and Linux in parallel jobs, then publishes
-both from one job. The moving release resets all of its assets on each publish,
-so a single publisher is what keeps one platform from deleting the other's
-binaries. Each platform has its own update feed file inside the same release
-tag:
+`build-desktop.yml` builds macOS, Linux and Windows in parallel jobs, then
+publishes all three from one job. The moving release resets all of its assets
+on each publish, so a single publisher is what keeps one platform from deleting
+another's binaries. Each platform has its own update feed file inside the same
+release tag:
 
-| Platform | Artifacts              | electron-updater metadata | Version feed                 |
-| -------- | ---------------------- | ------------------------- | ---------------------------- |
-| macOS    | `.dmg`, `.zip` (arm64) | `latest-mac.yml`          | `desktop-version.json`       |
-| Linux    | `.AppImage` (x64)      | `latest-linux.yml`        | `desktop-version-linux.json` |
+| Platform | Artifacts              | electron-updater metadata | Version feed                   |
+| -------- | ---------------------- | ------------------------- | ------------------------------ |
+| macOS    | `.dmg`, `.zip` (arm64) | `latest-mac.yml`          | `desktop-version.json`         |
+| Linux    | `.AppImage` (x64)      | `latest-linux.yml`        | `desktop-version-linux.json`   |
+| Windows  | `.exe` (NSIS, x64)     | `latest.yml`              | `desktop-version-windows.json` |
 
-macOS keeps the unsuffixed feed name because released macOS builds already
-request it. Linux artifacts are unsigned; only the macOS binaries wait on the
-Apple signing secrets.
+Two unsuffixed names sit in that table and they are not the same thing. macOS
+keeps the unsuffixed **version feed** name because released macOS builds
+already request it. Windows keeps the unsuffixed **electron-updater metadata**
+name because app-builder-lib gives Windows an empty OS suffix.
+
+Linux artifacts are unsigned and publish on their own. The macOS binaries wait
+on the Apple signing secrets, and the Windows binaries wait on the Azure
+Trusted Signing secrets the same way: when either gate is closed the publish
+job still uploads that platform's version feed and withholds its unsigned
+binaries.
+
+The Windows job runs on the pinned `windows-2025` image — the same image the
+`windows-x64` CI job uses — validates the seven signing secrets, builds the
+installer, runs `smoke:packaged` and `smoke:windows-processes`, generates the
+version feed, and uploads two artifacts: `bb-desktop-windows-x64` with the
+release assets, and `bb-desktop-windows-x64-process-hygiene` with the smoke's
+JSON evidence. They are separate on purpose: `upload-artifact` roots an
+artifact at the least common ancestor of its matched paths, and the publish job
+reads the release files from the top level of its download.
 
 ## Nightly channel
 
@@ -211,12 +323,18 @@ nightly channel stays below `latest` until the next scheduled run.
 The nightly desktop is a separate installation:
 
 - product name: `bb Nightly`
-- bundle identifier: `dev.bb.desktop.nightly`
+- bundle identifier: `dev.bb.desktop.nightly`, which is also the Windows
+  AppUserModelID, so Windows taskbar grouping and notifications keep the two
+  channels apart
 - Linux binary name: `bb-nightly`, so it never shadows stable `bb` on PATH
+- Windows installer and executable: `bb-nightly-<version>-x64.exe` and
+  `bb Nightly.exe`
 - app/update release: `desktop-nightly`
-- update metadata: `nightly-mac.yml` and `nightly-linux.yml`
-- version feeds: `desktop-version.json` (macOS) and
-  `desktop-version-linux.json` (Linux)
+- update metadata: `nightly-mac.yml`, `nightly-linux.yml` and `nightly.yml`
+  (Windows)
+- version feeds: `desktop-version.json` (macOS),
+  `desktop-version-linux.json` (Linux) and `desktop-version-windows.json`
+  (Windows)
 - icon: `assets/icon-nightly.icns` and `assets/icon-nightly.png`
 
 Download it from
@@ -300,6 +418,20 @@ unless `BB_DESKTOP_AUTO_UPDATE=1` is set.
 workflow requires the complete signing/notarization secret set before
 publishing nightly desktop assets.
 
+Windows gets both paths too. The renderer toast reads
+`desktop-version-windows.json` and electron-updater reads `latest.yml` from
+the same `desktop-latest` directory. An available update downloads on its own
+and installs on quit or from Settings; the install handler runs the normal
+quit sequence first, so the whole `bb-app` runtime tree is already stopped
+before `quitAndInstall` hands the installer over. An unsigned build updates to
+the next unsigned build precisely because `publisherName` is unset:
+electron-updater's NSIS signature check accepts a download when no publisher
+name is configured, so setting a publisher without a certificate would break
+every update rather than harden it. There is no environment override for the
+electron-updater half — to point an installed build at a test feed, edit
+`url:` in `resources/app-update.yml` inside the installed copy, and record the
+original. The JSON half still follows `BB_DESKTOP_VERSION_FEED_URL`.
+
 To verify a downloaded or unpacked build:
 
 ```bash
@@ -316,8 +448,30 @@ Use the View menu to toggle DevTools. To open them automatically on launch, set
 BB_DESKTOP_OPEN_DEVTOOLS=1 apps/desktop/release/mac-arm64/bb.app/Contents/MacOS/bb
 ```
 
+On Windows the packaged binary is `bb.exe` under `release/win-unpacked/`, or
+`bb.exe` under the install directory for an installed copy:
+
+```powershell
+$env:BB_DESKTOP_OPEN_DEVTOOLS = "1"; apps\desktop\release\win-unpacked\bb.exe
+```
+
 When the desktop app spawns `bb-app`, server and daemon logs land under
 `~/.bb/logs/` or `$BB_DATA_DIR/logs/` when `BB_DATA_DIR` is set.
+
+Two Windows-only environment variables exist for automation, not for users.
+Neither is a product feature and neither does anything on macOS or Linux:
+
+- `BB_DESKTOP_QUIT_REQUEST_FILE` names a file path the app polls every 500 ms;
+  the first poll that finds the file quits the app once, on exactly the tray
+  Quit path. It exists because an Electron GUI process on Windows has no
+  console to receive a signal, so the packaged smokes need some way to ask for
+  a graceful quit. The app never deletes the file, so a script must use a
+  fresh path per run or delete a stale one before launching.
+- `BB_DESKTOP_PARENT_PID` is set by the desktop app on the `bb-app` child it
+  spawns. The launcher polls that pid every 2 seconds and shuts itself down
+  when the parent is gone, so a Desktop crash cannot leave a runtime behind.
+  Setting it by hand on a launcher bb did not spawn just ties that launcher's
+  lifetime to an unrelated process.
 
 To verify attach-if-found manually, start a compatible bb first, then launch the
 desktop app:

@@ -40,9 +40,17 @@ daemon, terminals and providers directly on Windows, with drive-letter project
 paths, PowerShell terminals through ConPTY, and provider CLIs resolved through
 `Path` and `PATHEXT`; see [platform-windows.md](platform-windows.md) for what
 has been measured and what is known not to work. It is verified on the fork's
-`windows-native/*` branches and by the `windows-x64` CI job. It is beta
-because the Windows Desktop app (Phase 4) and the persistent host (Phase 5)
-have not landed.
+`windows-native/*` branches and by the `windows-x64` CI job.
+
+The Windows Desktop app lands as part of that beta path: a per-user NSIS
+installer packages the Electron shell together with the `bb-app` runtime it
+supervises, parks in the tray when the last window closes, and updates through
+the same `desktop-latest` release the other platforms use. It is unsigned
+today, so SmartScreen warns on first launch and the publish job withholds the
+unsigned installer from the release; maintainers build one from source with
+`pnpm --filter @bb/desktop run dist:windows`. Native Windows stays beta
+because the persistent host (Phase 5) has not landed and no Windows
+code-signing certificate exists yet.
 
 ## Mobile app
 
@@ -160,8 +168,8 @@ Not available on the phone (use the web app or desktop for these):
 Native Windows is not one of these surfaces: it is a beta host environment
 listed above. [platform-windows.md](platform-windows.md) tracks the port phase
 by phase, including what each phase measured and the limitations that remain.
-Phase 3 (terminals, providers, watcher, native `bb-app`) has landed on the
-`windows-native/phase-3` fork branch and has not merged to `main`.
+Phase 4 (the Windows Desktop app) has landed on the `windows-native/phase-4`
+fork branch and has not merged to `main`.
 
 ## Dependency Policy
 
@@ -243,9 +251,10 @@ rebuild the native dependency, for example `npm rebuild better-sqlite3`.
   smoke jobs do not run on pull requests and should not be configured as
   required PR checks.
 - The native Windows job (`windows-x64`) runs the ConPTY smoke, a typecheck
-  and build, a non-blocking per-package test baseline, and the `bb-app`
-  tarball smoke. It is intentionally not a required check while the native
-  Windows path is beta.
+  and build, a non-blocking per-package test baseline, the `bb-app` tarball
+  smoke, and then packages the desktop app and runs the packaged-app and
+  process-hygiene smokes against it. It is intentionally not a required check
+  while the native Windows path is beta.
 - `apps/mobile` typecheck, lint, and unit tests run inside the Ubuntu
   `Checks` and `Tests (packages)` jobs like every other workspace package. The
   iOS simulator Maestro flows run in `Mobile E2E`

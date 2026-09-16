@@ -127,11 +127,22 @@ Two things read that file:
 
 - `npx bb-app stop` stops the bb that owns the data directory. Pass the same
   `--data-dir` you started with when it is not the default `~/.bb/`.
-- The macOS desktop app asks before it uses a bb it did not start, and offers to
+- The desktop app asks before it uses a bb it did not start, and offers to
   stop that copy for you.
 
 Both confirm that the recorded process really is a bb launcher before they
 signal it, so a stale file left by a crash cannot stop an unrelated process.
+
+## Desktop Automation Keys
+
+These two keys are internal seams for automation and smoke tests, not product
+settings. Both are Windows-only: on macOS and Linux they are read and ignored.
+Do not set them in normal use.
+
+| Key                            | Set by                    | Used for                                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BB_DESKTOP_QUIT_REQUEST_FILE` | Automation, before launch | A file path the Windows desktop app polls every 500 ms; the first poll that finds the file quits the app once, on the same path as tray Quit. It exists because an Electron GUI process on Windows has no console to signal. The app never deletes the file, so use a fresh path per run or delete a stale one first. |
+| `BB_DESKTOP_PARENT_PID`        | The desktop app itself    | The pid the packaged Windows app writes into the `bb-app` runtime it spawns. The launcher polls that pid every 2 seconds and shuts down gracefully once it is gone, so a desktop crash cannot leave a runtime behind. Setting it by hand only ties a launcher's lifetime to an unrelated process.                     |
 
 ## Common Keys
 

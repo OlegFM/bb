@@ -202,15 +202,17 @@ Report:
 ## Publish The Desktop App
 
 The npm publish does not build or publish the desktop app. The desktop release
-is a separate workflow. It builds the signed and notarized macOS app and the
-Linux x64 AppImage in parallel jobs, then one publish job creates the immutable
-`desktop-v<version>` GitHub release and moves the `desktop-latest` release with
-both auto-update feeds: `desktop-version.json` for macOS and
-`desktop-version-linux.json` for Linux. Run it from the same pushed `main`
+is a separate workflow. It builds three platforms in parallel jobs — the signed
+and notarized macOS app, the Linux x64 AppImage, and the Windows x64 NSIS
+installer on the pinned `windows-2025` runner — then one publish job creates
+the immutable `desktop-v<version>` GitHub release and moves the
+`desktop-latest` release with all three auto-update feeds:
+`desktop-version.json` for macOS, `desktop-version-linux.json` for Linux and
+`desktop-version-windows.json` for Windows. Run it from the same pushed `main`
 commit, at the same version, for every stable release.
 
-A failure in either platform job stops the publish job, so no release can ship
-one platform's binaries against the other platform's stale feed.
+A failure in any platform job stops the publish job, so no release can ship one
+platform's binaries against another platform's stale feed.
 
 ```bash
 gh workflow run build-desktop.yml \
@@ -224,9 +226,22 @@ gh workflow run build-desktop.yml \
 - Only a non-prerelease version is published. The workflow refuses to publish a
   prerelease (`X.Y.Z-...`) to `desktop-latest`.
 - macOS signing/notarization secrets must be configured, or the workflow
-  withholds the unsigned `.dmg`/`.zip` and publishes both version feeds plus the
+  withholds the unsigned `.dmg`/`.zip` and publishes every version feed plus the
   Linux AppImage. Linux has no notarization equivalent, so it never waits on the
   Apple secrets.
+- All seven Azure Trusted Signing secrets — `AZURE_TENANT_ID`,
+  `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`,
+  `AZURE_SIGNING_ACCOUNT_NAME`, `AZURE_SIGNING_CERTIFICATE_PROFILE` and
+  `WINDOWS_PUBLISHER_NAME` — must be configured, or the publish job uploads
+  `desktop-version-windows.json` alone and withholds the unsigned
+  `latest.yml`, `bb-<version>-x64.exe` and its `.blockmap`. A partial set is
+  worse than none: it fails the Windows job before packaging. No Windows
+  certificate exists today, so a stable release currently ships the Windows
+  version feed without an installer.
+- The Windows job uploads its process-hygiene evidence as a separate
+  `bb-desktop-windows-x64-process-hygiene` workflow artifact, deliberately kept
+  out of `bb-desktop-windows-x64` so the publish job's download holds release
+  files only.
 - The `desktop-v<version>` release is immutable: if it already exists the
   workflow fails. Bump to a new version rather than re-running the same one.
 - The immutable `desktop-v<version>` release owns GitHub's repository-wide
@@ -356,3 +371,8 @@ jobs are unaffected.
   AppImage still publish), the macOS signing secrets are missing or incomplete.
   Fix the secrets and re-run; do not hand-upload unsigned macOS binaries to
   `desktop-latest`.
+- If it withholds the Windows installer (`desktop-version-windows.json` still
+  publishes), the Azure Trusted Signing secrets are missing or incomplete. That
+  is the expected state until a Windows certificate exists. Fix the secrets and
+  re-run; do not hand-upload an unsigned `.exe` to `desktop-latest`, because
+  SmartScreen would warn on every download of it.

@@ -5,10 +5,12 @@
 Native Windows 11 x64 is being ported phase by phase; the design is
 [docs/superpowers/specs/2026-09-11-native-windows-port-design.md](superpowers/specs/2026-09-11-native-windows-port-design.md).
 Phase 3 landed terminals, provider launch and installation, the file watcher
-and the native `bb-app` runtime, so the server, the host daemon, terminals and
-providers now run directly on Windows without WSL2. That path is beta: the
-Windows Desktop app (Phase 4) and the persistent host (Phase 5) have not
-landed, and WSL2 stays the stable Windows path described in
+and the native `bb-app` runtime, and Phase 4 landed the Windows Desktop app:
+the server, the host daemon, terminals and providers run directly on Windows
+without WSL2, and the Electron shell packages, installs, supervises, updates
+and uninstalls that runtime from a per-user NSIS installer. That path is beta:
+the persistent host (Phase 5) has not landed, no Windows code-signing
+certificate exists yet, and WSL2 stays the stable Windows path described in
 [platform-support.md](platform-support.md). This page records what has been
 measured on native Windows and what is known not to work.
 
@@ -20,7 +22,7 @@ measured on native Windows and what is known not to work.
 | 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/` |
 | 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/` |
 | 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/` |
-| 4 Windows Desktop                                  | not started                                  |
+| 4 Windows Desktop                                  | landed; evidence under `qa/windows/phase-4/` |
 | 5 Persistent host and GA hardening                 | not started                                  |
 
 ## Prerequisites for a source checkout
@@ -515,6 +517,173 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `continue-on-error: true`; the ConPTY and tarball smokes fail the job. The
   job itself is still not a required check.
 
+## Windows Desktop (Phase 4)
+
+- **Build.** `pnpm --filter @bb/desktop run dist:windows` produces
+  `release/bb-<version>-x64.exe`, `release/latest.yml` and
+  `release/win-unpacked/`; the nightly channel produces
+  `bb-nightly-<version>-x64.exe` and `nightly.yml`. On Windows
+  `scripts/run-electron-builder.mjs` starts electron-builder as
+  `node electron-builder/cli.js` (resolved through `createRequire`), because
+  `node_modules/.bin/electron-builder` is a `.cmd` shim that `spawn` cannot
+  start without a shell; POSIX keeps the `.bin` spawn unchanged. The first
+  build downloads `winCodeSign` — and `nsis` for a full `dist:windows` — into
+  `%LOCALAPPDATA%\electron-builder\Cache`, which is why even an unsigned
+  `--dir` package pays for that cache miss once. `package:windows` was
+  measured at a few minutes on the reference desktop, the first run being the
+  slow one. Icons are the checked-in PNGs (`assets/icon.png`,
+  `assets/icon-nightly.png`); app-builder-lib converts them to `.ico` itself
+  and no `.ico` is checked in. Two log lines are expected noise rather than
+  findings: electron-builder reports "signing with signtool.exe" even with no
+  secrets configured, where it is a no-op and the executable stays unsigned,
+  and `prebuild-install`'s `better-sqlite3` fetch prints below npmlog's notice
+  level, so it does not appear in the build transcript at all.
+- **Installer.** The NSIS target is assisted rather than one-click, per-user
+  rather than per-machine, and therefore needs no elevation: a standard
+  account can install it. The default directory is
+  `%LOCALAPPDATA%\Programs\bb` and the user may change it; a desktop shortcut
+  is created. `%APPDATA%\bb` — Electron's `userData`, holding
+  `owned-runtime.json`, the window state and the cached Connect credential —
+  survives uninstall by design (`deleteAppDataOnUninstall: false`).
+  `%USERPROFILE%\.bb` is bb's own runtime data directory and the installer
+  never touches it.
+- **Signing.** `run-electron-builder.mjs` gains a `windows` signing mode
+  beside the macOS one. All seven of `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`,
+  `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`,
+  `AZURE_SIGNING_ACCOUNT_NAME`, `AZURE_SIGNING_CERTIFICATE_PROFILE` and
+  `WINDOWS_PUBLISHER_NAME` are required together; a partial set aborts the
+  build with `Incomplete Windows signing environment`, naming the present and
+  the missing keys. With none of them set the build is unsigned and
+  `publisherName` is deliberately left unset — `publisherName` is written only
+  in signed mode. No certificate exists today, so every build produced so far
+  is unsigned, and an unsigned installer raises SmartScreen's "Windows
+  protected your PC" dialog, which the user clears with More info → Run
+  anyway; the gate records the exact dialog in
+  `qa/windows/phase-4/21-install-standard-user.md` with a screenshot. A stable
+  publish withholds unsigned Windows binaries and always publishes
+  `desktop-version-windows.json`.
+- **Native modules.** node-pty's Windows prebuild is ConPTY-only: four files,
+  `conpty.node`, `conpty_console_list.node`, `conpty/conpty.dll` and
+  `conpty/OpenConsole.exe`. `winpty.dll` and `winpty-agent.exe`, which the
+  design spec's Phase 4 scope names, do not exist in node-pty 1.2.0-beta.15
+  and are not staged. `asarUnpack` already places every `node_modules` file
+  outside asar, so those four ship under
+  `resources/app.asar.unpacked/node_modules/node-pty/prebuilds/win32-x64/`;
+  on win32 `scripts/prepare-native-modules.cjs` asserts all four exist under
+  every packaged node-pty and throws naming the missing file.
+  `better-sqlite3` is fetched for the Electron ABI with `prebuild-install`.
+- **Runtime supervision.** The packaged app runs `bb-app` as a hidden
+  (`windowsHide: true`), non-detached child of `bb.exe` carrying
+  `BB_DESKTOP_PARENT_PID`. Quit stops that tree through Phase 2's
+  `terminateProcessTree`: a 1-second grace after `taskkill /PID <leader> /T`,
+  then the leader through the `ChildProcess` handle bb still holds, then each
+  descendant whose `CreationDate` still matches the pre-stop snapshot. A
+  recycled-PID skip is written into the runtime log buffer as
+  `bb desktop left pid <pid> alone: pid-reused`. A typical Quit spends about
+  2.8 seconds stopping the tree, because the windowless Node leader has no
+  window to receive `taskkill`'s close request and is therefore ended through
+  the held handle once the grace expires; the worst case is bounded by the two
+  CIM snapshots the stop takes, each with the 10-second enumeration timeout
+  described under "Process sweep" above. No SIGTERM is sent on win32: Node's
+  `kill("SIGTERM")` is `TerminateProcess` there, so the launcher's signal
+  handlers would never run. POSIX keeps its signal-then-timeout path
+  byte-identical.
+- **Parent watchdog.** `bb-app` reads `BB_DESKTOP_PARENT_PID` on win32 only
+  and polls that pid every 2 seconds; when the parent is gone it logs
+  "Desktop parent process exited; shutting down" and runs its normal graceful
+  shutdown. That is the recovery path when the Desktop process is killed
+  outright rather than quit. There is no `BB_DESKTOP_RUNTIME_ID` yet, and the
+  health response carries no runtime id: on win32 `stopVerifiedProcess`
+  already verifies an owned runtime by command line (the `bridgePath` recorded
+  in `owned-runtime.json`) and CIM `creationDate`, and adding a runtime id to
+  the health response would be a server wire change this phase deliberately
+  did not make.
+- **Packaged process tree.** In a packaged Windows install the bridge, the
+  server and the host daemon all run as `bb.exe` with `ELECTRON_RUN_AS_NODE`
+  set; there are no `node.exe` rows to look for. The process-hygiene smoke
+  therefore identifies the bridge by the `bb-app-bridge.mjs` string in its
+  command line and identifies every process by pid plus creation date.
+- **Tray and close policy.** On win32 `window-all-closed` never quits the app:
+  closing the last window parks it in the tray with the owned runtime still
+  running and still answering `/health`. Closing that window also persists an
+  empty window set, so the next launch opens the default window rather than
+  restoring none. The tray tooltip is the application name and its menu is
+  `Open bb` then a separator then `Quit bb` (`bb Nightly` on the nightly
+  channel); clicking the tray icon focuses an existing window or creates one.
+  Quit stops a spawned runtime and never an attached one — the ownership check
+  is the same one macOS and Linux already use.
+- **Session end.** Windows logoff and shutdown run the same stop as Quit, but
+  the wiring is not obvious: Electron 41 has no App-level `session-end`; it is
+  a `BrowserWindow` event. The desktop attaches it per window on win32 only,
+  through `browser-window-created`, with a guard so that several open windows
+  still trigger one stop. A logoff while the app is parked in the tray with
+  zero windows therefore fires nothing at all; the runtime is ended in that
+  case by Windows ending the session's processes and by the `bb-app` parent
+  watchdog described above.
+- **`BB_DESKTOP_QUIT_REQUEST_FILE`.** This is the automation hook the packaged
+  smokes use in place of a signal, since an Electron GUI process on Windows
+  has no console to receive one. It is read on win32 only, polled every
+  500 ms, and the first poll that finds the file calls `app.quit()` once —
+  exactly the tray Quit path. The app does not delete the file, so automation
+  must use a fresh path per run or remove a stale file before launching.
+- **Window.** The window is created with `titleBarStyle: "hidden"` and a 48 px
+  caption overlay whose colours follow the theme: dark `#1f1f1f` with
+  `#e8e8e8` symbols, light `#f6f6f6` with `#1f1f1f` symbols. The overlay is
+  re-applied both when the app switches its own theme and when the OS theme
+  changes (`nativeTheme`'s `updated` event). On the app side, the header rows
+  reserve 138 px on the right — three 46 px Windows 11 caption buttons — and
+  the right-panel toggles are offset by 138 px plus 1 rem so they never sit
+  under the caption controls. The drag-region class constants were renamed
+  from `MACOS_*` to `DESKTOP_*` project-wide with their values unchanged,
+  because the same drag and no-drag regions now serve both platforms; the
+  macOS traffic-light reserves stay macOS-only. `dev.bb.desktop` is the
+  AppUserModelID (`dev.bb.desktop.nightly` for nightly builds,
+  `dev.bb.desktop.dev` for an unpackaged dev run).
+- **Updates.** Windows gets both update paths. The lightweight JSON feed is
+  `desktop-version-windows.json` and electron-updater reads `latest.yml`
+  (`nightly.yml` on the nightly channel); both live in the same
+  `desktop-latest` release directory as the macOS and Linux metadata. An
+  available update downloads automatically and installs on quit or from
+  Settings. The install handler runs the normal quit sequence first, so the
+  runtime tree is already stopped before `quitAndInstall` hands over to the
+  installer. An unsigned build updates to the next unsigned build because
+  `publisherName` is unset: electron-updater's NSIS signature verification
+  accepts a download when no publisher name is configured, which is also why
+  setting a publisher without a certificate would break every update. To point
+  an installed build at a test feed there is no environment knob for the
+  electron-updater half — edit `url:` in `resources/app-update.yml` inside the
+  installed copy; the JSON half still follows `BB_DESKTOP_VERSION_FEED_URL`.
+- **App file names.** File names shown in the app come from `hostPathBasename`
+  (`apps/app/src/lib/host-path.ts`): a drive-absolute (`C:\`, `C:/`) or UNC
+  (`\\`) path splits on either separator, and every other input splits on `/`
+  exactly as before, so POSIX inputs are byte-identical. The nine sites that
+  derived a file name with `split("/")` now use it.
+- **Terminal exit.** `normalizeTerminalExitCode`
+  (`apps/host-daemon/src/terminals/terminal-exit-code.ts`) maps
+  `-1073741510` to `null` on win32 only, and only when bb itself requested the
+  close, so the app shows `Terminal exited` instead of the number. Any other
+  exit code, and the same code on a close bb did not request, passes through
+  unchanged.
+- **CI.** The `windows-x64` job in `.github/workflows/ci.yml` packages the
+  unpacked app with `pnpm --filter @bb/desktop run package:windows` — there is
+  no Turbo task for that script — and then runs `smoke:packaged` and
+  `smoke:windows-processes` through Turbo, all three steps with `TMP` and
+  `TEMP` redirected to a workspace-local directory because of the runner's
+  temp-directory ACLs. `smoke:windows-processes --evidence-dir <dir>` resolves
+  `<dir>` against `apps/desktop` under Turbo, so CI uploads
+  `apps/desktop/qa-artifacts/process-hygiene/*.json` inside the
+  `windows-x64-test-results` artifact. `.github/workflows/build-desktop.yml`
+  gains a `windows` job on the pinned `windows-2025` image that validates the
+  seven signing secrets, builds the NSIS installer, runs both smokes and the
+  version feed, and uploads `bb-desktop-windows-x64` (the release assets) plus
+  a separate `bb-desktop-windows-x64-process-hygiene` artifact for the smoke
+  evidence. The single publish job needs that job, always publishes
+  `desktop-version-windows.json`, and publishes `latest.yml`, the `.exe` and
+  its `.blockmap` only when the Windows signing secrets are complete.
+- **Measured on the reference desktop, 2026-09-16.** `smoke:packaged` exited
+  0, three `smoke:windows-processes` runs exited 0, 0 and 0, and no leaked
+  processes were observed in any of them.
+
 ## Known limitations after Phase 0
 
 - Project paths became drive-letter aware in Phase 1 (see "Host identity and
@@ -583,11 +752,14 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   can pass the placement pre-check and then be refused at provisioning with a
   provisioning error instead of a clean 409.
 - `listEnvironments`'s `path` query filter compares raw paths, not path keys.
-- App views that derive a file name with `split("/")`
-  (`environment-queries.ts`, `project-queries.ts`, `api.ts`,
-  `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`, `rightPanelFileVisuals.ts`)
-  still show the full Windows path. Phase 3 changed no app view; this moves to
-  the Phase 4 Windows Desktop and UI work.
+- App views that derived a file name with `split("/")` showed the full Windows
+  path through Phase 3. Phase 4 replaced that split with `hostPathBasename`
+  (`apps/app/src/lib/host-path.ts`) at all nine sites — the six named here
+  through Phase 3 (`environment-queries.ts`, `project-queries.ts`, `api.ts`,
+  `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`,
+  `rightPanelFileVisuals.ts`) plus `SkillDetailView.tsx`,
+  `RootComposeView.tsx` and `ThreadDetailView.tsx` — so a Windows path now
+  renders as its file name and a POSIX path renders exactly as it did before.
 - The host directory browser cannot switch drives.
 - The native folder picker was macOS-only after Phase 1; Phase 2 adds the
   Windows picker — see "Open targets and picker" above.
@@ -608,9 +780,13 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 
 - The Desktop runtime-identity design (`BB_DESKTOP_RUNTIME_ID`,
   `BB_DESKTOP_PARENT_PID`, a parent-PID watchdog) that spec §5 describes for
-  verified process stop is deferred to Phase 4, where Desktop's owned-runtime
-  policy needs it; Phase 2's `verified-process-stop.ts` win32 arm verifies
-  through `queryWindowsProcess` instead.
+  verified process stop was deferred out of Phase 2, where
+  `verified-process-stop.ts`'s win32 arm verifies through
+  `queryWindowsProcess` instead. Phase 4 landed the `BB_DESKTOP_PARENT_PID`
+  half and the watchdog — see "Runtime supervision" and "Parent watchdog"
+  above — and left `BB_DESKTOP_RUNTIME_ID` and a health-response runtime id
+  unimplemented, because command line plus creation date already identify an
+  owned runtime and a health-response field would change the server wire.
 - `plugins/account-pool`, `plugins/secrets`, and the host daemon's own
   `auth-state.ts` and `identity.ts` own their secret files directly and are
   not ACL-hardened by this phase.
@@ -659,10 +835,13 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 - bb runs no `chcp` bootstrap, so a terminal that falls through to Windows
   PowerShell 5.1 or `cmd.exe` keeps the machine's console code page and
   non-ASCII text can garble there. Install PowerShell 7 for a UTF-8 terminal.
-- A user-initiated terminal close reports exit code `-1073741510`
-  (`0xC000013A`) because the single `pty.kill()` is the only stop node-pty
-  offers on Windows. The app may show that number; presenting a closed
-  terminal without it is Phase 4 UX.
+- A user-initiated terminal close still reports exit code `-1073741510`
+  (`0xC000013A`) out of node-pty, because the single `pty.kill()` is the only
+  stop it offers on Windows. Phase 3 let the app show that number; Phase 4
+  hides it — `normalizeTerminalExitCode` maps it to `null` on win32 when bb
+  itself requested the close, so the app renders `Terminal exited`. The raw
+  code still reaches bb, and it is still reported when the same code arrives
+  from a close bb did not request.
 - A terminal open that fails after the pty spawned leaks the pty on POSIX. The
   win32 arm kills the orphan; the POSIX leak is a pre-existing upstream
   finding and is deliberately not changed here.
@@ -695,11 +874,54 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `auth-state.ts` and `identity.ts` own their secret files directly and are
   not ACL-hardened.
 - The Desktop runtime-identity design (`BB_DESKTOP_RUNTIME_ID`,
-  `BB_DESKTOP_PARENT_PID`, a parent-PID watchdog) is still Phase 4 work, as
-  "Known limitations after Phase 2" records.
+  `BB_DESKTOP_PARENT_PID`, a parent-PID watchdog) was Phase 4 work, as "Known
+  limitations after Phase 2" records. Phase 4 shipped
+  `BB_DESKTOP_PARENT_PID` and the watchdog; `BB_DESKTOP_RUNTIME_ID` and the
+  health-response runtime id remain unimplemented and are carried into "Known
+  limitations after Phase 4" below.
 - `pnpm dev:stop` still force-kills the pid in a session's pid file after
   checking only that the pid exists. It is developer tooling, not a product
   seam, and stays unverified.
+
+## Known limitations after Phase 4
+
+- No Windows code-signing certificate exists, so every installer built so far
+  is unsigned and SmartScreen warns on first launch. Users clear it with More
+  info → Run anyway. A stable publish withholds the unsigned `.exe` and
+  publishes only `desktop-version-windows.json`, so there is no published
+  Windows download yet; maintainers build one with
+  `pnpm --filter @bb/desktop run dist:windows`.
+- `BB_DESKTOP_RUNTIME_ID` and a runtime id in the health response are not
+  implemented. An owned runtime is verified by its command line and its
+  process creation date instead, which is enough for the stop path but does
+  not survive a case where two runtimes share both.
+- There is no `bb://` protocol client and no argv forwarding. Nothing in bb
+  registers a protocol client or a file association today, so a second
+  instance has no argv to forward; it focuses an existing window or creates
+  one, which is the same thing the tray does.
+- No Job Object is used, so the escaped-descendant risk spec §9 records stays
+  open on the Desktop stop path exactly as it does elsewhere on Windows. The
+  spec's trigger for adding a native Job Object helper is a repeated "zero
+  orphans after Quit" gate failure. Three process-hygiene runs on the
+  reference desktop all exited 0 with no leaked processes, so the trigger has
+  not fired; the gate records its own count in
+  `qa/windows/phase-4/24-quit-orphans.md`.
+- Uninstall leaves `%APPDATA%\bb` behind by design, so a reinstall keeps the
+  window layout, the owned-runtime record and the cached Connect credential.
+  Removing it is a manual step.
+- The caption overlay's height and colours are fixed values — 48 px and one
+  colour pair per theme — rather than being derived from the app's theme
+  tokens, so a theme whose chrome row or surface colour differs from those
+  constants will not match the caption band exactly.
+- The tray icon is the same 1024 px PNG the app ships, downscaled to 16 px at
+  runtime rather than a purpose-drawn small icon.
+- The Phase 3 limitations that Phase 4 did not touch still stand, including
+  the console code page: bb runs no `chcp` bootstrap, so a terminal that falls
+  through to Windows PowerShell 5.1 or `cmd.exe` keeps the machine's code page
+  and non-ASCII text can garble there.
+- The manual Windows QA checklist that spec §10 names,
+  `qa/windows/CHECKLIST.md`, still does not exist; it remains a Phase 5
+  deliverable.
 
 ## Evidence
 
@@ -739,3 +961,21 @@ session (`24-npx-bb-app-clean-shell.md`), three ConPTY smoke runs
 (`26-provider-installation.md`), the WSL POSIX test run (`40-posix-check.md`),
 and the `windows-x64` CI run (`41-ci-run.md`). The gate run that writes this
 directory is the last commit of Phase 3.
+
+`qa/windows/phase-4/` holds host facts (`00-host.md`), the build/typecheck log
+and per-package test results (`30-build-typecheck.txt`, `31-test-results.md`,
+`31-test-output-tail.txt`), the NSIS installer build with the release listing
+and signature state (`20-build-installer.md` and `.txt`), the standard-user
+install including the SmartScreen dialog and the installer screens
+(`21-install-standard-user.md`, `21-smartscreen.png`, `21-installer.png`), the
+installed app creating a project and running a provider turn
+(`22-use-installed-app.md` and `.txt`), an N → N+1 update against a local feed
+(`23-update-n-to-n1.md` and `.txt`), the Quit orphan diff with the three
+process-hygiene smoke runs (`24-quit-orphans.md`, `.txt` and
+`process-hygiene/*.json`), closing the last window to the tray
+(`25-close-to-tray.md`), uninstall and what it leaves behind (`26-uninstall.md`
+and `.txt`), the caption overlay over the app chrome (`27-window-chrome.png`),
+the WSL POSIX test run and the macOS/Linux config diff (`40-posix-check.md`),
+the `windows-x64` CI run (`41-ci-run.md`) and the `build-desktop.yml` run
+(`42-build-desktop-run.md`). The gate run that writes this directory is the
+last commit of Phase 4.

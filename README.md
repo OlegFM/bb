@@ -36,7 +36,8 @@ The recommended way to start using bb is the desktop app:
 
 The desktop app supports macOS on Apple Silicon (arm64). The Linux x64 AppImage
 is alpha: expect problems, and please report them. Intel Mac users should run bb
-with `npx` instead. There is no Windows desktop app yet; on Windows, run bb with
+with `npx` instead. A Windows x64 desktop installer exists but is not published
+yet, because it is unsigned — see Native Windows below. On Windows, run bb with
 `npx` either inside
 [WSL2 (Windows Subsystem for Linux)](https://learn.microsoft.com/windows/wsl/install)
 or natively (beta) — see below.
@@ -93,10 +94,23 @@ It needs Node.js 22.19 or newer, Git for Windows, and long paths enabled:
 `LongPathsEnabled` set to `1` under
 `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, plus
 `git config --global core.longpaths true`. Terminals, provider launch and
-installation, the file watcher and the `bb` CLI all run natively; there is no
-Windows desktop app yet. See
-[docs/platform-windows.md](docs/platform-windows.md) for what has been measured
-and the known limitations.
+installation, the file watcher and the `bb` CLI all run natively.
+
+**Desktop installer (beta)** — the Windows desktop app is built and smoke
+tested, but there is no download link for it yet: no code-signing certificate
+exists, so the release withholds the unsigned installer rather than shipping
+something SmartScreen blocks. Build one from a source checkout with:
+
+```powershell
+pnpm --filter @bb/desktop run dist:windows
+```
+
+That writes a per-user NSIS installer to `apps/desktop/release/`. It installs
+without elevation, parks in the tray instead of quitting when you close the
+last window, and stops the bb runtime it started when you quit. Expect
+SmartScreen's "Windows protected your PC" on first launch: More info → Run
+anyway. See [docs/platform-windows.md](docs/platform-windows.md) for what has
+been measured and the known limitations.
 
 For install requirements, provider setup, configuration, and package-focused
 docs, start with
