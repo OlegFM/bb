@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -34,6 +35,15 @@ const notarizationKeys = [
 const requiredSigningEnvironmentKeys = [
   ...codeSigningKeys,
   ...notarizationKeys,
+];
+const windowsSigningEnvironmentKeys = [
+  "AZURE_TENANT_ID",
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "AZURE_SIGNING_ACCOUNT_NAME",
+  "AZURE_SIGNING_CERTIFICATE_PROFILE",
+  "AZURE_SIGNING_ENDPOINT",
+  "WINDOWS_PUBLISHER_NAME",
 ];
 
 const printConfigFlag = "--print-config";
@@ -97,6 +107,19 @@ function logSigningPlan(signingPlan) {
   }
 }
 
+function logWindowsSigningPlan(windowsSigningPlan) {
+  if (windowsSigningPlan.mode === "windows") {
+    console.log(
+      `Windows code signing enabled with Azure Trusted Signing publisher "${windowsSigningPlan.publisherName}".`,
+    );
+    return;
+  }
+
+  logWarning(
+    "Windows signing skipped: no Azure Trusted Signing secrets found. The installer will be unsigned and SmartScreen will warn on first launch.",
+  );
+}
+
 function autoDiscoveryExplicitlyDisabled(env) {
   return (
     envValueIsSet(env.CSC_IDENTITY_AUTO_DISCOVERY) &&
@@ -158,6 +181,42 @@ function createSigningPlan(env) {
   };
 }
 
+function createWindowsSigningPlan(env) {
+  const presentKeys = presentEnvironmentKeys(
+    windowsSigningEnvironmentKeys,
+    env,
+  );
+  const missingKeys = missingEnvironmentKeys(
+    windowsSigningEnvironmentKeys,
+    env,
+  );
+
+  if (presentKeys.length > 0 && missingKeys.length > 0) {
+    throw new Error(
+      `Incomplete Windows signing environment. Present: ${formatEnvironmentKeyList(
+        presentKeys,
+      )}. Missing: ${formatEnvironmentKeyList(
+        missingKeys,
+      )}. Set all required keys for Azure Trusted Signing or unset all of them for an unsigned build.`,
+    );
+  }
+
+  if (missingKeys.length === 0) {
+    return {
+      mode: "windows",
+      azureSignOptions: {
+        certificateProfileName: env.AZURE_SIGNING_CERTIFICATE_PROFILE.trim(),
+        codeSigningAccountName: env.AZURE_SIGNING_ACCOUNT_NAME.trim(),
+        endpoint: env.AZURE_SIGNING_ENDPOINT.trim(),
+        publisherName: env.WINDOWS_PUBLISHER_NAME.trim(),
+      },
+      publisherName: env.WINDOWS_PUBLISHER_NAME.trim(),
+    };
+  }
+
+  return { mode: "unsigned", azureSignOptions: null, publisherName: null };
+}
+
 function resolveElectronBuilderConfig(baseConfig, env) {
   const signingPlan = createSigningPlan(env);
   const releaseChannel = resolveDesktopReleaseChannel(env);
@@ -184,6 +243,21 @@ function resolveElectronBuilderConfig(baseConfig, env) {
     executableName: releaseConfig.linuxExecutableName,
     icon: "assets/" + releaseConfig.iconFileName,
   };
+
+  const windowsSigningPlan = createWindowsSigningPlan(env);
+  const win = {
+    ...config.win,
+    icon: "assets/" + releaseConfig.iconFileName,
+  };
+  delete win.azureSignOptions;
+  delete win.publisherName;
+
+  if (windowsSigningPlan.mode === "windows") {
+    win.azureSignOptions = windowsSigningPlan.azureSignOptions;
+    win.publisherName = windowsSigningPlan.publisherName;
+  }
+
+  config.win = win;
   config.appId = releaseConfig.appId;
   config.artifactName = releaseConfig.artifactName;
   config.productName = releaseConfig.applicationName;
@@ -199,6 +273,7 @@ function resolveElectronBuilderConfig(baseConfig, env) {
     config,
     releaseChannel,
     signingPlan,
+    windowsSigningPlan,
   };
 }
 
@@ -228,10 +303,23 @@ async function removeGeneratedConfig() {
   await rm(generatedConfigPath, { force: true });
 }
 
+function resolveElectronBuilderInvocation(platform) {
+  if (platform === "win32") {
+    const requireFromScript = createRequire(import.meta.url);
+    return {
+      command: process.execPath,
+      args: [requireFromScript.resolve("electron-builder/cli.js")],
+    };
+  }
+
+  return { command: electronBuilderBin, args: [] };
+}
+
 async function runElectronBuilder(args, signingPlan) {
+  const invocation = resolveElectronBuilderInvocation(process.platform);
   const child = spawn(
-    electronBuilderBin,
-    ["--config", generatedConfigPath, ...args],
+    invocation.command,
+    [...invocation.args, "--config", generatedConfigPath, ...args],
     {
       cwd: desktopPackageRoot,
       env: createElectronBuilderEnv(signingPlan),
@@ -259,10 +347,8 @@ async function main() {
   const printConfig = args.includes(printConfigFlag);
   const electronBuilderArgs = args.filter((arg) => arg !== printConfigFlag);
   const baseConfig = await readBaseConfig();
-  const { config, signingPlan } = resolveElectronBuilderConfig(
-    baseConfig,
-    process.env,
-  );
+  const { config, signingPlan, windowsSigningPlan } =
+    resolveElectronBuilderConfig(baseConfig, process.env);
 
   if (printConfig) {
     console.log(JSON.stringify(config, null, 2));
@@ -274,6 +360,11 @@ async function main() {
     !electronBuilderArgs.includes("--mac")
   ) {
     console.log("macOS signing is not applicable for Linux-only builds.");
+  } else if (
+    electronBuilderArgs.includes("--win") &&
+    !electronBuilderArgs.includes("--mac")
+  ) {
+    logWindowsSigningPlan(windowsSigningPlan);
   } else {
     logSigningPlan(signingPlan);
   }

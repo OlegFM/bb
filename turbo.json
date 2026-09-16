@@ -250,12 +250,23 @@
       "outputs": ["release/**"],
       "passThroughEnv": ["*"]
     },
+    "@bb/desktop#desktop:build:windows": {
+      "dependsOn": ["bb-app#build", "@bb/desktop#build"],
+      "cache": false,
+      "outputs": ["release/**"],
+      "passThroughEnv": ["*"]
+    },
     "@bb/desktop#smoke:packaged": {
       "cache": false,
       "outputs": [],
       "passThroughEnv": ["*"]
     },
     "@bb/desktop#smoke:windows-conpty": {
+      "cache": false,
+      "outputs": [],
+      "passThroughEnv": ["*"]
+    },
+    "@bb/desktop#smoke:windows-processes": {
       "cache": false,
       "outputs": [],
       "passThroughEnv": ["*"]

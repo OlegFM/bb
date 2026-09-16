@@ -79,6 +79,39 @@ const linuxConfigSchema = z
   })
   .passthrough();
 
+const winConfigSchema = z
+  .object({
+    azureSignOptions: z
+      .object({
+        certificateProfileName: z.string().min(1),
+        codeSigningAccountName: z.string().min(1),
+        endpoint: z.string().min(1),
+        publisherName: z.string().min(1),
+      })
+      .optional(),
+    icon: z.string().min(1),
+    publisherName: z.string().min(1).optional(),
+    target: z.tuple([
+      z
+        .object({
+          arch: z.tuple([z.literal("x64")]),
+          target: z.literal("nsis"),
+        })
+        .passthrough(),
+    ]),
+  })
+  .passthrough();
+
+const nsisConfigSchema = z
+  .object({
+    allowToChangeInstallationDirectory: z.literal(true),
+    createDesktopShortcut: z.literal(true),
+    deleteAppDataOnUninstall: z.literal(false),
+    oneClick: z.literal(false),
+    perMachine: z.literal(false),
+  })
+  .passthrough();
+
 const electronBuilderFileSetSchema = z
   .object({
     filter: z.array(z.string().min(1)),
@@ -105,6 +138,8 @@ const electronBuilderConfigSchema = z
     linux: linuxConfigSchema,
     mac: macConfigSchema,
     npmRebuild: z.literal(false),
+    nsis: nsisConfigSchema,
+    win: winConfigSchema,
     appId: z.string().min(1),
     artifactName: z.string().min(1),
     productName: z.string().min(1),
@@ -146,10 +181,17 @@ const signingEnvironmentKeys = [
   "APPLE_APP_SPECIFIC_PASSWORD",
   "APPLE_ID",
   "APPLE_TEAM_ID",
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "AZURE_SIGNING_ACCOUNT_NAME",
+  "AZURE_SIGNING_CERTIFICATE_PROFILE",
+  "AZURE_SIGNING_ENDPOINT",
+  "AZURE_TENANT_ID",
   "CSC_IDENTITY_AUTO_DISCOVERY",
   "CSC_KEY_PASSWORD",
   "CSC_LINK",
   "CSC_NAME",
+  "WINDOWS_PUBLISHER_NAME",
 ];
 const audioInputEntitlementPattern =
   /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\s*\/>/u;
@@ -632,5 +674,98 @@ describe("electron-builder signing config", () => {
     );
     expect(completeAppleCredentials.config.mac.notarize).toBe(true);
     expect(completeAppleCredentials.config.dmg.sign).toBe(false);
+  });
+
+  it("packages a per-user Windows NSIS installer for x64", async () => {
+    const configText = await readFile(
+      resolve(desktopPackageRoot, "electron-builder.config.json"),
+      "utf8",
+    );
+    const config = electronBuilderConfigSchema.parse(JSON.parse(configText));
+
+    expect(config.win.target).toEqual([{ arch: ["x64"], target: "nsis" }]);
+    expect(config.nsis).toMatchObject({
+      allowToChangeInstallationDirectory: true,
+      createDesktopShortcut: true,
+      deleteAppDataOnUninstall: false,
+      oneClick: false,
+      perMachine: false,
+    });
+    expect(config.artifactName).toBe(
+      "${productName}-${version}-${arch}.${ext}",
+    );
+    await expect(
+      access(resolve(desktopPackageRoot, config.win.icon)),
+    ).resolves.toBeUndefined();
+  });
+
+  it("uses the nightly PNG icon for Windows builds", async () => {
+    const { config } = await readResolvedConfig({
+      BB_DESKTOP_RELEASE_CHANNEL: "nightly",
+    });
+
+    expect(config.win.icon).toBe("assets/icon-nightly.png");
+  });
+
+  it("keeps Windows builds unsigned and publisher-less without Azure signing secrets", async () => {
+    const { config } = await readResolvedConfig({});
+
+    expect(config.win).not.toHaveProperty("azureSignOptions");
+    expect(config.win).not.toHaveProperty("publisherName");
+  });
+
+  it("signs Windows builds with Azure Trusted Signing when the secret set is complete", async () => {
+    const { config } = await readResolvedConfig({
+      AZURE_CLIENT_ID: "client",
+      AZURE_CLIENT_SECRET: "secret",
+      AZURE_SIGNING_ACCOUNT_NAME: "bb-signing",
+      AZURE_SIGNING_CERTIFICATE_PROFILE: "bb-desktop",
+      AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+      AZURE_TENANT_ID: "tenant",
+      WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+    });
+
+    expect(config.win.azureSignOptions).toEqual({
+      certificateProfileName: "bb-desktop",
+      codeSigningAccountName: "bb-signing",
+      endpoint: "https://weu.codesigning.azure.net",
+      publisherName: "bb Desktop Publisher",
+    });
+    expect(config.win.publisherName).toBe("bb Desktop Publisher");
+  });
+
+  it("rejects partial Windows signing secret sets", async () => {
+    const result = await runConfigScript({
+      AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+      WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Incomplete Windows signing environment.");
+    expect(result.stderr).toContain(
+      "Present: AZURE_SIGNING_ENDPOINT, WINDOWS_PUBLISHER_NAME.",
+    );
+    expect(result.stderr).toContain(
+      "Missing: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ACCOUNT_NAME, AZURE_SIGNING_CERTIFICATE_PROFILE.",
+    );
+  });
+
+  it("leaves the macOS and Linux blocks untouched by the Windows target", async () => {
+    const configText = await readFile(
+      resolve(desktopPackageRoot, "electron-builder.config.json"),
+      "utf8",
+    );
+    const baseConfig = electronBuilderConfigSchema.parse(
+      JSON.parse(configText),
+    );
+    const { config } = await readResolvedConfig({});
+
+    expect(config.linux).toEqual({ ...baseConfig.linux, executableName: "bb" });
+    expect(config.mac).toEqual({
+      ...baseConfig.mac,
+      icon: "assets/icon.icns",
+      identity: undefined,
+      notarize: false,
+    });
   });
 });
