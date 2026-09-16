@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { resolveSpawnPlanOrThrow } from "@bb/process-utils";
 import {
   createBbAppArtifactService,
   resolveBbAppPackage,
@@ -15,6 +16,16 @@ const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 const ARTIFACT_LIFECYCLE_TIMEOUT_MS = 15_000;
 const MODES = ["repo-src", "repo-dist", "packaged"] as const;
+const runPackageCommand: BbAppArtifactCommandRunner = async (
+  command,
+  args,
+  cwd,
+) => {
+  const plan = await resolveSpawnPlanOrThrow({ command, args, cwd });
+  return (
+    await execFileAsync(plan.command, plan.args, { cwd, windowsHide: true })
+  ).stdout;
+};
 const packageJson = {
   name: "bb-app",
   version: "1.2.3-test",
@@ -101,6 +112,74 @@ afterEach(async () => {
 });
 
 describe("bb-app artifact service (desktop packaging)", () => {
+  it.each(["linux", "win32"] as const)(
+    "includes the Windows CLI shim when a %s server packages a Windows-capable runtime",
+    async (platform) => {
+      const test = await fixture("packaged");
+      const shim = '@echo off\r\nnode "%~dp0bb" %*\r\n';
+      await writeFile(
+        join(test.packageRoot, "package.json"),
+        JSON.stringify({ ...packageJson, os: [...packageJson.os, "win32"] }),
+      );
+      await writeFile(join(test.packageRoot, "host-daemon/dist/bb.cmd"), shim);
+      const service = createBbAppArtifactService({
+        dataDir: join(test.root, "data"),
+        serverEntryUrl: pathToFileURL(test.serverEntry).href,
+        commandRunner: runPackageCommand,
+        platform,
+      });
+      const artifact = await service.getArtifact();
+      const packed = await execFileAsync("tar", [
+        "-xOzf",
+        artifact.path,
+        "package/host-daemon/dist/bb.cmd",
+      ]);
+      expect(packed.stdout).toBe(shim);
+    },
+    ARTIFACT_LIFECYCLE_TIMEOUT_MS,
+  );
+
+  it("rejects a Windows-capable runtime missing its CLI shim before packing", async () => {
+    const test = await fixture("packaged");
+    await writeFile(
+      join(test.packageRoot, "package.json"),
+      JSON.stringify({ ...packageJson, os: [...packageJson.os, "win32"] }),
+    );
+    const service = createBbAppArtifactService({
+      dataDir: join(test.root, "data"),
+      serverEntryUrl: pathToFileURL(test.serverEntry).href,
+      commandRunner: async () => {
+        throw new Error("Incomplete runtime must not be packed");
+      },
+    });
+    await expect(service.getArtifact()).rejects.toMatchObject({
+      code: "ENOENT",
+      path: join(test.packageRoot, "host-daemon/dist/bb.cmd"),
+    });
+  });
+
+  it(
+    "preserves the POSIX-only packaged layout even if a Windows shim exists",
+    async () => {
+      const test = await fixture("packaged");
+      await writeFile(
+        join(test.packageRoot, "host-daemon/dist/bb.cmd"),
+        "extra",
+      );
+      const service = createBbAppArtifactService({
+        dataDir: join(test.root, "data"),
+        serverEntryUrl: pathToFileURL(test.serverEntry).href,
+        commandRunner: runPackageCommand,
+      });
+      const artifact = await service.getArtifact();
+      const listing = await execFileAsync("tar", ["-tzf", artifact.path]);
+      expect(listing.stdout.split(/\r?\n/u)).not.toContain(
+        "package/host-daemon/dist/bb.cmd",
+      );
+    },
+    ARTIFACT_LIFECYCLE_TIMEOUT_MS,
+  );
+
   it(
     "packs the runtime when Electron Builder omits the README",
     async () => {
@@ -115,7 +194,7 @@ describe("bb-app artifact service (desktop packaging)", () => {
       const artifact = await service.getArtifact();
       const listing = (
         await execFileAsync("tar", ["-tzf", artifact.path])
-      ).stdout.split("\n");
+      ).stdout.split(/\r?\n/u);
       expect(listing).toEqual(
         expect.arrayContaining([
           "package/package.json",
@@ -168,7 +247,11 @@ describe("bb-app artifact service (desktop packaging)", () => {
     });
 
     await expect(service.getArtifact()).rejects.toMatchObject({
-      code: expect.stringMatching(/^(EISDIR|ENOTSUP)$/u),
+      code: expect.stringMatching(
+        process.platform === "win32"
+          ? /^(EISDIR|ENOTSUP|EPERM)$/u
+          : /^(EISDIR|ENOTSUP)$/u,
+      ),
       path: readmePath,
     });
   });
@@ -190,7 +273,7 @@ describe.each(MODES)("bb-app artifact service (%s)", (mode) => {
           await test.refreshHostPackage();
           return "built";
         }
-        return (await execFileAsync(command, [...args], { cwd })).stdout;
+        return runPackageCommand(command, args, cwd);
       };
       const resolved = await resolveBbAppPackage(
         pathToFileURL(test.serverEntry).href,
@@ -207,7 +290,7 @@ describe.each(MODES)("bb-app artifact service (%s)", (mode) => {
       await expect(service.getVersion()).resolves.toBe("1.2.3-test");
       const listing = (
         await execFileAsync("tar", ["-tzf", artifact.path])
-      ).stdout.split("\n");
+      ).stdout.split(/\r?\n/u);
       expect(listing).toContain("package/package.json");
       expect(listing).toContain("package/dist/bb-app.js");
       expect(listing).toContain("package/dist/bb.js");
@@ -268,7 +351,7 @@ describe.each(MODES)("bb-app artifact service (%s)", (mode) => {
           await test.refreshHostPackage();
           return "built";
         }
-        return (await execFileAsync(command, [...args], { cwd })).stdout;
+        return runPackageCommand(command, args, cwd);
       };
       const options = {
         dataDir: join(test.root, "data"),
@@ -306,7 +389,7 @@ describe.each(MODES)("bb-app artifact service (%s)", (mode) => {
           await test.refreshHostPackage();
           return "built";
         }
-        return (await execFileAsync(command, [...args], { cwd })).stdout;
+        return runPackageCommand(command, args, cwd);
       };
       const baseOptions = {
         dataDir: join(test.root, "data"),
@@ -340,7 +423,7 @@ describe.each(MODES)("bb-app artifact service (%s)", (mode) => {
           return "built";
         }
         if (failNextPack) throw new Error("npm pack exploded");
-        return (await execFileAsync(command, [...args], { cwd })).stdout;
+        return runPackageCommand(command, args, cwd);
       };
       const options = {
         dataDir: join(test.root, "data"),

@@ -16,6 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { HOST_DAEMON_PROTOCOL_VERSION } from "@bb/host-daemon-contract";
+import { resolveSpawnPlanOrThrow } from "@bb/process-utils";
 
 const execFileAsync = promisify(execFile);
 const HOST_DEPENDENCIES = [
@@ -50,6 +51,7 @@ export interface BbAppArtifactCommandRunner {
 
 interface CreateBbAppArtifactServiceOptions {
   dataDir: string;
+  platform?: NodeJS.Platform;
   commandRunner?: BbAppArtifactCommandRunner;
   protocolVersion?: number;
   serverEntryUrl?: string;
@@ -67,10 +69,16 @@ async function defaultCommandRunner(
   command: string,
   args: readonly string[],
   cwd: string,
+  platform: NodeJS.Platform,
 ): Promise<string> {
-  const result = await execFileAsync(command, [...args], {
+  const launch =
+    platform === "win32"
+      ? await resolveSpawnPlanOrThrow({ command, args, cwd, platform })
+      : { command, args: [...args] };
+  const result = await execFileAsync(launch.command, launch.args, {
     cwd,
     maxBuffer: 10 * 1024 * 1024,
+    ...(platform === "win32" ? { windowsHide: true } : {}),
   });
   return result.stdout;
 }
@@ -193,7 +201,10 @@ async function materializePackagedHostPackage(
     );
     await chmod(join(distDir, fileName), 0o755);
   }
-  for (const fileName of HOST_DAEMON_FILES) {
+  const hostDaemonFiles = packageJson.os.includes("win32")
+    ? [...HOST_DAEMON_FILES, "bb.cmd"]
+    : HOST_DAEMON_FILES;
+  for (const fileName of hostDaemonFiles) {
     await copyFile(
       join(hostDaemonSource, fileName),
       join(hostDaemonTarget, fileName),
@@ -228,10 +239,14 @@ function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-export function createBbAppArtifactService(
-  options: CreateBbAppArtifactServiceOptions,
-): BbAppArtifactService {
-  const commandRunner = options.commandRunner ?? defaultCommandRunner;
+export function createBbAppArtifactService({
+  platform = process.platform,
+  ...options
+}: CreateBbAppArtifactServiceOptions): BbAppArtifactService {
+  const commandRunner =
+    options.commandRunner ??
+    ((command, args, cwd) =>
+      defaultCommandRunner(command, args, cwd, platform));
   const serverEntryUrl = options.serverEntryUrl ?? import.meta.url;
   const cacheDir = join(options.dataDir, "install-cache");
   const protocolVersion =
