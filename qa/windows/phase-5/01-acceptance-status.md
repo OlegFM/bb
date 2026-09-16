@@ -1,0 +1,57 @@
+# Phase 5 acceptance status
+
+Base: `fafaf454a` (Phase 4 continuation); branch: `windows-native/phase-5`.
+Date: 2026-09-16. Native Windows remains **beta**.
+
+The implementation plan is
+`docs/superpowers/plans/2026-09-16-native-windows-phase-5.md`. The canonical
+clean-machine checklist is `qa/windows/CHECKLIST.md`.
+
+## External gates observed before implementation
+
+Read-only commands:
+
+```powershell
+gh api repos/OlegFM/bb/actions/workflows --jq '.workflows[] | {id,name,path,state}'
+gh api repos/OlegFM/bb/branches/main/protection
+```
+
+Observed workflow registry: CI (356166268) and Version Lockstep (356103578),
+both active. `build-desktop.yml` is absent from the registry. The branch
+protection API returned HTTP 404 with `Branch not protected`. No remote
+settings, branch protection or publication was changed by this inspection.
+
+The checked-in CI Windows job is `Windows x64 (windows-2025, Node 22.x)`.
+Its baseline test step has `continue-on-error: true`; its selected test packages
+do not include server or app. A successful job therefore does not prove the
+Windows server/UI test suites passed. Packaged Desktop and process-hygiene
+smokes are separate steps. Ubuntu jobs use Blacksmith labels unavailable to
+this fork in earlier Phase 4 attempts; a new passing POSIX run is still needed.
+
+The Phase 4 continuation commit has not been pushed or checked by remote CI.
+Earlier successful Windows CI applies to the earlier head, as recorded in
+`../phase-4/41-ci-run.md`.
+
+## Existing baseline requiring hardening
+
+The controlled Phase 4 continuation measured 19 failing server files and five
+failing Desktop files. Details and limitations are in
+`../phase-4/43-continuation.md`; this inventory does not turn those failures into
+passes. Root causes need reproduction and focused fixes preserving POSIX.
+
+| Priority             | Family                                                                      | Evidence / intended treatment                                                                     |
+| -------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Installer dependency | bb-app artifact npm spawning and missing Windows CLI shim                   | Correct on the persistent-host path in this phase; use real tarball tests.                        |
+| High                 | plugin-install, plugin-update, third-party marketplaces, plugin-service     | Drive-letter Git source parsing, file URLs and ESM loading; do not weaken validation globally.    |
+| High                 | theme loading and thread runtime config                                     | Native separator/source-root handling; verify real behavior before changing expectations.         |
+| High                 | fake-host-dependent public routes                                           | Reproduce on an isolated run before deciding whether timeout or host execution is faulty.         |
+| Medium               | install-machine-script, CLI documentation examples                          | POSIX-only shell fixtures need Windows equivalents; no unconditional green returns.               |
+| Medium               | SQLite/update cleanup EBUSY                                                 | Close handles and await owned workers before deleting fixture directories.                        |
+| Medium               | chmod/secret-mode and separator assertions                                  | Assert native ACLs/path contracts; preserve POSIX expectations on POSIX.                          |
+| Medium               | Desktop app-paths, browser-import, packaging, foreign-runtime, view-manager | Five baseline files are not fixed by the broker lifecycle patch.                                  |
+| Investigate          | execution-options timeouts                                                  | All 38 tests passed in a focused single-worker repeat; this is not proof the full suite is green. |
+
+A clean VM with WSL disabled, real logon/restart, live Connect credential
+redemption, physical tray/Settings actions and signed-release verification have
+not been performed by this acceptance inventory. Keep those checklist rows
+pending until their own evidence exists.
