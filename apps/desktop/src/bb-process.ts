@@ -1,5 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { posix as posixPath } from "node:path";
+import {
+  terminateProcessTree,
+  type SkippedProcessEvent,
+} from "@bb/process-utils";
 
 interface RuntimeLogBuffer {
   append(chunk: Buffer | string): void;
@@ -15,6 +19,7 @@ interface StartBbAppProcessArgs {
   cwd: string;
   env: NodeJS.ProcessEnv;
   logLineLimit: number;
+  platform?: NodeJS.Platform;
   runtime: BbAppProcessRuntime;
 }
 
@@ -60,13 +65,20 @@ type BbAppProcessRuntime =
 interface CreateBbAppProcessLaunchArgs {
   bridgePath: string;
   env: NodeJS.ProcessEnv;
+  parentPid?: number;
+  platform?: NodeJS.Platform;
   runtime: BbAppProcessRuntime;
+}
+
+interface BbAppProcessSpawnOptions {
+  windowsHide?: true;
 }
 
 interface BbAppProcessLaunch {
   args: string[];
   env: NodeJS.ProcessEnv;
   executablePath: string;
+  spawnOptions: BbAppProcessSpawnOptions;
 }
 
 interface CreateBbAppProcessEnvArgs {
@@ -93,6 +105,10 @@ type ResolveWaitForProcessExitWithTimeout = (
 
 const APPIMAGE_BRIDGE_RELATIVE_PATH_ENV =
   "BB_DESKTOP_APPIMAGE_BRIDGE_RELATIVE_PATH";
+
+export const BB_DESKTOP_PARENT_PID_ENV_NAME = "BB_DESKTOP_PARENT_PID";
+
+const WINDOWS_RUNTIME_STOP_GRACE_MS = 1_000;
 
 async function runAppImageBridgeSupervisor(
   bridgeRelativePathEnv: string,
@@ -278,15 +294,23 @@ export function resolveBbAppProcessRuntime(
 export function createBbAppProcessLaunch(
   args: CreateBbAppProcessLaunchArgs,
 ): BbAppProcessLaunch {
-  const env = createBbAppProcessEnv({
+  const platform = args.platform ?? process.platform;
+  const baseEnv = createBbAppProcessEnv({
     env: args.env,
     runtimeMode: args.runtime.mode,
   });
+  const env =
+    platform === "win32" && args.parentPid !== undefined
+      ? { ...baseEnv, [BB_DESKTOP_PARENT_PID_ENV_NAME]: String(args.parentPid) }
+      : baseEnv;
+  const spawnOptions: BbAppProcessSpawnOptions =
+    platform === "win32" ? { windowsHide: true } : {};
   if (args.runtime.kind === "direct") {
     return {
       args: [args.bridgePath],
       env,
       executablePath: args.runtime.executablePath,
+      spawnOptions,
     };
   }
 
@@ -317,6 +341,7 @@ export function createBbAppProcessLaunch(
       [APPIMAGE_BRIDGE_RELATIVE_PATH_ENV]: bridgeRelativePath,
     },
     executablePath: args.runtime.executablePath,
+    spawnOptions,
   };
 }
 
@@ -377,9 +402,12 @@ function waitForProcessExitWithTimeout(
 
 export function startBbAppProcess(args: StartBbAppProcessArgs): BbAppProcess {
   const logs = createRuntimeLogBuffer({ maxLines: args.logLineLimit });
+  const platform = args.platform ?? process.platform;
   const launch = createBbAppProcessLaunch({
     bridgePath: args.bridgePath,
     env: args.env,
+    parentPid: process.pid,
+    platform,
     runtime: args.runtime,
   });
   const childProcess = spawn(launch.executablePath, launch.args, {
@@ -387,6 +415,7 @@ export function startBbAppProcess(args: StartBbAppProcessArgs): BbAppProcess {
     detached: args.runtime.kind === "appimage",
     env: launch.env,
     stdio: ["ignore", "pipe", "pipe"],
+    ...launch.spawnOptions,
   });
   const pid = childProcess.pid;
   if (pid === undefined) {
@@ -414,6 +443,23 @@ export function startBbAppProcess(args: StartBbAppProcessArgs): BbAppProcess {
     pid,
     async stop(stopArgs) {
       if (hasProcessExited(childProcess)) {
+        return;
+      }
+      if (platform === "win32") {
+        await terminateProcessTree({
+          child: childProcess,
+          graceMs: WINDOWS_RUNTIME_STOP_GRACE_MS,
+          onSkippedProcess(event: SkippedProcessEvent) {
+            logs.append(
+              `bb desktop left pid ${String(event.pid)} alone: ${event.reason}\n`,
+            );
+          },
+          platform: "win32",
+        });
+        await waitForProcessExitWithTimeout({
+          childProcess,
+          timeoutMs: stopArgs.killTimeoutMs,
+        });
         return;
       }
       childProcess.kill(stopArgs.signal);

@@ -603,6 +603,9 @@ importers:
       '@bb/host-daemon-contract':
         specifier: workspace:*
         version: link:../../packages/host-daemon-contract
+      '@bb/process-utils':
+        specifier: workspace:*
+        version: link:../../packages/process-utils
       bb-app:
         specifier: workspace:*
         version: link:../../packages/bb-app

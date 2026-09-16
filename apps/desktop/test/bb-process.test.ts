@@ -44,6 +44,15 @@ async function readLinuxProcessStat(pid: number): Promise<LinuxProcessStat> {
   };
 }
 
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function createTempScript(
   args: CreateTempScriptArgs,
 ): Promise<TempScript> {
@@ -177,41 +186,41 @@ describe("bb app process", () => {
     });
   });
 
-  it("imports the bridge from the child AppImage mount", async () => {
-    const desktopMountScript = await createTempScript({
-      contents: 'process.stdout.write("desktop mount\\n");\n',
-    });
-    const childMountScript = await createTempScript({
-      contents: 'process.stdout.write("child mount\\n");\n',
-    });
-    const launch = createBbAppProcessLaunch({
-      bridgePath: desktopMountScript.path,
-      env: process.env,
-      runtime: {
-        appDirPath: desktopMountScript.root,
-        executablePath: process.execPath,
-        kind: "appimage",
-        mode: "electron-node",
-      },
-    });
+  it.skipIf(process.platform !== "linux")(
+    "imports the bridge from the child AppImage mount",
+    async () => {
+      const desktopMountScript = await createTempScript({
+        contents: 'process.stdout.write("desktop mount\\n");\n',
+      });
+      const childMountScript = await createTempScript({
+        contents: 'process.stdout.write("child mount\\n");\n',
+      });
+      const launch = createBbAppProcessLaunch({
+        bridgePath: desktopMountScript.path,
+        env: process.env,
+        runtime: {
+          appDirPath: desktopMountScript.root,
+          executablePath: process.execPath,
+          kind: "appimage",
+          mode: "electron-node",
+        },
+      });
 
-    expect(launch.args.slice(-3)).toEqual([
-      "--",
-      desktopMountScript.path,
-      "--no-sandbox",
-    ]);
-    if (process.platform !== "linux") {
-      return;
-    }
-    const result = await execFileAsync(launch.executablePath, launch.args, {
-      env: {
-        ...launch.env,
-        APPDIR: childMountScript.root,
-      },
-    });
+      expect(launch.args.slice(-3)).toEqual([
+        "--",
+        desktopMountScript.path,
+        "--no-sandbox",
+      ]);
+      const result = await execFileAsync(launch.executablePath, launch.args, {
+        env: {
+          ...launch.env,
+          APPDIR: childMountScript.root,
+        },
+      });
 
-    expect(result.stdout).toBe("child mount\n");
-  });
+      expect(result.stdout).toBe("child mount\n");
+    },
+  );
 
   it.skipIf(process.platform !== "linux")(
     "anchors the process group while supervising descendants after the bridge exits",
@@ -313,49 +322,135 @@ process.stdout.write(\`grandchild=\${grandchild.pid}\\n\`);
     });
   });
 
-  it("escalates to SIGKILL when the bridge ignores SIGTERM", async () => {
-    const script = await createTempScript({
-      contents: `
+  it.skipIf(process.platform === "win32")(
+    "escalates to SIGKILL when the bridge ignores SIGTERM",
+    async () => {
+      const script = await createTempScript({
+        contents: `
 process.on("SIGTERM", () => {
   process.stdout.write("ignored SIGTERM\\n");
 });
 process.stdout.write("ready\\n");
 setInterval(() => undefined, 1000);
 `,
-    });
-    const processEntry = startBbAppProcess({
-      bridgePath: script.path,
-      cwd: script.root,
-      env: process.env,
-      logLineLimit: 20,
+      });
+      const processEntry = startBbAppProcess({
+        bridgePath: script.path,
+        cwd: script.root,
+        env: process.env,
+        logLineLimit: 20,
+        platform: "linux",
+        runtime: {
+          executablePath: process.execPath,
+          kind: "direct",
+          mode: "node",
+        },
+      });
+      processes.push(processEntry);
+      await waitForLog({
+        process: processEntry,
+        text: "ready",
+      });
+      processEntry.childProcess.kill("SIGTERM");
+      await waitForLog({
+        process: processEntry,
+        text: "ignored SIGTERM",
+      });
+      const killSpy = vi.spyOn(processEntry.childProcess, "kill");
+
+      await processEntry.stop({
+        killSignal: "SIGKILL",
+        killTimeoutMs: 1_000,
+        signal: "SIGTERM",
+        timeoutMs: 50,
+      });
+
+      const exit = await processEntry.exit;
+      expect(killSpy).toHaveBeenNthCalledWith(1, "SIGTERM");
+      expect(killSpy).toHaveBeenNthCalledWith(2, "SIGKILL");
+      expect(exit.signal).toBe("SIGKILL");
+    },
+  );
+
+  it("hides the console window and hands the parent pid to a Windows runtime", () => {
+    const launch = createBbAppProcessLaunch({
+      bridgePath: "C:\\bb\\bridge.mjs",
+      env: { PATH: "C:\\Windows" },
+      parentPid: 4242,
+      platform: "win32",
       runtime: {
-        executablePath: process.execPath,
+        executablePath: "C:\\bb\\bb.exe",
         kind: "direct",
-        mode: "node",
+        mode: "electron-node",
       },
     });
-    processes.push(processEntry);
-    await waitForLog({
-      process: processEntry,
-      text: "ready",
-    });
-    processEntry.childProcess.kill("SIGTERM");
-    await waitForLog({
-      process: processEntry,
-      text: "ignored SIGTERM",
-    });
-    const killSpy = vi.spyOn(processEntry.childProcess, "kill");
 
-    await processEntry.stop({
-      killSignal: "SIGKILL",
-      killTimeoutMs: 1_000,
-      signal: "SIGTERM",
-      timeoutMs: 50,
-    });
-
-    const exit = await processEntry.exit;
-    expect(killSpy).toHaveBeenNthCalledWith(1, "SIGTERM");
-    expect(killSpy).toHaveBeenNthCalledWith(2, "SIGKILL");
-    expect(exit.signal).toBe("SIGKILL");
+    expect(launch.env.BB_DESKTOP_PARENT_PID).toBe("4242");
+    expect(launch.spawnOptions).toEqual({ windowsHide: true });
   });
+
+  it("leaves POSIX launches without a parent pid or hidden-window option", () => {
+    const launch = createBbAppProcessLaunch({
+      bridgePath: "/opt/bb/bridge.mjs",
+      env: { PATH: "/usr/bin" },
+      parentPid: 4242,
+      platform: "linux",
+      runtime: {
+        executablePath: "/opt/bb/bb",
+        kind: "direct",
+        mode: "electron-node",
+      },
+    });
+
+    expect(launch.env).not.toHaveProperty("BB_DESKTOP_PARENT_PID");
+    expect(launch.spawnOptions).toEqual({});
+  });
+
+  it.runIf(process.platform === "win32")(
+    "stops the whole Windows process tree without the SIGTERM handshake",
+    async () => {
+      const script = await createTempScript({
+        contents: `
+import { spawn } from "node:child_process";
+const grandchild = spawn(process.execPath, ["-e", "setInterval(() => undefined, 1000)"], { stdio: "ignore", windowsHide: true });
+process.stdout.write(\`grandchild=\${grandchild.pid}\\n\`);
+process.stdout.write("ready\\n");
+setInterval(() => undefined, 1000);
+`,
+      });
+      const processEntry = startBbAppProcess({
+        bridgePath: script.path,
+        cwd: script.root,
+        env: process.env,
+        logLineLimit: 20,
+        platform: "win32",
+        runtime: {
+          executablePath: process.execPath,
+          kind: "direct",
+          mode: "node",
+        },
+      });
+      processes.push(processEntry);
+      await waitForLog({ process: processEntry, text: "ready" });
+      const grandchildPid = Number(
+        /grandchild=(\d+)/u.exec(processEntry.logs.text())?.[1],
+      );
+      expect(Number.isInteger(grandchildPid)).toBe(true);
+      const killSpy = vi.spyOn(processEntry.childProcess, "kill");
+
+      await processEntry.stop({
+        killSignal: "SIGKILL",
+        killTimeoutMs: 5_000,
+        signal: "SIGTERM",
+        timeoutMs: 5_000,
+      });
+
+      const exit = await processEntry.exit;
+      expect(exit.code !== null || exit.signal !== null).toBe(true);
+      expect(killSpy.mock.calls.some(([signal]) => signal === "SIGTERM")).toBe(
+        false,
+      );
+      expect(isProcessAlive(grandchildPid)).toBe(false);
+    },
+  );
 });
