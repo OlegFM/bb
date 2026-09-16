@@ -95,7 +95,14 @@ describe.skipIf(process.platform !== "win32").each(shells)(
       storedPort?: number,
       bystanderPid?: number,
     ) {
-      const root = mkdtempSync(join(scratch, "данные с пробелом "));
+      const root = mkdtempSync(
+        join(
+          scratch,
+          mode === "smart-quote-path"
+            ? "данные с пробелом \u2018left\u2019right\u201alow\u201breversed "
+            : "данные с пробелом ",
+        ),
+      );
       const data = join(root, "profile");
       const junctionTarget = join(root, "junction-target");
       if (mode.startsWith("junction")) {
@@ -382,6 +389,29 @@ describe.skipIf(process.platform !== "win32").each(shells)(
         expect(result.output).toMatch(/data paths|drive-local path/i);
       },
     );
+    it("preserves smart-quote data paths through enrollment and rerun", async () => {
+      const test = await scenario("smart-quote-path");
+      try {
+        expect(test.result.code, test.result.output).toBe(0);
+        expect(
+          JSON.parse(readFileSync(join(test.data, "auth.json"), "utf8")),
+        ).toEqual({ hostId: "host-fixture" });
+        const daemonPid = readFileSync(join(test.data, "fixture.pid"), "utf8");
+        const port = readFileSync(join(test.data, "host-daemon-port"), "utf8");
+        const repeated = await test.invoke();
+        expect(repeated.code, repeated.output).toBe(0);
+        expect(readFileSync(join(test.data, "fixture.pid"), "utf8")).toBe(
+          daemonPid,
+        );
+        expect(readFileSync(join(test.data, "host-daemon-port"), "utf8")).toBe(
+          port,
+        );
+        expect(existsSync(join(test.root, "task.json"))).toBe(true);
+        expect(existsSync(join(test.root, "run.json"))).toBe(false);
+      } finally {
+        await test.cleanup();
+      }
+    }, 60_000);
     it.each([false, true])(
       "installs privately and reuses the artifact with task denied=%s",
       async (denyTask) => {

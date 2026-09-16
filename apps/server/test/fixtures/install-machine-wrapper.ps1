@@ -1,5 +1,9 @@
 param([string]$Installer, [string]$FixtureDirectory, [switch]$DenyTask, [switch]$DenyAcl, [switch]$FolderOnly, [int]$BystanderPid, [string]$JunctionTarget, [string]$JoinCode, [string]$HostId, [string]$Server, [string]$MachineCode, [string]$HostDaemonPort)
 $ErrorActionPreference = 'Stop'
+function Write-FixtureJson {
+  param([string]$LiteralPath, [Parameter(ValueFromPipeline = $true)][string]$Value)
+  process { [System.IO.File]::WriteAllText($LiteralPath, $Value, (New-Object System.Text.UTF8Encoding($false))) }
+}
 function Start-Process {
   [CmdletBinding()]
   param($FilePath, $ArgumentList, [switch]$NoNewWindow, [switch]$Wait, [switch]$PassThru)
@@ -23,7 +27,7 @@ function Invoke-WebRequest {
 function Invoke-RestMethod {
   param($Uri, $Method = 'Get', $ContentType, $Body, $TimeoutSec)
   if (([uri]$Uri).AbsolutePath -eq '/api/connect/redeem-machine') {
-    @{ uri = $Uri; body = $Body } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'redeem.json')
+    @{ uri = $Uri; body = $Body } | ConvertTo-Json | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'redeem.json')
     Microsoft.PowerShell.Utility\Invoke-RestMethod -Uri ($env:BB_FIXTURE_ORIGIN + '/api/connect/redeem-machine') -Method $Method -ContentType $ContentType -Body $Body -TimeoutSec $TimeoutSec
   } else { Microsoft.PowerShell.Utility\Invoke-RestMethod -Uri $Uri -TimeoutSec $TimeoutSec }
 }
@@ -31,12 +35,12 @@ function New-ScheduledTaskAction { param($Execute, $Argument) @{ Execute = $Exec
 function Get-ScheduledTask {
   param($TaskName)
   $path = Join-Path $FixtureDirectory 'task.json'
-  if (Test-Path -LiteralPath $path) { $task = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json; @{ Actions = @($task.Action) } }
+  if (Test-Path -LiteralPath $path) { $task = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json; @{ Actions = @($task.Action) } }
 }
 function Get-ItemProperty {
   param($Path, $Name)
   $record = Join-Path $FixtureDirectory 'run.json'
-  if (Test-Path -LiteralPath $record) { $run = Get-Content -LiteralPath $record -Raw | ConvertFrom-Json; $value = New-Object PSObject; $value | Add-Member -NotePropertyName $Name -NotePropertyValue $run.Value; $value }
+  if (Test-Path -LiteralPath $record) { $run = Get-Content -LiteralPath $record -Raw -Encoding UTF8 | ConvertFrom-Json; $value = New-Object PSObject; $value | Add-Member -NotePropertyName $Name -NotePropertyValue $run.Value; $value }
 }
 function New-ScheduledTaskTrigger { param([switch]$AtLogOn, $User) @{ User = $User } }
 function New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel) @{ UserId = $UserId; RunLevel = $RunLevel } }
@@ -44,13 +48,13 @@ function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable, [swit
 function Register-ScheduledTask {
   param($TaskName, $Action, $Trigger, $Principal, $Settings, [switch]$Force)
   if ($DenyTask) { throw 'Task registration denied' }
-  @{ TaskName = $TaskName; Action = $Action; Principal = $Principal } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'task.json')
+  @{ TaskName = $TaskName; Action = $Action; Principal = $Principal } | ConvertTo-Json -Depth 8 | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'task.json')
 }
 function Unregister-ScheduledTask { param($TaskName, [switch]$Confirm) Remove-Item -LiteralPath (Join-Path $FixtureDirectory 'task.json') -ErrorAction SilentlyContinue }
 function New-ItemProperty {
   param($Path, $Name, $Value, $PropertyType, [switch]$Force)
   if (-not (Test-Path -LiteralPath (Join-Path $FixtureDirectory 'run-key'))) { throw 'Run key does not exist' }
-  @{ Name = $Name; Value = $Value } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'run.json')
+  @{ Name = $Name; Value = $Value } | ConvertTo-Json | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'run.json')
 }
 function Remove-ItemProperty { param($Path, $Name) Remove-Item -LiteralPath (Join-Path $FixtureDirectory 'run.json') -ErrorAction SilentlyContinue }
 function Test-Path {
@@ -82,12 +86,12 @@ if ($HostDaemonPort) { $installerParams.HostDaemonPort = $HostDaemonPort }
 $global:LASTEXITCODE = 0
 try { & $Installer @installerParams; $status = $LASTEXITCODE }
 finally {
-  if ($JunctionTarget) { @{ before = $beforeJunctionAcl; after = (Get-Acl -LiteralPath $JunctionTarget).Sddl } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'junction-acl.json') }
-  @{ data = ($beforeData -eq $env:BB_DATA_DIR); prefix = ($beforePrefix -eq $env:BB_APP_NPM_PREFIX) } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'environment.json')
+  if ($JunctionTarget) { @{ before = $beforeJunctionAcl; after = (Get-Acl -LiteralPath $JunctionTarget).Sddl } | ConvertTo-Json | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'junction-acl.json') }
+  @{ data = ($beforeData -eq $env:BB_DATA_DIR); prefix = ($beforePrefix -eq $env:BB_APP_NPM_PREFIX) } | ConvertTo-Json | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'environment.json')
   $config = Join-Path $env:BB_DATA_DIR 'config.json'
   if (Test-Path -LiteralPath $config) {
     $acl = Get-Acl -LiteralPath $config
-    @{ protected = $acl.AreAccessRulesProtected; rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value }); user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $FixtureDirectory 'acl.json')
+    @{ protected = $acl.AreAccessRulesProtected; rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value }); user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } | ConvertTo-Json | Write-FixtureJson -LiteralPath (Join-Path $FixtureDirectory 'acl.json')
   }
 }
 exit $status

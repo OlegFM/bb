@@ -19,7 +19,7 @@ $download = $null
 $oldData = $env:BB_DATA_DIR
 $oldPrefix = $env:BB_APP_NPM_PREFIX
 
-function Quote-Literal([string]$Value) { "'" + $Value.Replace("'", "''") + "'" }
+function Quote-Literal([string]$Value) { "'" + [regex]::Replace($Value, "['\u2018-\u201b]", '$0$0') + "'" }
 
 function Quote-Native([string]$Value) {
   '"' + [regex]::Replace([regex]::Replace($Value, '(\\*)"', '$1$1\"'), '(\\+)$', '$1$1') + '"'
