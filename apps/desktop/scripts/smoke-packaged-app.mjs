@@ -7,6 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createDesktopReleaseConfig,
+  resolveDesktopBuildPlatform,
   resolveDesktopReleaseChannel,
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
@@ -25,21 +26,6 @@ const windowsQuitTimeoutMs = 30_000;
 const quitRequestFileName = "quit-request";
 const removeAttempts = 3;
 const removeRetryDelayMs = 500;
-
-function resolveDesktopPlatform(platform) {
-  if (platform === "darwin") {
-    return "macos";
-  }
-  if (platform === "linux") {
-    return "linux";
-  }
-  if (platform === "win32") {
-    return "windows";
-  }
-  throw new Error(
-    "Packaged desktop smoke only runs on macOS, Linux or Windows.",
-  );
-}
 
 function writeJson(response, body) {
   response.writeHead(200, {
@@ -408,7 +394,7 @@ async function stopPackagedApp(child, quitRequestFile) {
 }
 
 async function smokePackagedApp() {
-  const desktopPlatform = resolveDesktopPlatform(process.platform);
+  const desktopPlatform = resolveDesktopBuildPlatform(process.platform);
   const desktopVersion = await readDesktopPackageVersion();
   const appBinary = await resolvePackagedAppBinary({
     executableName: releaseConfig.linuxExecutableName,
@@ -463,6 +449,7 @@ async function smokePackagedApp() {
     appendOutput(stderr, chunk);
   });
 
+  let bodyError;
   try {
     const preloadReady = await waitForPreloadReady({
       child,
@@ -489,9 +476,16 @@ async function smokePackagedApp() {
     }
 
     console.log(`Packaged desktop smoke passed: ${appBinary}`);
+  } catch (error) {
+    bodyError = error;
+    throw error;
   } finally {
     try {
       await stopPackagedApp(child, quitRequestFile);
+    } catch (stopError) {
+      if (bodyError === undefined) {
+        throw stopError;
+      }
     } finally {
       await smokeServer.close();
       await removeSmokeRoot(smokeRoot);

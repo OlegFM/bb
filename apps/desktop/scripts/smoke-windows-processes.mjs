@@ -18,6 +18,7 @@ const startupTimeoutMs = 120_000;
 const quitTimeoutMs = 30_000;
 const settleMs = 2_000;
 const pollIntervalMs = 500;
+const cimTimeoutMs = 30_000;
 const interestingImages = new Set([
   "bb.exe",
   "bb nightly.exe",
@@ -65,10 +66,20 @@ function runPowerShellJson(script) {
     );
     const stdout = [];
     const stderr = [];
+    const timer = setTimeout(() => {
+      child.kill();
+      rejectPromise(
+        new Error(`CIM snapshot timed out after ${String(cimTimeoutMs)}ms.`),
+      );
+    }, cimTimeoutMs);
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.once("error", rejectPromise);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      rejectPromise(error);
+    });
     child.once("exit", (code) => {
+      clearTimeout(timer);
       if (code !== 0) {
         rejectPromise(
           new Error(
@@ -78,7 +89,18 @@ function runPowerShellJson(script) {
         return;
       }
       const text = Buffer.concat(stdout).toString("utf8").trim();
-      resolvePromise(text.length === 0 ? [] : JSON.parse(text));
+      if (text.length === 0) {
+        resolvePromise([]);
+        return;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (error) {
+        rejectPromise(error);
+        return;
+      }
+      resolvePromise(parsed);
     });
   });
 }
@@ -104,15 +126,32 @@ export function descendantsOf(rows, rootPid) {
     children.set(row.parentPid, siblings);
   }
   const result = [];
+  const visited = new Set([rootPid]);
   const pending = [rootPid];
   while (pending.length > 0) {
     const pid = pending.pop();
     for (const row of children.get(pid) ?? []) {
+      if (visited.has(row.pid)) {
+        continue;
+      }
+      visited.add(row.pid);
       result.push(row);
       pending.push(row.pid);
     }
   }
   return result;
+}
+
+export function findSurvivors(during, after) {
+  const afterByPid = new Map(after.map((row) => [row.pid, row]));
+  return during.filter((row) => {
+    const now = afterByPid.get(row.pid);
+    return now !== undefined && now.creationDate === row.creationDate;
+  });
+}
+
+function evidenceRows(rows) {
+  return rows.filter((row) => interestingImages.has(row.name));
 }
 
 async function findFreePort() {
@@ -222,126 +261,138 @@ async function smokeWindowsProcesses() {
     ["-e", "setInterval(() => undefined, 1000)"],
     { stdio: "ignore", windowsHide: true },
   );
-  if (bystander.pid === undefined) {
-    throw new Error("Bystander process did not expose a PID.");
-  }
-  console.log(`Process hygiene smoke: bystander pid ${String(bystander.pid)}.`);
-
-  const before = await snapshotProcesses();
-  await writeJson(join(evidenceDir, "before.json"), before);
-
-  const childEnv = {
-    ...process.env,
-    BB_DATA_DIR: dataDir,
-    BB_DESKTOP_ATTACH_WITHOUT_PROMPT: "1",
-    BB_DESKTOP_OPEN_DEVTOOLS: "0",
-    BB_DESKTOP_QUIT_REQUEST_FILE: quitRequestFile,
-    BB_HOST_DAEMON_PORT: String(daemonPort),
-    BB_SERVER_PORT: String(serverPort),
-  };
-  delete childEnv.BB_DESKTOP_APP_URL;
-  delete childEnv.BB_DESKTOP_NODE_EXEC_PATH;
-  delete childEnv.BB_DESKTOP_VERSION_FEED_URL;
-  delete childEnv.ELECTRON_RUN_AS_NODE;
-
-  const child = spawn(
-    appBinary,
-    createPackagedAppLaunchArguments({
-      platform: process.platform,
-      userDataDir,
-    }),
-    { env: childEnv, stdio: "ignore" },
-  );
-  if (child.pid === undefined) {
-    throw new Error("Packaged app did not expose a PID.");
-  }
-  console.log(
-    `Process hygiene smoke: app pid ${String(child.pid)} → ${serverUrl}`,
-  );
-
-  let during = [];
   try {
-    const healthy = await waitForHealth(serverUrl, child, startupTimeoutMs);
-    if (!healthy) {
-      failures.push(
-        `Owned runtime never answered ${serverUrl}/health within ${String(startupTimeoutMs)}ms (app exit code ${String(child.exitCode)}).`,
-      );
-    } else {
-      const snapshot = await snapshotProcesses();
-      during = descendantsOf(snapshot, child.pid);
-      await writeJson(join(evidenceDir, "during.json"), during);
-      console.log(
-        `Process hygiene smoke: ${String(during.length)} descendant processes while running.`,
-      );
-      if (
-        !during.some((row) => row.commandLine.includes("bb-app-bridge.mjs"))
-      ) {
-        failures.push("No bb-app bridge process found under the app.");
-      }
-      await writeFile(quitRequestFile, "quit\n", "utf8");
-      const exited = await waitForExit(child, quitTimeoutMs);
-      if (!exited) {
-        failures.push(
-          `App pid ${String(child.pid)} ignored the quit request within ${String(quitTimeoutMs)}ms.`,
-        );
-      }
+    if (bystander.pid === undefined) {
+      throw new Error("Bystander process did not expose a PID.");
     }
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) {
-      await taskkillTree(child.pid);
-      await waitForExit(child, 10_000);
-    }
-  }
-
-  await sleep(settleMs);
-  const after = await snapshotProcesses();
-  await writeJson(join(evidenceDir, "after.json"), after);
-  const afterByPid = new Map(after.map((row) => [row.pid, row]));
-  const survivors = during.filter((row) => {
-    const now = afterByPid.get(row.pid);
-    return now !== undefined && now.creationDate === row.creationDate;
-  });
-  const beforePids = new Set(before.map((row) => row.pid));
-  const strays = after.filter(
-    (row) =>
-      !beforePids.has(row.pid) &&
-      row.pid !== process.pid &&
-      row.pid !== bystander.pid &&
-      interestingImages.has(row.name) &&
-      (row.commandLine.includes(dataDir) ||
-        row.commandLine.includes("bb-app-bridge.mjs") ||
-        row.commandLine.includes(userDataDir)),
-  );
-  for (const row of [...survivors, ...strays]) {
-    failures.push(
-      `Leaked process after quit: ${row.name} (${String(row.pid)}) ${row.commandLine}`,
+    bystander.unref();
+    console.log(
+      `Process hygiene smoke: bystander pid ${String(bystander.pid)}.`,
     );
-  }
-  if (!isAlive(bystander.pid)) {
-    failures.push("The unrelated bystander process was killed during the run.");
-  }
-  bystander.kill();
 
-  await writeJson(join(evidenceDir, "summary.json"), {
-    appBinary,
-    appPid: child.pid,
-    bystanderPid: bystander.pid,
-    descendantsWhileRunning: during.length,
-    failures,
-    serverUrl,
-    strays: strays.map((row) => row.pid),
-    survivors: survivors.map((row) => row.pid),
-  });
-  await rm(smokeRoot, { force: true, recursive: true }).catch(() => undefined);
+    const before = await snapshotProcesses();
+    await writeJson(join(evidenceDir, "before.json"), evidenceRows(before));
 
-  if (failures.length > 0) {
-    for (const failure of failures) {
-      console.log(`FAILED process-hygiene: ${failure}`);
+    const childEnv = {
+      ...process.env,
+      BB_DATA_DIR: dataDir,
+      BB_DESKTOP_ATTACH_WITHOUT_PROMPT: "1",
+      BB_DESKTOP_OPEN_DEVTOOLS: "0",
+      BB_DESKTOP_QUIT_REQUEST_FILE: quitRequestFile,
+      BB_HOST_DAEMON_PORT: String(daemonPort),
+      BB_SERVER_PORT: String(serverPort),
+    };
+    delete childEnv.BB_DESKTOP_APP_URL;
+    delete childEnv.BB_DESKTOP_NODE_EXEC_PATH;
+    delete childEnv.BB_DESKTOP_VERSION_FEED_URL;
+    delete childEnv.ELECTRON_RUN_AS_NODE;
+
+    const child = spawn(
+      appBinary,
+      createPackagedAppLaunchArguments({
+        platform: process.platform,
+        userDataDir,
+      }),
+      { env: childEnv, stdio: "ignore" },
+    );
+    if (child.pid === undefined) {
+      throw new Error("Packaged app did not expose a PID.");
     }
-    process.exitCode = 1;
-    return;
+    console.log(
+      `Process hygiene smoke: app pid ${String(child.pid)} → ${serverUrl}`,
+    );
+
+    let during = [];
+    await writeJson(join(evidenceDir, "during.json"), during);
+    try {
+      const healthy = await waitForHealth(serverUrl, child, startupTimeoutMs);
+      if (!healthy) {
+        failures.push(
+          `Owned runtime never answered ${serverUrl}/health within ${String(startupTimeoutMs)}ms (app exit code ${String(child.exitCode)}).`,
+        );
+      } else {
+        const snapshot = await snapshotProcesses();
+        during = descendantsOf(snapshot, child.pid);
+        await writeJson(join(evidenceDir, "during.json"), evidenceRows(during));
+        console.log(
+          `Process hygiene smoke: ${String(during.length)} descendant processes while running.`,
+        );
+        if (
+          !during.some((row) => row.commandLine.includes("bb-app-bridge.mjs"))
+        ) {
+          failures.push("No bb-app bridge process found under the app.");
+        }
+        await writeFile(quitRequestFile, "quit\n", "utf8");
+        const exited = await waitForExit(child, quitTimeoutMs);
+        if (!exited) {
+          failures.push(
+            `App pid ${String(child.pid)} ignored the quit request within ${String(quitTimeoutMs)}ms.`,
+          );
+        }
+      }
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        await taskkillTree(child.pid);
+        await waitForExit(child, 10_000);
+      }
+    }
+
+    await sleep(settleMs);
+    let after = await snapshotProcesses();
+    let survivors = findSurvivors(during, after);
+    if (survivors.length > 0) {
+      await sleep(settleMs);
+      after = await snapshotProcesses();
+      survivors = findSurvivors(during, after);
+    }
+    await writeJson(join(evidenceDir, "after.json"), evidenceRows(after));
+    const beforePids = new Set(before.map((row) => row.pid));
+    const strays = after.filter(
+      (row) =>
+        !beforePids.has(row.pid) &&
+        row.pid !== process.pid &&
+        row.pid !== bystander.pid &&
+        interestingImages.has(row.name) &&
+        (row.commandLine.includes(dataDir) ||
+          row.commandLine.includes("bb-app-bridge.mjs") ||
+          row.commandLine.includes(userDataDir)),
+    );
+    for (const row of [...survivors, ...strays]) {
+      failures.push(
+        `Leaked process after quit: ${row.name} (${String(row.pid)}) ${row.commandLine}`,
+      );
+    }
+    if (!isAlive(bystander.pid)) {
+      failures.push(
+        "The unrelated bystander process was killed during the run.",
+      );
+    }
+
+    await writeJson(join(evidenceDir, "summary.json"), {
+      appBinary,
+      appPid: child.pid,
+      bystanderPid: bystander.pid,
+      descendantsWhileRunning: during.length,
+      failures,
+      serverUrl,
+      strays: strays.map((row) => row.pid),
+      survivors: survivors.map((row) => row.pid),
+    });
+    await rm(smokeRoot, { force: true, recursive: true }).catch(
+      () => undefined,
+    );
+
+    if (failures.length > 0) {
+      for (const failure of failures) {
+        console.log(`FAILED process-hygiene: ${failure}`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+    console.log("Process hygiene smoke passed: no leaked processes.");
+  } finally {
+    bystander.kill();
   }
-  console.log("Process hygiene smoke passed: no leaked processes.");
 }
 
 await smokeWindowsProcesses().catch((error) => {
