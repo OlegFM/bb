@@ -301,7 +301,11 @@ version feed, and uploads two artifacts: `bb-desktop-windows-x64` with the
 release assets, and `bb-desktop-windows-x64-process-hygiene` with the smoke's
 JSON evidence. They are separate on purpose: `upload-artifact` roots an
 artifact at the least common ancestor of its matched paths, and the publish job
-reads the release files from the top level of its download.
+reads the release files from the top level of its download. It runs no test
+step, unlike the macOS and Linux jobs: the Windows desktop and launcher suites
+are still a non-gating baseline measured by `ci.yml`'s `windows-x64` job, and
+gating the release workflow on them would let a red Windows assertion withhold
+the macOS and Linux assets.
 
 ## Nightly channel
 

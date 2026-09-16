@@ -242,6 +242,10 @@ gh workflow run build-desktop.yml \
   `bb-desktop-windows-x64-process-hygiene` workflow artifact, deliberately kept
   out of `bb-desktop-windows-x64` so the publish job's download holds release
   files only.
+- Unlike the macOS and Linux jobs, the Windows job runs no desktop test suite.
+  Those suites are still a non-gating Windows baseline, measured by the
+  `windows-x64` job in `ci.yml`, so a red assertion there cannot stop the macOS
+  and Linux assets that publish today.
 - The `desktop-v<version>` release is immutable: if it already exists the
   workflow fails. Bump to a new version rather than re-running the same one.
 - The immutable `desktop-v<version>` release owns GitHub's repository-wide
