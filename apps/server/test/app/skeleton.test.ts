@@ -43,6 +43,21 @@ function readLatestAppliedMigrationCreatedAt(db: DbConnection): number {
 }
 
 describe("server skeleton", () => {
+  it("serves the Windows installer bytes without auth or caching", async () => {
+    await withTestHarness(async (harness) => {
+      const response = await harness.app.request("/install.ps1");
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe(
+        "text/plain; charset=utf-8",
+      );
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(
+        readFileSync(
+          new URL("../../src/assets/install-machine.ps1", import.meta.url),
+        ),
+      );
+    });
+  });
   it("serves the machine install script bytes without auth", async () => {
     await withTestHarness(async (harness) => {
       const expected = readFileSync(
