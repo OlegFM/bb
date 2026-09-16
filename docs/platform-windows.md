@@ -637,6 +637,11 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   channel); clicking the tray icon focuses an existing window or creates one.
   Quit stops a spawned runtime and never an attached one — the ownership check
   is the same one macOS and Linux already use.
+  The first-close exception found in the initial Phase 4 gate is fixed on
+  Windows: the browser broker retains the live renderer identity and safely
+  revokes browser-control leases after the window is destroyed. The installed
+  build passed three close/reopen cycles with runtime health preserved; see
+  `qa/windows/phase-4/43-continuation.md`.
 - **Session end.** Windows logoff and shutdown run the same stop as Quit, but
   the wiring is not obvious: Electron 41 has no App-level `session-end`; it is
   a `BrowserWindow` event. The desktop attaches it per window on win32 only,
@@ -682,15 +687,18 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   accepts a download when no publisher name is configured, which is also why
   setting a publisher without a certificate would break every update. The JSON
   half follows `BB_DESKTOP_VERSION_FEED_URL`, and a packaged build's
-  electron-updater half **cannot be pointed at a test feed at all**: the
+  electron-updater half has no shipped test-feed override: the
   desktop calls `autoUpdater.setFeedURL()` with the built-in
   `https://github.com/get-bb/bb/releases/download/<tag>/` base at startup,
   which takes precedence over `resources/app-update.yml`, and
   `forceDevUpdateConfig` is gated on an unpackaged run. Editing
   `app-update.yml` inside an installed copy therefore has no effect —
   `qa/windows/phase-4/23-update-n-to-n1.md` measures the resulting requests
-  going to `github.com` — so the electron-updater path can only be exercised
-  against a real `desktop-latest` or `desktop-nightly` release.
+  going to `github.com`. Local QA can instead use the main-process Inspector
+  to replace the existing updater adapter's feed in memory after startup
+  configuration and before its first check. This is test instrumentation,
+  not a supported configuration setting. The continuation procedure and its
+  measured limits are in `qa/windows/phase-4/43-continuation.md`.
 - **App file names.** File names shown in the app come from `hostPathBasename`
   (`apps/app/src/lib/host-path.ts`): a drive-absolute (`C:\`, `C:/`) or UNC
   (`\\`) path splits on either separator, and every other input splits on `/`
@@ -976,18 +984,6 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   installer that last ran, which the NSIS target seeds so a later differential
   update has its base file. That directory holds no user data and is safe to
   delete; `qa/windows/phase-4/26-uninstall.md` measures both.
-- Closing the first window of an app session raises an Electron "A JavaScript
-  error occurred in the main process" box:
-  `TypeError: Object has been destroyed` thrown by `instanceForWindow` in
-  `apps/desktop/src/desktop-browser-broker.ts`, reached from `releaseWindow`
-  in the window's own `closed` handler, which reads `entry.window.webContents`
-  on a window that is already destroyed. The tray parking around it is
-  correct — the runtime keeps running and `/health` keeps answering — and later
-  closes in the same session are clean, but the first one is the close every
-  user performs. The broker code is unchanged by Phase 4; what Phase 4 changed
-  is that Windows now reaches it with the app still alive.
-  `qa/windows/phase-4/25-close-to-tray.md` has the stack, the reproduction and
-  the shape of a fix.
 - The caption overlay's height and colours are fixed values — 48 px and one
   colour pair per theme — rather than being derived from the app's theme
   tokens, so a theme whose chrome row or surface colour differs from those
@@ -1058,5 +1054,7 @@ the last window to the tray with the defect it exposed (`25-close-to-tray.md`,
 (`27-window-chrome.png` and `27-window-chrome-light-overlay.png`), the WSL POSIX
 test run and the macOS/Linux config diff (`40-posix-check.md`), the
 `windows-x64` CI run (`41-ci-run.md`) and why `build-desktop.yml` could not be
-dispatched on the fork (`42-build-desktop-run.md`). The gate run that writes
-this directory is the last commit of Phase 4.
+dispatched on the fork (`42-build-desktop-run.md`). These files preserve the
+initial gate, including its failures. `43-continuation.md` records the later
+Windows broker fix, rebuilt installer, installed lifecycle verification,
+updater instrumentation and controlled server-test follow-up.

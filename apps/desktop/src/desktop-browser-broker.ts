@@ -37,6 +37,7 @@ interface BrokerWindow extends DesktopBrowserHostWindow {
 
 interface InstanceEntry {
   window: BrokerWindow;
+  webContentsId: number;
   descriptor: DesktopBrowserInstance;
   threads: Set<string>;
 }
@@ -51,10 +52,14 @@ interface ControlLease {
   connection: { wsEndpoint: string; expiresAt: number } | null;
 }
 
-export function createDesktopBrowserBroker(args: {
+export function createDesktopBrowserBroker({
+  platform = process.platform,
+  ...args
+}: {
   manager: DesktopBrowserViewManager;
   product: string;
   browserImport?: BrowserImportService;
+  platform?: NodeJS.Platform;
 }) {
   const instances = new Map<string, InstanceEntry>();
   const leases = new Map<string, ControlLease>();
@@ -63,9 +68,15 @@ export function createDesktopBrowserBroker(args: {
   const snapshots = new Map<string, string>();
   let hostId: string | null = null;
 
+  function webContentsIdFor(instance: InstanceEntry): number {
+    return platform === "win32"
+      ? instance.webContentsId
+      : instance.window.webContents.id;
+  }
+
   function instanceForWindow(webContentsId: number): InstanceEntry | undefined {
     return [...instances.values()].find(
-      (entry) => entry.window.webContents.id === webContentsId,
+      (entry) => webContentsIdFor(entry) === webContentsId,
     );
   }
 
@@ -82,8 +93,9 @@ export function createDesktopBrowserBroker(args: {
     instance: InstanceEntry,
     threadId: string,
   ): DesktopBrowserNativeTab[] {
+    if (platform === "win32" && instance.window.isDestroyed()) return [];
     return args.manager.listTabs({
-      hostWebContentsId: instance.window.webContents.id,
+      hostWebContentsId: webContentsIdFor(instance),
       threadId,
     });
   }
@@ -156,8 +168,9 @@ export function createDesktopBrowserBroker(args: {
         revoke(lease);
     }
     for (const instance of instances.values()) {
+      if (platform === "win32" && instance.window.isDestroyed()) continue;
       for (const tab of args.manager.listTabs({
-        hostWebContentsId: instance.window.webContents.id,
+        hostWebContentsId: webContentsIdFor(instance),
         threadId: null,
       }))
         instance.threads.add(tab.threadId);
@@ -212,7 +225,7 @@ export function createDesktopBrowserBroker(args: {
   async function openConnection(lease: ControlLease) {
     if (lease.connection !== null) return lease.connection;
     const scope = {
-      hostWebContentsId: lease.instance.window.webContents.id,
+      hostWebContentsId: webContentsIdFor(lease.instance),
       threadId: lease.threadId,
     };
     const ensureLease = () => {
@@ -299,14 +312,16 @@ export function createDesktopBrowserBroker(args: {
 
   return {
     registerWindow(window: BrokerWindow) {
-      if (instanceForWindow(window.webContents.id)) return;
+      const webContentsId = window.webContents.id;
+      if (instanceForWindow(webContentsId)) return;
       const descriptor = {
         instanceId: randomUUID(),
         generation: randomUUID(),
-        label: `BB window ${window.webContents.id}`,
+        label: `BB window ${webContentsId}`,
       };
       instances.set(descriptor.instanceId, {
         window,
+        webContentsId,
         descriptor,
         threads: new Set(),
       });
@@ -411,7 +426,7 @@ export function createDesktopBrowserBroker(args: {
         );
       }
       const scope = {
-        hostWebContentsId: instance.window.webContents.id,
+        hostWebContentsId: webContentsIdFor(instance),
         threadId: command.threadId,
       };
       switch (command.type) {

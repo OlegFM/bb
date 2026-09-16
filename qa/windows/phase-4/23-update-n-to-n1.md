@@ -1,5 +1,9 @@
 # N → N+1 update (Phase 4 gate, Step 7)
 
+Follow-up: [43-continuation.md](43-continuation.md) records the later local
+Inspector-based updater check. The original uninstrumented feed-override
+failure and direct-installer measurement below remain historical evidence.
+
 Raw transcript: `23-update-n-to-n1.txt`.
 
 > ## Result: **PARTIAL — a product finding, not a pass.**

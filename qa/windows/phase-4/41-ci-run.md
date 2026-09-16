@@ -277,5 +277,8 @@ construction: `23-update-n-to-n1.md` bumps both to `0.42.2` together, and
 
 The evidence commit is pushed after this file is written, so the branch tip on the fork matches the local
 tip. It changes only `qa/windows/phase-4/**` and `docs/platform-windows.md` — no product code and no
-workflow — so its CI run is not part of this gate's verdict; its id is recorded at the bottom of
-`31-test-results.md`.
+workflow — so its CI run is not part of this gate's verdict. Its run id is
+**35097601541**; Windows job **104798730962** completed with `success` at
+`2026-09-16T12:59:56Z`, confirmed by the live API during the continuation.
+This covers `0ad6f0e6b`, not the later local broker fix. The same result is
+recorded at the bottom of `31-test-results.md`.

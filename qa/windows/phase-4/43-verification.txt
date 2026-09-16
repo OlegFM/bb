@@ -1,0 +1,66 @@
+continuation-broker-red.log
+@bb/desktop:test: "TypeError: Object has been destroyed"
+@bb/desktop:test: AssertionError: expected [Function] to not throw an error but 'TypeError: Object has been destroyed' was thrown
+@bb/desktop:test: "TypeError: Object has been destroyed"
+@bb/desktop:test:  Test Files  1 failed (1)
+@bb/desktop:test:       Tests  7 failed | 2 passed (9)
+ Tasks:    3 successful, 4 total
+  Time:    6.66s 
+Failed:    @bb/desktop#test
+ ERROR  run failed: command  exited (1)
+
+continuation-broker-green.log
+@bb/desktop:test:  Test Files  1 passed (1)
+@bb/desktop:test:       Tests  9 passed (9)
+ Tasks:    4 successful, 4 total
+  Time:    6.636s 
+
+continuation-broker-typecheck.log
+ Tasks:    3 successful, 3 total
+  Time:    6.155s 
+
+continuation-broker-desktop-tests.log
+@bb/desktop:test:  Test Files  5 failed | 44 passed (49)
+@bb/desktop:test:       Tests  10 failed | 373 passed | 6 skipped (389)
+ Tasks:    3 successful, 4 total
+  Time:    23.634s 
+Failed:    @bb/desktop#test
+ ERROR  run failed: command  exited (1)
+
+continuation-broker-baseline.log
+@bb/desktop:test:  Test Files  5 failed (5)
+@bb/desktop:test:       Tests  10 failed | 119 passed (129)
+ Tasks:    3 successful, 4 total
+  Time:    11.384s 
+Failed:    @bb/desktop#test
+ ERROR  run failed: command  exited (1)
+
+continuation-windows-build.log
+bb-plugin-tasks:prepare:bundled: cache hit, suppressing logs fa02c6c68a9a5de2
+ Tasks:    49 successful, 49 total
+  Time:    5m16.057s 
+
+continuation-packaged-smoke.log
+@bb/desktop:smoke:packaged: Packaged desktop smoke passed: C:\Users\olege\Work\bb\apps\desktop\release\win-unpacked\bb.exe
+ Tasks:    1 successful, 1 total
+  Time:    7.299s 
+
+continuation-hygiene-isolated.log
+@bb/desktop:smoke:windows-processes: Process hygiene smoke passed: no leaked processes.
+ Tasks:    1 successful, 1 total
+  Time:    16.338s 
+
+continuation-server-tests.log
+@bb/server:test:  Test Files  19 failed | 219 passed | 2 skipped (240)
+@bb/server:test:       Tests  133 failed | 2317 passed | 6 skipped (2456)
+ Tasks:    7 successful, 8 total
+  Time:    9m57.191s 
+Failed:    @bb/server#test
+ ERROR  run failed: command  exited (1)
+
+continuation-server-execution-options.log
+@bb/server:test:  Test Files  1 passed (1)
+@bb/server:test:       Tests  38 passed (38)
+ Tasks:    8 successful, 8 total
+  Time:    3m1.736s 
+

@@ -1,5 +1,9 @@
 # Closing the last window to the tray (Phase 4 gate, Step 9)
 
+Follow-up: the Windows fix and installed close/reopen verification are recorded
+in [43-continuation.md](43-continuation.md). The original failing observation
+below is retained for comparison.
+
 Screenshot: `25-close-to-tray-error.png`.
 
 > ## Result: **FAIL — the gate's one blocking finding.**

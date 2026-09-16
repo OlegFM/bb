@@ -1,5 +1,9 @@
 # Tests on the reference Windows desktop (Phase 4 gate, Step 3)
 
+Follow-up: [43-continuation.md](43-continuation.md) records the Windows broker
+fix, installed lifecycle checks and controlled server rerun. The original
+gate verdict below describes the original measured head, not those later changes.
+
 **Code head measured:** `11dfe15db7d21c1f4526b23ee4762975fcd2123f` — the Phase 4 tip, unchanged for the
 whole gate; no fix commit was made during it.
 **Node:** v22.19.0 · **pnpm:** 9.15.0 · **pwsh:** 7.6.6 · **OS:** Windows 11 Pro 10.0.26200 (`00-host.md`)
@@ -342,3 +346,8 @@ green in this very run, and that CI's `Tests (server, …)` job would catch it o
 The evidence commit is pushed after this file is written, so the fork's branch tip matches the local tip.
 It changes only `qa/windows/phase-4/**` and `docs/platform-windows.md`, no product code and no workflow, so
 its CI run is not part of this gate's verdict.
+
+The run is **35097601541**. Live API verification during the continuation
+confirmed Windows job **104798730962** completed with `success` at
+`2026-09-16T12:59:56Z`. This covers `0ad6f0e6b`; the local continuation fix is
+verified separately in `43-continuation.md`.

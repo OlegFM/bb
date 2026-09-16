@@ -1,0 +1,31 @@
+{
+  "appBinary": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\bb.exe",
+  "appPid": 13564,
+  "serverPort": 51547,
+  "cycles": [
+    {
+      "cycle": 1,
+      "windowsBefore": 1,
+      "parkedWindows": 0,
+      "healthy": true,
+      "errors": []
+    },
+    {
+      "cycle": 2,
+      "windowsBefore": 1,
+      "parkedWindows": 0,
+      "healthy": true,
+      "errors": []
+    },
+    {
+      "cycle": 3,
+      "windowsBefore": 1,
+      "parkedWindows": 0,
+      "healthy": true,
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "quitMs": 4977,
+  "exitCode": 0
+}

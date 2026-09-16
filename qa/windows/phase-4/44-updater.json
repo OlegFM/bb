@@ -1,0 +1,143 @@
+{
+  "appBinary": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\bb.exe",
+  "feedDir": "C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\scratchpad\\feed-n1",
+  "evidence": "C:\\Users\\olege\\Work\\bb\\.superpowers\\sdd\\2026-09-16-native-windows-phase-4\\update-clean",
+  "requests": [
+    {
+      "time": "2026-09-16T13:22:39.613Z",
+      "url": "/desktop-version-windows.json",
+      "range": null,
+      "status": 200,
+      "bytes": 595
+    },
+    {
+      "time": "2026-09-16T13:22:39.727Z",
+      "url": "/latest.yml?noCache=1k2l64ev5",
+      "range": null,
+      "status": 200,
+      "bytes": 332
+    },
+    {
+      "time": "2026-09-16T13:22:39.764Z",
+      "url": "/bb-0.42.2-x64.exe.blockmap",
+      "range": null,
+      "status": 200,
+      "bytes": 168090
+    },
+    {
+      "time": "2026-09-16T13:22:39.795Z",
+      "url": "/bb-0.42.1-x64.exe.blockmap",
+      "range": null,
+      "status": 404,
+      "error": "Error: ENOENT: no such file or directory, stat 'C:\\Users\\olege\\AppData\\Local\\Temp\\claude\\C--Users-olege-Work-bb\\fae45475-6759-4fe1-972b-fb198493f6ff\\scratchpad\\feed-n1\\bb-0.42.1-x64.exe.blockmap'"
+    },
+    {
+      "time": "2026-09-16T13:22:39.799Z",
+      "url": "/bb-0.42.2-x64.exe",
+      "range": null,
+      "status": 200,
+      "bytes": 161914035
+    }
+  ],
+  "failures": [],
+  "instrumentation": "Main-process inspector feed override; normal automatic installation on Quit",
+  "launch": {
+    "args": [
+      "--user-data-dir=C:\\Users\\olege\\Work\\bb\\.superpowers\\sdd\\2026-09-16-native-windows-phase-4\\update-clean\\user-data",
+      "--inspect-brk=127.0.0.1:50474"
+    ],
+    "serverPort": 50472,
+    "hostPort": 50473,
+    "feedUrl": "http://127.0.0.1:50471/",
+    "dataDir": "C:\\Users\\olege\\Work\\bb\\.superpowers\\sdd\\2026-09-16-native-windows-phase-4\\update-clean\\data"
+  },
+  "appPid": 44836,
+  "bystanderPid": 49188,
+  "breakpoints": {
+    "feedLine": 41390,
+    "installLine": 15337,
+    "feed": {
+      "breakpointId": "4:41389:0:139",
+      "actualLocation": {
+        "scriptId": "139",
+        "lineNumber": 41389,
+        "columnNumber": 4
+      }
+    },
+    "install": {
+      "breakpointId": "4:15336:0:139",
+      "actualLocation": {
+        "scriptId": "139",
+        "lineNumber": 15336,
+        "columnNumber": 30
+      }
+    }
+  },
+  "feedOverrideApplied": true,
+  "downloadedInfo": {
+    "downloadState": "downloaded",
+    "lastCheckedAt": "2026-09-16T13:22:41.546Z",
+    "latestVersion": "0.42.2",
+    "pendingVersion": "0.42.2",
+    "platform": "windows",
+    "serverDaemonLogsAvailable": false,
+    "updateAvailable": true,
+    "updateDownloaded": true,
+    "version": "0.42.1"
+  },
+  "ownedRuntime": [
+    {
+      "pid": 41644,
+      "ppid": 44836,
+      "name": "bb.exe",
+      "commandLine": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\bb.exe C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\resources\\app.asar.unpacked\\dist\\bb-app-bridge.mjs",
+      "creationDate": "2026-09-16T16:22:40.0648050+03:00"
+    },
+    {
+      "pid": 12368,
+      "ppid": 41644,
+      "name": "bb.exe",
+      "commandLine": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\bb.exe C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\resources\\app.asar.unpacked\\node_modules\\bb-app\\server\\dist\\index.js",
+      "creationDate": "2026-09-16T16:22:40.5470200+03:00"
+    },
+    {
+      "pid": 30700,
+      "ppid": 41644,
+      "name": "bb.exe",
+      "commandLine": "C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\bb.exe C:\\Users\\olege\\AppData\\Local\\Programs\\bb\\resources\\app.asar.unpacked\\node_modules\\bb-app\\host-daemon\\dist\\daemon-bundle.mjs",
+      "creationDate": "2026-09-16T16:22:46.9805890+03:00"
+    }
+  ],
+  "quitRequestedAt": "2026-09-16T13:22:48.657Z",
+  "installOptions": {
+    "isSilent": true,
+    "isForceRunAfter": false,
+    "isAdminRightsRequired": false
+  },
+  "installerPath": "C:\\Users\\olege\\AppData\\Local\\@bbdesktop-updater\\pending\\bb-0.42.2-x64.exe",
+  "survivingRuntime": [],
+  "bystanderAliveBeforeInstall": true,
+  "downloadSha512": "oI6Cj0upcX5VcPozfHDtMlPrAZvFoqjdEHxdfd8NkLswvm4ebmRMQCtKSmnMS/e7t9EpT15tu6N1s8ntZT4PWg==",
+  "installerBytes": 161914035,
+  "inspectorDetachedAt": "2026-09-16T13:22:54.914Z",
+  "installerProcesses": [
+    {
+      "pid": 49712,
+      "ppid": 44836,
+      "name": "bb-0.42.2-x64.exe",
+      "commandLine": "C:\\Users\\olege\\AppData\\Local\\@bbdesktop-updater\\pending\\bb-0.42.2-x64.exe --updated /S",
+      "creationDate": "2026-09-16T16:22:55.6564820+03:00"
+    }
+  ],
+  "installerProcessExitedAt": "2026-09-16T13:24:51.757Z",
+  "desktopExitCode": 0,
+  "desktopExitSignal": null,
+  "installerExitCode": null,
+  "limitations": [
+    "Detached updater installer exit code unavailable; controller must verify installed files and registry version and explicitly relaunch N+1 with isolated QA arguments.",
+    "Feed server supports single byte ranges; multi-range requests return 416 and may trigger normal full-download fallback.",
+    "Controller owns original APPDATA/cache/install-registration preservation."
+  ],
+  "bystanderAliveAfterInstall": true,
+  "handoffObserved": true
+}

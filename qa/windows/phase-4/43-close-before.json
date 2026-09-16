@@ -1,0 +1,27 @@
+{
+  "appBinary": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe",
+  "appPid": 46620,
+  "serverPort": 49989,
+  "cycles": [
+    {
+      "cycle": 1,
+      "windowsBefore": 1,
+      "parkedWindows": 0,
+      "healthy": true,
+      "errors": [
+        {
+          "title": "A JavaScript error occurred in the main process",
+          "content": "Uncaught Exception:\nTypeError: Object has been destroyed\n    at C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:44799:31\n    at Array.find (<anonymous>)\n    at instanceForWindow (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:44798:36)\n    at Object.releaseWindow (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:45002:24)\n    at BrowserWindow.<anonymous> (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:46873:27)\n    at BrowserWindow.emit (node:events:521:24)"
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "title": "A JavaScript error occurred in the main process",
+      "content": "Uncaught Exception:\nTypeError: Object has been destroyed\n    at C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:44799:31\n    at Array.find (<anonymous>)\n    at instanceForWindow (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:44798:36)\n    at Object.releaseWindow (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:45002:24)\n    at BrowserWindow.<anonymous> (C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\resources\\app.asar\\dist\\main.js:46873:27)\n    at BrowserWindow.emit (node:events:521:24)"
+    }
+  ],
+  "quitMs": 7041,
+  "exitCode": 0
+}

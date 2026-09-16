@@ -1,0 +1,10 @@
+{
+  "appBinary": "C:\\Users\\olege\\Work\\bb\\apps\\desktop\\release\\win-unpacked\\bb.exe",
+  "appPid": 46292,
+  "bystanderPid": 42140,
+  "descendantsWhileRunning": 7,
+  "failures": ["App pid 46292 ignored the quit request within 30000ms."],
+  "serverUrl": "http://127.0.0.1:64176",
+  "strays": [],
+  "survivors": []
+}
