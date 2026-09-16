@@ -172,10 +172,13 @@ async function assertNodePtyWindowsPrebuild(packageDirectory, arch) {
     const filePath = path.join(prebuildDirectory, relativePath);
     try {
       await access(filePath);
-    } catch {
-      throw new Error(
-        `Packaged node-pty is missing ${path.join("prebuilds", `win32-${arch}`, relativePath)} under ${packageDirectory}; the ConPTY prebuild must ship outside asar.`,
-      );
+    } catch (error) {
+      if (error && error.code === "ENOENT") {
+        throw new Error(
+          `Packaged node-pty is missing ${path.join("prebuilds", `win32-${arch}`, relativePath)} under ${packageDirectory}; the ConPTY prebuild must ship outside asar.`,
+        );
+      }
+      throw error;
     }
   }
 }

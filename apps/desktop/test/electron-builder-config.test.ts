@@ -215,7 +215,6 @@ type RunConfigScript = (
 type ReadResolvedConfig = (
   overrides: EnvironmentOverrides,
 ) => Promise<ReadResolvedConfigResult>;
-type RunNativePrepScript = (appOutDir: string) => Promise<ScriptRunResult>;
 type RunNativePrepScriptWithArgs = (
   appOutDir: string,
   extraArguments: string[],
@@ -246,35 +245,6 @@ const runConfigScript: RunConfigScript = async (overrides) => {
     {
       cwd: desktopPackageRoot,
       env: createScriptEnvironment(overrides),
-    },
-  );
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-
-  child.stdout.on("data", (chunk) => {
-    stdoutChunks.push(String(chunk));
-  });
-  child.stderr.on("data", (chunk) => {
-    stderrChunks.push(String(chunk));
-  });
-
-  const exitCode = await new Promise<number | null>((resolveExitCode) => {
-    child.on("close", resolveExitCode);
-  });
-
-  return {
-    exitCode,
-    stderr: stderrChunks.join(""),
-    stdout: stdoutChunks.join(""),
-  };
-};
-
-const runNativePrepScript: RunNativePrepScript = async (appOutDir) => {
-  const child = spawn(
-    process.execPath,
-    ["scripts/prepare-native-modules.cjs", appOutDir],
-    {
-      cwd: desktopPackageRoot,
     },
   );
   const stdoutChunks: string[] = [];
@@ -532,7 +502,9 @@ describe("electron-builder signing config", () => {
       await mkdir(dirname(helperPath), { recursive: true });
       await writeFile(helperPath, "helper");
       await chmod(helperPath, 0o644);
-      const result = await runNativePrepScript(appOutDir);
+      const result = await runNativePrepScriptWithArgs(appOutDir, [
+        "--platform=darwin",
+      ]);
 
       expect(result.exitCode).toBe(0);
       await expect(
