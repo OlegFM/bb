@@ -215,9 +215,10 @@ owned-runtime record, the window state and the cached Connect credential —
 deliberately survives uninstall, and `%USERPROFILE%\.bb`, bb's own runtime
 data directory, is never touched by the installer or the uninstaller.
 
-Closing the last window on Windows parks the app in the tray with the owned
-`bb-app` runtime still running instead of quitting; if the tray could not be
-created, closing the last window quits the app as it does on Linux. The tray
+Windows creates the tray before the first window, so the app always has a tray
+to park in: closing the last window parks it there with the owned `bb-app`
+runtime still running instead of quitting. `window-all-closed` quits only if no
+tray exists, which is a safety net rather than a supported mode. The tray
 menu offers `Open bb` and `Quit bb`, and Quit stops the whole runtime process
 tree — identity-verified, never a blind `taskkill` — before the app exits.
 Windows logoff and shutdown run that same stop.
@@ -237,11 +238,13 @@ these are set, and are unsigned otherwise:
 | `AZURE_SIGNING_CERTIFICATE_PROFILE` | Certificate profile inside that account.                                                 |
 | `WINDOWS_PUBLISHER_NAME`            | Publisher common name; also written as `publisherName`.                                  |
 
-A partial set is a build failure, not a silent unsigned build: the script
-aborts with `Incomplete Windows signing environment`, naming what is present
-and what is missing. In unsigned mode `publisherName` is deliberately left
-unset, which is what lets one unsigned build update to the next — see
-Auto-update below.
+The script reads these only for a build that targets Windows (`--win` among
+the electron-builder arguments); a macOS or Linux build ignores them entirely.
+For a Windows build a partial set is a build failure, not a silent unsigned
+build: the script aborts with `Incomplete Windows signing environment`, naming
+what is present and what is missing. In unsigned mode `publisherName` is
+deliberately left unset, which is what lets one unsigned build update to the
+next — see Auto-update below.
 
 No certificate exists today, so local and CI builds are unsigned and Windows
 SmartScreen shows "Windows protected your PC" on first launch; clearing it

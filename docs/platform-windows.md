@@ -553,9 +553,12 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   beside the macOS one. All seven of `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`,
   `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`,
   `AZURE_SIGNING_ACCOUNT_NAME`, `AZURE_SIGNING_CERTIFICATE_PROFILE` and
-  `WINDOWS_PUBLISHER_NAME` are required together; a partial set aborts the
-  build with `Incomplete Windows signing environment`, naming the present and
-  the missing keys. With none of them set the build is unsigned and
+  `WINDOWS_PUBLISHER_NAME` are required together, and they are read only for a
+  build that targets Windows (`--win` among the electron-builder arguments), so
+  a macOS or Linux build ignores them exactly as it did before Phase 4. For a
+  Windows build a partial set aborts with
+  `Incomplete Windows signing environment`, naming the present and the missing
+  keys. With none of them set the build is unsigned and
   `publisherName` is deliberately left unset — `publisherName` is written only
   in signed mode. No certificate exists today, so every build produced so far
   is unsigned, and an unsigned installer raises SmartScreen's "Windows
@@ -584,9 +587,16 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `bb desktop left pid <pid> alone: pid-reused`. A typical Quit spends about
   2.8 seconds stopping the tree, because the windowless Node leader has no
   window to receive `taskkill`'s close request and is therefore ended through
-  the held handle once the grace expires; the worst case is bounded by the two
-  CIM snapshots the stop takes, each with the 10-second enumeration timeout
-  described under "Process sweep" above. No SIGTERM is sent on win32: Node's
+  the held handle once the grace expires; the worst case is bounded by the
+  stop's own budget, `timeoutMs` plus `killTimeoutMs`, which is 6 s + 1 s = 7 s
+  for an owned runtime (`OWNED_RUNTIME_STOP_TIMEOUT_MS` and
+  `OWNED_RUNTIME_KILL_TIMEOUT_MS` in `apps/desktop/src/main.ts`). When
+  `timeoutMs` expires before the sweep answers, the stop logs
+  `bb desktop gave up waiting for the runtime tree after <N> ms` and force-kills
+  the leader through the held `ChildProcess` handle rather than waiting on the
+  sweep. The descendant sweep also runs when the leader has already exited on
+  its own, so a runtime that dies mid-quit still has its children collected.
+  No SIGTERM is sent on win32: Node's
   `kill("SIGTERM")` is `TerminateProcess` there, so the launcher's signal
   handlers would never run. POSIX keeps its signal-then-timeout path
   byte-identical.
@@ -605,11 +615,13 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   set; there are no `node.exe` rows to look for. The process-hygiene smoke
   therefore identifies the bridge by the `bb-app-bridge.mjs` string in its
   command line and identifies every process by pid plus creation date.
-- **Tray and close policy.** On win32 closing the last window parks the app in
-  the tray with the owned runtime still running and still answering `/health`;
-  `window-all-closed` quits only when there is no tray to park in, so a startup
-  where the tray could not be created still exits with its last window, as on
-  Linux. Closing that window also persists an empty window set, so the next
+- **Tray and close policy.** On win32 the tray is created before the first
+  window is restored, so the app always has a tray to park in; closing the last
+  window parks it there with the owned runtime still running and still
+  answering `/health`. `window-all-closed` quits only when there is no tray,
+  which is a safety net rather than a supported mode — a tray that cannot be
+  created throws into the startup error path instead. Closing that window also
+  persists an empty window set, so the next
   launch opens the default window rather than restoring none. The tray tooltip
   is the application name and its menu is
   `Open bb` then a separator then `Quit bb` (`bb Nightly` on the nightly
@@ -634,10 +646,15 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   caption overlay whose colours follow the theme: dark `#1f1f1f` with
   `#e8e8e8` symbols, light `#f6f6f6` with `#1f1f1f` symbols. The overlay is
   re-applied both when the app switches its own theme and when the OS theme
-  changes (`nativeTheme`'s `updated` event). On the app side, the header rows
-  reserve 138 px on the right — three 46 px Windows 11 caption buttons — and
-  the right-panel toggles are offset by 138 px plus 1 rem so they never sit
-  under the caption controls. The drag-region class constants were renamed
+  changes (`nativeTheme`'s `updated` event). On the app side, `AppPageHeader`
+  reserves 138 px on the right — three 46 px Windows 11 caption buttons — and
+  the secondary-panel header reserves 154 px, the same 138 px plus a 16 px
+  gutter beside the band, because that row carries its own padding. Only the
+  header that owns the window's top-right corner takes the reserve: in a split
+  the top-right pane takes it, and a thread header whose secondary panel is
+  open inline cedes it to the panel header. The right-panel toggles are offset
+  by 138 px plus 1 rem so they never sit under the caption controls. The
+  drag-region class constants were renamed
   from `MACOS_*` to `DESKTOP_*` project-wide with their values unchanged,
   because the same drag and no-drag regions now serve both platforms; the
   macOS traffic-light reserves stay macOS-only. `dev.bb.desktop` is the
@@ -670,7 +687,10 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `-1073741510` to `null` on win32 only, and only when bb itself requested the
   close, so the app shows `Terminal exited` instead of the number. Any other
   exit code, and the same code on a close bb did not request, passes through
-  unchanged.
+  unchanged. `HOST_DAEMON_PROTOCOL_VERSION` stays at 201 for this change: the
+  field's type (`number | null`) and the meaning of `null` are unchanged and
+  only a value a Windows daemon emits moves, so an older enrolled Windows
+  daemon merely renders the negative code as it did before.
 - **CI.** The `windows-x64` job in `.github/workflows/ci.yml` packages the
   unpacked app with `pnpm --filter @bb/desktop run package:windows` — there is
   no Turbo task for that script — and then runs `smoke:packaged` and
@@ -763,8 +783,9 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   path through Phase 3. Phase 4 replaced that split with
   `apps/app/src/lib/host-path.ts` at all nine sites — `hostPathBasename` at
   eight of them and `hostPathSegments` in `rightPanelFileVisuals.ts`, whose
-  check is on directory segments rather than the file name. They are the six
-  named here through Phase 3 (`environment-queries.ts`, `project-queries.ts`,
+  check is on directory segments rather than the file name. The nine sites are
+  the six named here through Phase 3 (`environment-queries.ts`,
+  `project-queries.ts`,
   `api.ts`, `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`,
   `rightPanelFileVisuals.ts`) plus `SkillDetailView.tsx`,
   `RootComposeView.tsx` and `ThreadDetailView.tsx`, so a Windows path now
@@ -899,7 +920,21 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   info → Run anyway. A stable publish withholds the unsigned `.exe` and
   publishes only `desktop-version-windows.json`, so there is no published
   Windows download yet; maintainers build one with
-  `pnpm --filter @bb/desktop run dist:windows`.
+  `pnpm --filter @bb/desktop run dist:windows`. Because that is the permanent
+  state rather than a transient one, a source-built Windows install sees
+  "update available" from `desktop-version-windows.json` while
+  electron-updater finds no `latest.yml` to download; the nightly and QA feeds,
+  which do publish unsigned binaries, are the working update path until a
+  certificate exists.
+- The `bb-app` parent watchdog tests the desktop pid with `process.kill(pid, 0)`
+  and nothing else, so it cannot tell an exited desktop from a recycled pid: if
+  Windows reassigns that pid, the watchdog keeps treating the parent as alive
+  and never shuts the runtime down. Quit and `session-end` are the normal
+  paths; the watchdog is only the recovery path for a killed desktop.
+- `session-end` runs the same 7 s bounded stop as Quit, which exceeds Windows'
+  default logoff budget of roughly 5 s. A logoff can therefore end the session
+  before the stop finishes, leaving the runtime tree to Windows' own session
+  teardown rather than to bb's stop.
 - `BB_DESKTOP_RUNTIME_ID` and a runtime id in the health response are not
   implemented. An owned runtime is verified by its command line and its
   process creation date instead, which is enough for the stop path but does
