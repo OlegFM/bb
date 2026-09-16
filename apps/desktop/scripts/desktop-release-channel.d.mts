@@ -1,9 +1,10 @@
 export type DesktopReleaseChannel = "latest" | "nightly";
-export type DesktopBuildPlatform = "macos" | "linux";
+export type DesktopBuildPlatform = "macos" | "linux" | "windows";
 
 export interface DesktopUpdateMetadataFileNames {
   linux: "latest-linux.yml" | "nightly-linux.yml";
   macos: "latest-mac.yml" | "nightly-mac.yml";
+  windows: "latest.yml" | "nightly.yml";
 }
 
 export interface DesktopReleaseConfig {
