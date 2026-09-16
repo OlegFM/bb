@@ -23,7 +23,7 @@ import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGit
 import {
   getBbDesktopInfo,
   DESKTOP_WINDOW_NO_DRAG_CLASS,
-  shouldUseMacosDesktopChrome,
+  shouldUseDesktopWindowChrome,
 } from "@/lib/bb-desktop";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { useAppCommandShortcut } from "@/components/commands/AppCommandProvider";
@@ -94,7 +94,7 @@ export function ThreadDetailHeader({
   const [desktopInfo] = useState(getBbDesktopInfo);
   const dimsInactiveSplits = useAtomValue(dimInactiveSplitsAtom);
   const panelShortcut = useAppCommandShortcut("panel.toggle");
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const headerRef = useRef<HTMLElement>(null!);
   const {
     beginPaneDrag,

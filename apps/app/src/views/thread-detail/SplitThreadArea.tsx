@@ -102,7 +102,7 @@ import { ThreadDetailWorkerPoolProvider } from "./ThreadDetailWorkerPoolProvider
 import {
   getBbDesktopInfo,
   DESKTOP_WINDOW_NO_DRAG_CLASS,
-  shouldUseMacosDesktopChrome,
+  shouldUseDesktopWindowChrome,
 } from "@/lib/bb-desktop";
 import { SplitWorkspaceSecondaryPanelHost } from "./SplitWorkspaceSecondaryPanelHost";
 import { SecondaryPanelHostLayoutContext } from "@/components/secondary-panel/SecondaryPanelHostLayoutContext";
@@ -1049,7 +1049,7 @@ function NonThreadPaneContent({
   const hostLayout = useContext(SecondaryPanelHostLayoutContext);
   const showsWindowPanelToggle = hostLayout?.pinsCornerToggle === true;
   const [desktopInfo] = useState(getBbDesktopInfo);
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const panelEntry =
     content.kind === "plugin-panel"
       ? navPanelChrome.find(

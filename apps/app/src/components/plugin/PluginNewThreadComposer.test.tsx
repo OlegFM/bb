@@ -328,6 +328,7 @@ vi.mock("@/components/dialogs/ProjectMachineSetupDialog", () => ({
 
 vi.mock("@/views/RootComposeSecondaryContent", () => ({
   ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS: "",
+  ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS: "",
   RootComposeSecondaryContent: ({ children }: { children: ReactNode }) =>
     children,
 }));

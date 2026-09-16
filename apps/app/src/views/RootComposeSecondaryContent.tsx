@@ -13,16 +13,23 @@ import {
   getBbDesktopInfo,
   DESKTOP_APP_REGION_NO_DRAG_CLASS,
   DESKTOP_WINDOW_DRAG_CLASS,
-  shouldUseMacosDesktopChrome,
+  shouldReserveWindowsCaptionControls,
+  shouldUseDesktopWindowChrome,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS,
 } from "@/lib/bb-desktop";
+import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import { RootComposeCompactHome } from "./RootComposeCompactHome";
 import { useOptionalPaneContext } from "./thread-detail/PaneContext";
 import { getCompactPanelPresentation } from "@/components/secondary-panel/panelToggleControlState";
 
 const ROOT_COMPOSE_MAX_WIDTH_CLASS = "max-w-[760px]";
 
-export const ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS =
-  "right-[calc(1rem+env(safe-area-inset-right))] top-[calc(0.625rem+env(safe-area-inset-top))] max-md:pointer-coarse:top-[calc(0.375rem+env(safe-area-inset-top))]";
+const ROOT_COMPOSE_PINNED_PANEL_TOGGLE_TOP_CLASS =
+  "top-[calc(0.625rem+env(safe-area-inset-top))] max-md:pointer-coarse:top-[calc(0.375rem+env(safe-area-inset-top))]";
+
+export const ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS = `right-[calc(1rem+env(safe-area-inset-right))] ${ROOT_COMPOSE_PINNED_PANEL_TOGGLE_TOP_CLASS}`;
+
+export const ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS = `${WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS} ${ROOT_COMPOSE_PINNED_PANEL_TOGGLE_TOP_CLASS}`;
 
 type RootSecondaryPanelProps = Omit<
   ComponentProps<typeof LazyThreadSecondaryPanel>,
@@ -75,9 +82,16 @@ export function RootComposeSecondaryContent({
   const secondaryPanelHost = paneContext?.secondaryPanelHost ?? null;
   const composerHost = usePluginComposerHost();
   const [desktopInfo] = useState(getBbDesktopInfo);
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const desktopWindowState = useDesktopWindowState();
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const rendersWindowDragStrip =
     usesDesktopChrome && paneContext?.isTopRow !== false;
+  const pinnedPanelTogglePositionClass = shouldReserveWindowsCaptionControls({
+    desktopInfo,
+    windowState: desktopWindowState,
+  })
+    ? ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS
+    : ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS;
   const { renderBrowserDeck, ...threadSecondaryPanelProps } = secondaryPanel;
   const isCompactViewport = useIsCompactViewport();
   const usesCompactHomeLayout =
@@ -100,7 +114,7 @@ export function RootComposeSecondaryContent({
               data-testid="root-compose-drag-strip-toggle-cutout"
               className={cn(
                 "absolute",
-                ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS,
+                pinnedPanelTogglePositionClass,
                 COARSE_POINTER_HEADER_ICON_BUTTON_CLASS,
                 DESKTOP_APP_REGION_NO_DRAG_CLASS,
               )}

@@ -41,7 +41,13 @@ import {
   PANEL_RESIZE_HANDLE_LAYER_CLASS,
   PANEL_RESIZE_HIT_TARGET_CLASS,
 } from "@/components/secondary-panel/panelTransitionTokens";
-import { DESKTOP_APP_REGION_NO_DRAG_CLASS } from "@/lib/bb-desktop";
+import {
+  DESKTOP_APP_REGION_NO_DRAG_CLASS,
+  getBbDesktopInfo,
+  shouldReserveWindowsCaptionControls,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS,
+} from "@/lib/bb-desktop";
+import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import { PluginComposerHostProvider } from "@/components/plugin/plugin-composer-host";
 import { usePanelResizeSnap } from "@/components/secondary-panel/usePanelResizeSnap";
 import {
@@ -69,6 +75,8 @@ export function SplitWorkspaceSecondaryPanelHost({
   const panelGroupRef = useRef<ImperativePanelGroupHandle | null>(null);
   const panelWidthPercent = useAtomValue(secondaryPanelWidthPercentAtom);
   const shortcut = useAppCommandShortcut("panel.toggle");
+  const [desktopInfo] = useState(getBbDesktopInfo);
+  const desktopWindowState = useDesktopWindowState();
 
   const [isPanelVisible, setIsPanelVisible] = useState<boolean | null>(null);
   const isOpen = isPanelVisible ?? model?.isOpen ?? false;
@@ -198,7 +206,12 @@ export function SplitWorkspaceSecondaryPanelHost({
         <div
           data-testid="split-workspace-panel-toggle"
           className={cn(
-            "absolute right-4 top-2.5 z-40",
+            shouldReserveWindowsCaptionControls({
+              desktopInfo,
+              windowState: desktopWindowState,
+            })
+              ? `absolute ${WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS} top-2.5 z-40`
+              : "absolute right-4 top-2.5 z-40",
             !showsCornerToggle && "hidden",
             DESKTOP_APP_REGION_NO_DRAG_CLASS,
           )}

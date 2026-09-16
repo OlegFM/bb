@@ -105,9 +105,12 @@ import {
 } from "@/lib/route-paths";
 import { getBrowserUrlHost } from "@/lib/browser-url";
 import {
+  getBbDesktopInfo,
   getDesktopBrowserApi,
   isDesktopBrowserAvailable,
+  shouldReserveWindowsCaptionControls,
 } from "@/lib/bb-desktop";
+import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import {
   useFixedPanelTabsState,
   useFixedPanelTabsStorageMaintenance,
@@ -144,6 +147,7 @@ import {
 } from "@/lib/root-compose-selection";
 import {
   ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS,
+  ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS,
   RootComposeSecondaryContent,
 } from "./RootComposeSecondaryContent";
 import { RootComposeMobileRecents } from "./RootComposeMobileRecents";
@@ -650,6 +654,8 @@ function RootComposeSurface({
 }: RootComposeSurfaceProps) {
   const paneContext = useOptionalPaneContext();
   const isFocusedPane = paneContext?.isFocused ?? true;
+  const [desktopInfo] = useState(getBbDesktopInfo);
+  const desktopWindowState = useDesktopWindowState();
   const location = useLocation();
   const navigate = useNavigate();
   const isPointerCoarse = usePointerCoarse();
@@ -1765,9 +1771,15 @@ function RootComposeSurface({
   const showPinnedToggle =
     (paneContext?.secondaryPanelHost ?? null) === null &&
     (!isSecondaryPanelOpen || isCompactViewport);
+  const pinnedTogglePositionClass = shouldReserveWindowsCaptionControls({
+    desktopInfo,
+    windowState: desktopWindowState,
+  })
+    ? ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS
+    : ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS;
   const rootPanelToggle = showPinnedToggle ? (
     <div
-      className={`fixed z-40 ${ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS} ${
+      className={`fixed z-40 ${pinnedTogglePositionClass} ${
         isSecondaryPanelOpen ? "pointer-events-none invisible" : ""
       }`}
     >

@@ -2478,6 +2478,15 @@ async function runDesktopApp(): Promise<void> {
     preloadPath,
     userDataPath,
   });
+  if (shouldUseWindowsTitleBarOverlay({ platform: process.platform })) {
+    nativeTheme.on("updated", () => {
+      desktopWindowFactory?.applyTitleBarOverlay(
+        resolveWindowsTitleBarOverlay({
+          darkColors: nativeTheme.shouldUseDarkColors,
+        }),
+      );
+    });
+  }
   installLogViewerIpcHandlers();
   desktopTray = createDesktopTray({
     applicationName,

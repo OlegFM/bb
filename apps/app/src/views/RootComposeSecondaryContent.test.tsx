@@ -10,6 +10,7 @@ import {
 } from "./thread-detail/PaneContext";
 import {
   ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS,
+  ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS,
   RootComposeSecondaryContent,
 } from "./RootComposeSecondaryContent";
 
@@ -37,7 +38,7 @@ interface RenderRootComposeArgs {
 }
 
 type TestDesktopWindow = {
-  bbDesktop?: { platform: "macos" };
+  bbDesktop?: { platform: "macos" | "windows" };
 };
 
 const panelGroupState = vi.hoisted(() => ({
@@ -49,6 +50,10 @@ const noop = () => {};
 
 function setMacosDesktopChrome(): void {
   (window as unknown as TestDesktopWindow).bbDesktop = { platform: "macos" };
+}
+
+function setWindowsDesktopChrome(): void {
+  (window as unknown as TestDesktopWindow).bbDesktop = { platform: "windows" };
 }
 
 function clearDesktopChrome(): void {
@@ -300,6 +305,25 @@ describe("RootComposeSecondaryContent desktop layout", () => {
     )) {
       expect(cutout.className).toContain(positionClass);
     }
+  });
+
+  it("clears the Windows caption band when carving the pinned toggle footprint", () => {
+    setWindowsDesktopChrome();
+
+    renderRootCompose({
+      isCompactViewport: false,
+      isSecondaryPanelOpen: false,
+    });
+
+    const cutout = screen.getByTestId("root-compose-drag-strip-toggle-cutout");
+    for (const positionClass of ROOT_COMPOSE_PINNED_PANEL_TOGGLE_WINDOWS_POSITION_CLASS.split(
+      " ",
+    )) {
+      expect(cutout.className).toContain(positionClass);
+    }
+    expect(cutout.className).not.toContain(
+      "right-[calc(1rem+env(safe-area-inset-right))]",
+    );
   });
 
   it("keeps the drag strip whole while the panel is open (the panel chrome carves instead)", () => {
