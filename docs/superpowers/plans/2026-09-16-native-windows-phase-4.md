@@ -970,7 +970,7 @@ it("leaves POSIX launches without a parent pid or hidden-window option", () => {
 });
 
 it.runIf(process.platform === "win32")(
-  "stops the whole Windows process tree without sending a signal",
+  "stops the whole Windows process tree without the SIGTERM handshake",
   async () => {
     const script = await createTempScript({
       contents: `
@@ -1009,9 +1009,9 @@ setInterval(() => undefined, 1000);
     });
 
     const exit = await processEntry.exit;
-    expect(exit).toEqual({ code: 1, signal: null });
-    expect(killSpy.mock.calls.every(([signal]) => signal === undefined)).toBe(
-      true,
+    expect(exit.code !== null || exit.signal !== null).toBe(true);
+    expect(killSpy.mock.calls.some(([signal]) => signal === "SIGTERM")).toBe(
+      false,
     );
     expect(isProcessAlive(grandchildPid)).toBe(false);
   },
@@ -1031,7 +1031,7 @@ function isProcessAlive(pid: number): boolean {
 }
 ```
 
-The `code: 1, signal: null` shape is what Windows reports for a `TerminateProcess` (measured in donor commit 2e8d2a957). `terminateProcessTree`'s force step calls `child.kill()` with no argument through the held handle; the assertion says no _signal name_ was ever passed.
+The exit shape depends on which step ended the leader: `taskkill /T` (no `/F`) yields `{ code: 1, signal: null }` (measured in donor commit 2e8d2a957), while `terminateProcessTree`'s force step calls `child.kill("SIGKILL")` through the held handle (`packages/process-utils/src/windows-process-stop.ts:243`) and Node then synthesises `{ code: null, signal: "SIGKILL" }`; the test accepts either and the report records the observed shape. The `killSpy` assertion says the POSIX `SIGTERM` handshake never ran.
 
 - [ ] **Step 2: Run to verify failure**
 
