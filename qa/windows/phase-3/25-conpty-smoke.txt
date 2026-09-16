@@ -1,0 +1,33 @@
+########## RUN 1  2026-09-16T02:43:43+03:00
+@bb/desktop:smoke:windows-conpty: check spawn-echo: ok pid=39472
+@bb/desktop:smoke:windows-conpty: check utf8: ok
+@bb/desktop:smoke:windows-conpty: check resize: ok
+@bb/desktop:smoke:windows-conpty: check ctrl-c: ok
+@bb/desktop:smoke:windows-conpty: check close: ok pid=22132 exitCode=-1073741510 reaped
+@bb/desktop:smoke:windows-conpty: check tree: ok parent=40484 child=46768 reaped
+@bb/desktop:smoke:windows-conpty: conpty smoke: 6/6
+ Tasks:    1 successful, 1 total
+  Time:    24.502s 
+CONPTY_EXIT_1=0
+########## RUN 2  2026-09-16T02:44:08+03:00
+@bb/desktop:smoke:windows-conpty: check spawn-echo: ok pid=39280
+@bb/desktop:smoke:windows-conpty: check utf8: ok
+@bb/desktop:smoke:windows-conpty: check resize: ok
+@bb/desktop:smoke:windows-conpty: check ctrl-c: ok
+@bb/desktop:smoke:windows-conpty: check close: ok pid=45560 exitCode=-1073741510 reaped
+@bb/desktop:smoke:windows-conpty: check tree: ok parent=20160 child=34952 reaped
+@bb/desktop:smoke:windows-conpty: conpty smoke: 6/6
+ Tasks:    1 successful, 1 total
+  Time:    24.327s 
+CONPTY_EXIT_2=0
+########## RUN 3  2026-09-16T02:44:33+03:00
+@bb/desktop:smoke:windows-conpty: check spawn-echo: ok pid=46272
+@bb/desktop:smoke:windows-conpty: check utf8: ok
+@bb/desktop:smoke:windows-conpty: check resize: ok
+@bb/desktop:smoke:windows-conpty: check ctrl-c: ok
+@bb/desktop:smoke:windows-conpty: check close: ok pid=45720 exitCode=-1073741510 reaped
+@bb/desktop:smoke:windows-conpty: check tree: ok parent=44556 child=22132 reaped
+@bb/desktop:smoke:windows-conpty: conpty smoke: 6/6
+ Tasks:    1 successful, 1 total
+  Time:    24.266s 
+CONPTY_EXIT_3=0

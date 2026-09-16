@@ -262,6 +262,13 @@ Win32_Process` (measured cost about 0.55 s here; cold PowerShell start about
   and `readSecretFile` still returns `""` for it, matching POSIX. Any failure
   in this sequence removes the empty or staged file and throws an error
   naming the path and the remedy: put the data directory on an NTFS volume.
+  That remedy does not cover every failure. On an account with full
+  administrator rights the read-back can still show
+  `NT AUTHORITY\SYSTEM:(F), BUILTIN\Administrators:(F), <user>:(F)` after a
+  successful tighten, on NTFS, and the server then refuses to start —
+  measured on a GitHub `windows-2025` runner during the Phase 3 gate
+  (`qa/windows/phase-3/41-ci-run.md`). Keep such a data directory out of the
+  administrator profile's temp directory until the check is revisited.
   Secret file names must be ASCII; with a non-ASCII Windows account name,
   `icacls`/`whoami` output may show replacement characters. `plugins/account-pool`,
   `plugins/secrets`, and the host daemon's own `auth-state.ts` and

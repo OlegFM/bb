@@ -1,0 +1,65 @@
+=== BB_* variables visible in this shell
+BB_VAR_COUNT=0
+=== packed tarball
+TGZ=C:\Users\olege\AppData\Local\Temp\claude\C--Users-olege-Work-bb\fae45475-6759-4fe1-972b-fb198493f6ff\scratchpad\task-14\bb-app-0.42.1.tgz
+TGZ_EXISTS=True
+TGZ_BYTES=44656675
+=== start npx bb-app (clean shell)
+NPX_PID=21492
+SAW_URL=True AFTER_S=33
+STDOUT_SO_FAR_BEGIN
+
+  bb
+
+[2K  ○  Starting server
+[2K  ✓  Server listening on http://127.0.0.1:48886
+[2K  ○  Starting host daemon
+
+STDOUT_SO_FAR_END
+STDERR_SO_FAR_BEGIN
+npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+
+STDERR_SO_FAR_END
+=== Invoke-WebRequest /api/v1/system/config
+HTTP_STATUS=200
+BODY_BYTES=44190
+BODY_HEAD={"generalSettings":{"showKeyboardHints":true,"steerActiveThreadOnEnter":true,"showDiagnosticEvents":false,"providerOrder":[],"defaultProviderId":null,"streamerMode":false,"managedBranchPrefix":"bb/","showUnhandledProviderEvents":false},"keybindings":[{"command":"palette.open","desktopOnly":false,"shortcut":{"key":"p","mod":true,"meta":false,"control":false,"alt":false,"shift":true},"when":{"all":[
+=== listeners
+
+LocalAddress LocalPort OwningProcess
+------------ --------- -------------
+127.0.0.1        48887         39648
+127.0.0.1        48886         43468
+
+
+=== npx bb-app stop
+  ✓  Stopped bb (pid 36924) (terminated)
+
+STOP_EXIT=0
+=== listeners after stop
+no listeners on 48886/48887
+NPX_PROC_EXITED=True
+=== final stdout
+  bb
+
+[2K  ○  Starting server
+[2K  ✓  Server listening on http://127.0.0.1:48886
+[2K  ○  Starting host daemon
+[2K  ✓  Host daemon running
+
+  ●  bb is ready
+
+     app    http://127.0.0.1:48886
+     daemon 48887
+     data   C:\Users\olege\.bb-phase3-test
+     db     C:\Users\olege\.bb-phase3-test\bb.db
+     logs   C:\Users\olege\.bb-phase3-test\logs/
+     lock   C:\Users\olege\.bb-phase3-test\daemon.lock
+
+     Press Ctrl+C to stop
+
+=== final stderr
+npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+
+=== remove data dir
+DATA_DIR_EXISTS=False

@@ -1,0 +1,334 @@
+### Run A - --text with a trailing LF (`n), pwsh 7.6.6, 2026-09-16T02:50:24+03:00
+### Command: pwsh -NoProfile -ExecutionPolicy Bypass -File terminal-step.ps1
+=== create (utc 2026-09-16T02:28:18.6217861+03:00)
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 80,
+  "rows": 24,
+  "status": "running",
+  "exitCode": null,
+  "closeReason": null,
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514899020,
+  "lastUserInputAt": null
+}
+
+CREATE_EXIT=0
+TERMINAL_ID=term_uakrec7fti
+=== show (pid)
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 80,
+  "rows": 24,
+  "status": "running",
+  "exitCode": null,
+  "closeReason": null,
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514899020,
+  "lastUserInputAt": null
+}
+
+SHOW_EXIT=0
+=== resize 120x40
+Resized terminal term_uakrec7fti to 120x40
+
+RESIZE_EXIT=0
+=== send cyrillic
+Sent input to terminal term_uakrec7fti
+
+SEND_EXIT=0
+=== output after cyrillic
+{
+  "chunks": [
+    {
+      "seq": 0,
+    },
+    {
+      "seq": 1,
+    },
+    {
+      "seq": 2,
+    },
+    {
+      "seq": 3,
+    },
+    {
+      "seq": 4,
+    },
+    {
+      "seq": 5,
+    }
+  ],
+  "nextSeq": 6,
+  "truncated": false
+}
+
+OUTPUT_EXIT=0
+CONTAINS_PRIVET=False
+=== show after resize
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 120,
+  "rows": 40,
+  "status": "running",
+  "exitCode": null,
+  "closeReason": null,
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514903132,
+  "lastUserInputAt": 1789514903132
+}
+
+=== start long sleep
+Sent input to terminal term_uakrec7fti
+
+SLEEP_SEND_EXIT=0
+BEFORE_CTRLC_SEQ=8
+BEFORE_CTRLC_TAIL=
+
+=== send ctrl-c (raw 0x03 through --stdin)
+Sent input to terminal term_uakrec7fti
+
+CTRLC_SEND_EXIT=0
+PROMPT_RETURNED=False ELAPSED_MS=-1
+=== marker command after ctrl-c
+Sent input to terminal term_uakrec7fti
+
+{
+  "chunks": [
+    {
+      "seq": 0,
+    },
+    {
+      "seq": 1,
+    },
+    {
+      "seq": 2,
+    },
+    {
+      "seq": 3,
+    },
+    {
+      "seq": 4,
+    },
+    {
+      "seq": 5,
+    },
+    {
+      "seq": 6,
+    },
+    {
+      "seq": 7,
+    },
+    {
+      "seq": 8,
+    },
+    {
+      "seq": 9,
+    },
+    {
+      "seq": 10,
+    },
+    {
+      "seq": 11,
+    }
+  ],
+  "nextSeq": 12,
+  "truncated": false
+}
+
+CONTAINS_MARKER=False
+=== pid before close
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 120,
+  "rows": 40,
+  "status": "running",
+  "exitCode": null,
+  "closeReason": null,
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514903132,
+  "lastUserInputAt": 1789514903132
+}
+
+TERMINAL_PID=
+=== close
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 120,
+  "rows": 40,
+  "status": "exited",
+  "exitCode": -1073741510,
+  "closeReason": "user",
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514937990,
+  "lastUserInputAt": 1789514903132
+}
+
+CLOSE_EXIT=0
+=== show after close
+{
+  "id": "term_uakrec7fti",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 120,
+  "rows": 40,
+  "status": "exited",
+  "exitCode": -1073741510,
+  "closeReason": "user",
+  "createdAt": 1789514898955,
+  "updatedAt": 1789514937990,
+  "lastUserInputAt": 1789514903132
+}
+
+SHOW_AFTER_CLOSE_EXIT=0
+=== list after close
+{
+  "sessions": []
+}
+
+LIST_EXIT=0
+
+### Run B - --text with a trailing CR (`r)
+### Command: pwsh -NoProfile -ExecutionPolicy Bypass -File terminal-step2.ps1
+PWSH_PIDS_BEFORE=7480,12252,16700,21500
+=== create  [2026-09-16T02:30:07.1899512+03:00]
+TERMINAL_ID=term_iws53k3mq9 CREATE_EXIT=0
+PWSH_PIDS_AFTER=4564,7480,12252,16700,21500
+TERMINAL_SHELL_PID=4564
+=== resize 120x40  [2026-09-16T02:30:11.5781534+03:00]
+Resized terminal term_iws53k3mq9 to 120x40
+
+RESIZE_EXIT=0
+AFTER_RESIZE cols=120 rows=40
+=== send cyrillic with CR submit  [2026-09-16T02:30:13.2526179+03:00]
+Sent input to terminal term_iws53k3mq9
+
+SEND_EXIT=0
+OUTPUT_EXIT=0
+DECODED_SCROLLBACK_BEGIN
+[2J[H]0;C:\Program Files\PowerShell\7\pwsh.exe]133;A]9;9;"C:\Users\olege\Work"PS C:\Users\olege\Work> ]133;B[8;40;120t[HPS C:\Users\olege\Work>[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[1;25HWrite-Output ('При' + 'вет')     
+Привет
+]133;D;0]133;A]9;9;"C:\Users\olege\Work"PS C:\Users\olege\Work> ]133;B
+DECODED_SCROLLBACK_END
+CONTAINS_PRIVET=True
+=== start Start-Sleep -Seconds 30  [2026-09-16T02:30:17.9432343+03:00]
+Sent input to terminal term_iws53k3mq9
+
+SEQ_AT_CTRLC=8
+PRE_CTRLC_TEXT=
+Start-Sleep -Seconds 30[K
+
+=== send raw 0x03  [2026-09-16T02:30:21.5951760+03:00]
+Sent input to terminal term_iws53k3mq9
+
+CTRLC_SEND_EXIT=0
+POST_CTRLC_TEXT=
+]133;D;]133;A]9;9;"C:\Users\olege\Work"PS C:\Users\olege\Work> ]133;B
+PROMPT_RETURNED=True ELAPSED_MS=804
+=== marker after ctrl-c  [2026-09-16T02:30:22.4065926+03:00]
+Sent input to terminal term_iws53k3mq9
+
+MARKER_TEXT=
+Write-Output GATE-MARKER    
+GATE-MARKER
+]133;D;0]133;A]9;9;"C:\Users\olege\Work"PS C:\Users\olege\Work> ]133;B
+CONTAINS_MARKER=True
+=== tasklist before close  [2026-09-16T02:30:26.0735767+03:00]
+
+pwsh.exe                      4564 Console                    1    107 748 K
+
+=== close  [2026-09-16T02:30:26.3288274+03:00]
+{
+  "id": "term_iws53k3mq9",
+  "threadId": null,
+  "environmentId": null,
+  "hostId": "host_45kqba73eq",
+  "title": "gate",
+  "initialCwd": "C:\\Users\\olege\\Work",
+  "cols": 120,
+  "rows": 40,
+  "status": "exited",
+  "exitCode": -1073741510,
+  "closeReason": "user",
+  "createdAt": 1789515007499,
+  "updatedAt": 1789515026747,
+  "lastUserInputAt": 1789515013540
+}
+
+CLOSE_EXIT=0
+=== tasklist after close  [2026-09-16T02:30:30.7763329+03:00]
+INFO: No tasks are running which match the specified criteria.
+
+=== list after close  [2026-09-16T02:30:31.0036780+03:00]
+{
+  "sessions": []
+}
+
+LIST_EXIT=0

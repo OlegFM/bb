@@ -1,0 +1,200 @@
+@bb/agent-runtime:test: [36m [2m❯[22m waitForRuntimeConditionUnsafe src/test/runtime-wait-helpers.ts:[2m186:9[22m[39m
+@bb/agent-runtime:test:     [90m184|[39m   [35mconst[39m failureDetail [33m=[39m options[33m.[39m[34mdescribeFailure[39m[33m?.[39m()[33m;[39m
+@bb/agent-runtime:test:     [90m185|[39m   [35mconst[39m detail [33m=[39m failureDetail [33m?[39m [32m`\n[39m[36m${[39mfailureDetail[36m}[39m[32m`[39m [33m:[39m [32m""[39m[33m;[39m
+@bb/agent-runtime:test:     [90m186|[39m   [35mthrow[39m [35mnew[39m [33mError[39m(
+@bb/agent-runtime:test:     [90m   |[39m         [31m^[39m
+@bb/agent-runtime:test:     [90m187|[39m     [32m`Timed out after [39m[36m${[39mtimeoutMs[36m}[39m[32mms waiting for [39m[36m${[39mlabel[36m}[39m[32m[39m[36m${[39mdetail[36m}[39m[32m`[39m[33m,[39m
+@bb/agent-runtime:test:     [90m188|[39m   )[33m;[39m
+@bb/agent-runtime:test: [90m [2m❯[22m waitForRuntimeState src/test/runtime-wait-helpers.ts:[2m194:3[22m[39m
+@bb/agent-runtime:test: [90m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m627:5[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[123/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mcuts off inherited provider output before starting a replacement
+@bb/agent-runtime:test: [31m[1mError[22m: EBUSY: resource busy or locked, rmdir 'C:\Users\olege\AppData\Local\Temp\bb-runtime-test-58D5hM'[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m69:5[22m[39m
+@bb/agent-runtime:test:     [90m 67|[39m   [34mafterEach[39m(() [33m=>[39m {
+@bb/agent-runtime:test:     [90m 68|[39m     vi[33m.[39m[34munstubAllEnvs[39m()[33m;[39m
+@bb/agent-runtime:test:     [90m 69|[39m     [34mrmSync[39m(tmpDir[33m,[39m { recursive[33m:[39m [35mtrue[39m[33m,[39m force[33m:[39m [35mtrue[39m })[33m;[39m
+@bb/agent-runtime:test:     [90m   |[39m     [31m^[39m
+@bb/agent-runtime:test:     [90m 70|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m 71|[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[124/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mtreats shutdown process errors as expected without carrying state to replacement processes
+@bb/agent-runtime:test: [31m[1mError[22m: Test timed out in 15000ms.
+@bb/agent-runtime:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m642:3[22m[39m
+@bb/agent-runtime:test:     [90m640|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m641|[39m
+@bb/agent-runtime:test:     [90m642|[39m   it("treats shutdown process errors as expected without carrying stat…
+@bb/agent-runtime:test:     [90m   |[39m   [31m^[39m
+@bb/agent-runtime:test:     [90m643|[39m     const exitInfo = vi.fn<NonNullable<AgentRuntimeOptions["onProcessE…
+@bb/agent-runtime:test:     [90m644|[39m     [35mconst[39m manager [33m=[39m [34mcreateProviderProcessManager[39m({
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[125/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mruns every codex thread on one provider process
+@bb/agent-runtime:test: [31m[1mError[22m: Test timed out in 15000ms.
+@bb/agent-runtime:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m727:3[22m[39m
+@bb/agent-runtime:test:     [90m725|[39m   }
+@bb/agent-runtime:test:     [90m726|[39m
+@bb/agent-runtime:test:     [90m727|[39m   [34mit[39m([32m"runs every codex thread on one provider process"[39m[33m,[39m [35masync[39m () [33m=>[39m {
+@bb/agent-runtime:test:     [90m   |[39m   [31m^[39m
+@bb/agent-runtime:test:     [90m728|[39m     [35mconst[39m events[33m:[39m [33mThreadEvent[39m[] [33m=[39m [][33m;[39m
+@bb/agent-runtime:test:     [90m729|[39m     [35mconst[39m { processLog[33m,[39m runtime } [33m=[39m [34mcreateCodexRuntime[39m({ events })[33m;[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[126/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mretires the provider process when session construction fails
+@bb/agent-runtime:test: [31m[1mError[22m: Test timed out in 15000ms.
+@bb/agent-runtime:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m820:3[22m[39m
+@bb/agent-runtime:test:     [90m818|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m819|[39m
+@bb/agent-runtime:test:     [90m820|[39m   it("retires the provider process when session construction fails", a…
+@bb/agent-runtime:test:     [90m   |[39m   [31m^[39m
+@bb/agent-runtime:test:     [90m821|[39m     [35mconst[39m events[33m:[39m [33mThreadEvent[39m[] [33m=[39m [][33m;[39m
+@bb/agent-runtime:test:     [90m822|[39m     [35mconst[39m { processLog[33m,[39m runtime } [33m=[39m [34mcreateCodexRuntime[39m({
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[127/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mreaps a codex session after a terminal provider error before turn start
+@bb/agent-runtime:test: [31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [32m- Expected[39m
+@bb/agent-runtime:test: [31m+ Received[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [32m- 1[39m
+@bb/agent-runtime:test: [31m+ 0[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m950:9[22m[39m
+@bb/agent-runtime:test:     [90m948|[39m       [34mexpect[39m(
+@bb/agent-runtime:test:     [90m949|[39m         processLog[33m.[39m[34mread[39m()[33m.[39m[34mfilter[39m((line) [33m=>[39m line[33m.[39m[34mstartsWith[39m([32m"exit:"[39m))[33m,[39m
+@bb/agent-runtime:test:     [90m950|[39m       )[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+@bb/agent-runtime:test:     [90m   |[39m         [31m^[39m
+@bb/agent-runtime:test:     [90m951|[39m     } [35mfinally[39m {
+@bb/agent-runtime:test:     [90m952|[39m       [35mawait[39m runtime[33m.[39m[34mshutdown[39m()[33m;[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[128/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mreaps an idle codex session and resumes it on a new process
+@bb/agent-runtime:test: [31m[1mError[22m: Test timed out in 15000ms.
+@bb/agent-runtime:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m956:3[22m[39m
+@bb/agent-runtime:test:     [90m954|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m955|[39m
+@bb/agent-runtime:test:     [90m956|[39m   it("reaps an idle codex session and resumes it on a new process", as…
+@bb/agent-runtime:test:     [90m   |[39m   [31m^[39m
+@bb/agent-runtime:test:     [90m957|[39m     [35mconst[39m events[33m:[39m [33mThreadEvent[39m[] [33m=[39m [][33m;[39m
+@bb/agent-runtime:test:     [90m958|[39m     [35mconst[39m { processLog[33m,[39m runtime } [33m=[39m [34mcreateCodexRuntime[39m({ events })[33m;[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[129/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mreaps an idle codex session and resumes it on a new process
+@bb/agent-runtime:test: [31m[1mError[22m: EBUSY: resource busy or locked, rmdir 'C:\Users\olege\AppData\Local\Temp\bb-runtime-test-RH2mND'[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m69:5[22m[39m
+@bb/agent-runtime:test:     [90m 67|[39m   [34mafterEach[39m(() [33m=>[39m {
+@bb/agent-runtime:test:     [90m 68|[39m     vi[33m.[39m[34munstubAllEnvs[39m()[33m;[39m
+@bb/agent-runtime:test:     [90m 69|[39m     [34mrmSync[39m(tmpDir[33m,[39m { recursive[33m:[39m [35mtrue[39m[33m,[39m force[33m:[39m [35mtrue[39m })[33m;[39m
+@bb/agent-runtime:test:     [90m   |[39m     [31m^[39m
+@bb/agent-runtime:test:     [90m 70|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m 71|[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[130/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mreaps a restorable non-Codex session
+@bb/agent-runtime:test: [31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [32m- Expected[39m
+@bb/agent-runtime:test: [31m+ Received[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [32m- 1[39m
+@bb/agent-runtime:test: [31m+ 0[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m1133:9[22m[39m
+@bb/agent-runtime:test:     [90m1131|[39m       [34mexpect[39m(
+@bb/agent-runtime:test:     [90m1132|[39m         processLog[33m.[39m[34mread[39m()[33m.[39m[34mfilter[39m((line) [33m=>[39m line[33m.[39m[34mstartsWith[39m([32m"exit:"[39m))[33m,[39m
+@bb/agent-runtime:test:     [90m1133|[39m       )[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+@bb/agent-runtime:test:     [90m   |[39m         [31m^[39m
+@bb/agent-runtime:test:     [90m1134|[39m     } [35mfinally[39m {
+@bb/agent-runtime:test:     [90m1135|[39m       [35mawait[39m runtime[33m.[39m[34mshutdown[39m()[33m;[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[131/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mremoves the cached provider and retries when startup skill configuration fails
+@bb/agent-runtime:test: [31m[1mError[22m: Test timed out in 15000ms.
+@bb/agent-runtime:test: If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m1418:3[22m[39m
+@bb/agent-runtime:test:     [90m1416|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m1417|[39m
+@bb/agent-runtime:test:     [90m1418|[39m   it("removes the cached provider and retries when startup skill confi…
+@bb/agent-runtime:test:     [90m   |[39m   [31m^[39m
+@bb/agent-runtime:test:     [90m1419|[39m     [35mconst[39m record [33m=[39m [34mcreateScriptedEchoRequestRecord[39m()[33m;[39m
+@bb/agent-runtime:test:     [90m1420|[39m     [35mconst[39m runtime [33m=[39m [34mcreateScriptedEchoRuntime[39m({
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[132/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [41m[1m FAIL [22m[49m [30m[45m @bb/agent-runtime:isolated [49m[39m src/runtime.process-lifecycle.test.ts[2m > [22mcreateAgentRuntime process lifecycle[2m > [22mremoves the cached provider and retries when startup skill configuration fails
+@bb/agent-runtime:test: [31m[1mError[22m: EBUSY: resource busy or locked, rmdir 'C:\Users\olege\AppData\Local\Temp\bb-runtime-test-urwMwd'[39m
+@bb/agent-runtime:test: [36m [2m❯[22m src/runtime.process-lifecycle.test.ts:[2m69:5[22m[39m
+@bb/agent-runtime:test:     [90m 67|[39m   [34mafterEach[39m(() [33m=>[39m {
+@bb/agent-runtime:test:     [90m 68|[39m     vi[33m.[39m[34munstubAllEnvs[39m()[33m;[39m
+@bb/agent-runtime:test:     [90m 69|[39m     [34mrmSync[39m(tmpDir[33m,[39m { recursive[33m:[39m [35mtrue[39m[33m,[39m force[33m:[39m [35mtrue[39m })[33m;[39m
+@bb/agent-runtime:test:     [90m   |[39m     [31m^[39m
+@bb/agent-runtime:test:     [90m 70|[39m   })[33m;[39m
+@bb/agent-runtime:test:     [90m 71|[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[133/141]⎯[22m[39m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test: [2m Test Files [22m [1m[31m15 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (22)[39m
+@bb/agent-runtime:test: [2m      Tests [22m [1m[31m84 failed[39m[22m[2m | [22m[1m[32m234 passed[39m[22m[90m (318)[39m
+@bb/agent-runtime:test: [2m   Start at [22m 01:46:48
+@bb/agent-runtime:test: [2m   Duration [22m 425.21s[2m (transform 152.20s, setup 0ms, import 204.21s, tests 2021.24s, environment 6ms)[22m
+@bb/agent-runtime:test: 
+@bb/agent-runtime:test:  ELIFECYCLE  Test failed. See above for more details.
+@bb/agent-runtime#test:  WARNING  command finished with error, but continuing...
+@bb/provider-bridge-protocol#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-bridge-protocol) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-browser-automation#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\browser-automation) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/config#test:  ERROR  command (C:\Users\olege\Work\bb\packages\config) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/logger#test:  ERROR  command (C:\Users\olege\Work\bb\packages\logger) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-app#test:  ERROR  command (C:\Users\olege\Work\bb\packages\bb-app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-echo-provider#test:  ERROR  command (C:\Users\olege\Work\bb\examples\plugins\echo-provider) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-account-pool#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\account-pool) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-daemon#test:  ERROR  command (C:\Users\olege\Work\bb\apps\host-daemon) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-automations#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\automations) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/plugin-registry#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-registry) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/qa#test:  ERROR  command (C:\Users\olege\Work\bb\tests\qa) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/desktop#test:  ERROR  command (C:\Users\olege\Work\bb\apps\desktop) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-environment-personal-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\environment-personal-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/host-workspace#test:  ERROR  command (C:\Users\olege\Work\bb\packages\host-workspace) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-tasks#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\tasks) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/scripts#test:  ERROR  command (C:\Users\olege\Work\bb\packages\scripts) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-codex#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-codex) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/provider-bridge-acp#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-bridge-acp) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/mobile#test:  ERROR  command (C:\Users\olege\Work\bb\apps\mobile) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-github#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\github) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-workflows#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\workflows) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/integration-tests#test:  ERROR  command (C:\Users\olege\Work\bb\tests\integration) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@get-bb/plugin-sdk#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-sdk) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-pi#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-pi) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/provider-parity#test:  ERROR  command (C:\Users\olege\Work\bb\packages\provider-parity) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/cli#test:  ERROR  command (C:\Users\olege\Work\bb\apps\cli) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/local-open-targets#test:  ERROR  command (C:\Users\olege\Work\bb\packages\local-open-targets) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+bb-plugin-provider-claude-code#test:  ERROR  command (C:\Users\olege\Work\bb\plugins\provider-claude-code) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/templates#test:  ERROR  command (C:\Users\olege\Work\bb\packages\templates) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/server#test:  ERROR  command (C:\Users\olege\Work\bb\apps\server) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/plugin-build#test:  ERROR  command (C:\Users\olege\Work\bb\packages\plugin-build) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/app#test:  ERROR  command (C:\Users\olege\Work\bb\apps\app) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+@bb/agent-runtime#test:  ERROR  command (C:\Users\olege\Work\bb\packages\agent-runtime) C:\nvm4w\nodejs\pnpm.CMD run test exited (1)
+
+  Tasks:    58 successful, 91 total
+ Cached:    7 cached, 91 total
+   Time:    14m35.065s 
+Summary:    C:\Users\olege\Work\bb\.turbo\runs\3JNsPB9arGQvb0BlvZ9kY1e99zk.json
+ Failed:    @bb/agent-runtime#test, @bb/app#test, @bb/cli#test, @bb/config#test, @bb/desktop#test, @bb/host-daemon#test, @bb/host-workspace#test, @bb/integration-tests#test, @bb/local-open-targets#test, @bb/logger#test, @bb/mobile#test, @bb/plugin-build#test, @bb/plugin-registry#test, @bb/provider-bridge-acp#test, @bb/provider-bridge-protocol#test, @bb/provider-parity#test, @bb/qa#test, @bb/scripts#test, @bb/server#test, @bb/templates#test, @get-bb/plugin-sdk#test, bb-app#test, bb-plugin-account-pool#test, bb-plugin-automations#test, bb-plugin-browser-automation#test, bb-plugin-echo-provider#test, bb-plugin-environment-personal-workspace#test, bb-plugin-github#test, bb-plugin-provider-claude-code#test, bb-plugin-provider-codex#test, bb-plugin-provider-pi#test, bb-plugin-tasks#test, bb-plugin-workflows#test
+
+ ERROR  run failed: command  exited (1)
