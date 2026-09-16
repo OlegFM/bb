@@ -3,6 +3,10 @@
 Status: pending. This is the clean-machine gate from the approved native Windows
 design, not a record of passing checks on the development workstation.
 
+On 2026-09-16 the user confirmed that no ready clean VM is available and agreed
+to leave this gate open. No VM provisioning, reboot, logoff or WSL feature
+change is part of the local Phase 5 verification.
+
 Create a fresh Windows 11 x64 VM with a standard user, WSL disabled, no Git Bash
 on PATH, and a profile containing spaces/non-ASCII characters. Save OS build,
 Node/npm/Git/PowerShell versions, commit, package hashes, feature state, commands,

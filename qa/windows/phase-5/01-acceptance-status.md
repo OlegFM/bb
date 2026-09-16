@@ -32,6 +32,21 @@ The Phase 4 continuation commit has not been pushed or checked by remote CI.
 Earlier successful Windows CI applies to the earlier head, as recorded in
 `../phase-4/41-ci-run.md`.
 
+## Final local Phase 5 evidence
+
+At head `43ff7f339`, real isolated native enrollment passes in PowerShell 5.1
+and 7, including actual Scheduled Task registration and controlled action
+restart, artifact reuse, private ACLs, CLI/SDK issuance and identity-safe cleanup.
+See [03-native-integration.md](03-native-integration.md) and its redacted JSON.
+This does not establish actual logon or clean-VM acceptance. The user confirmed
+on 2026-09-16 that no ready clean VM is available and agreed to leave it open.
+
+The final CI definition adds a failing-on-error focused persistent-host step
+for server installer/artifact/routes and the app dialog after build, before
+Electron packaging. The separate baseline still does not include server/app
+and remains non-gating. No same-head external run or required-check change is
+claimed by the local integration.
+
 ## Existing baseline requiring hardening
 
 The controlled Phase 4 continuation measured 19 failing server files and five
@@ -39,17 +54,17 @@ failing Desktop files. Details and limitations are in
 `../phase-4/43-continuation.md`; this inventory does not turn those failures into
 passes. Root causes need reproduction and focused fixes preserving POSIX.
 
-| Priority             | Family                                                                      | Evidence / intended treatment                                                                     |
-| -------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Installer dependency | bb-app artifact npm spawning and missing Windows CLI shim                   | Correct on the persistent-host path in this phase; use real tarball tests.                        |
-| High                 | plugin-install, plugin-update, third-party marketplaces, plugin-service     | Drive-letter Git source parsing, file URLs and ESM loading; do not weaken validation globally.    |
-| High                 | theme loading and thread runtime config                                     | Native separator/source-root handling; verify real behavior before changing expectations.         |
-| High                 | fake-host-dependent public routes                                           | Reproduce on an isolated run before deciding whether timeout or host execution is faulty.         |
-| Medium               | install-machine-script, CLI documentation examples                          | POSIX-only shell fixtures need Windows equivalents; no unconditional green returns.               |
-| Medium               | SQLite/update cleanup EBUSY                                                 | Close handles and await owned workers before deleting fixture directories.                        |
-| Medium               | chmod/secret-mode and separator assertions                                  | Assert native ACLs/path contracts; preserve POSIX expectations on POSIX.                          |
-| Medium               | Desktop app-paths, browser-import, packaging, foreign-runtime, view-manager | Five baseline files are not fixed by the broker lifecycle patch.                                  |
-| Investigate          | execution-options timeouts                                                  | All 38 tests passed in a focused single-worker repeat; this is not proof the full suite is green. |
+| Priority             | Family                                                                      | Evidence / intended treatment                                                                                                                              |
+| -------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Installer dependency | bb-app artifact npm spawning and missing Windows CLI shim                   | Corrected with 19 artifact tests and real route/npm installation plus installed CMD shim evidence in [03-native-integration.md](03-native-integration.md). |
+| High                 | plugin-install, plugin-update, third-party marketplaces, plugin-service     | Drive-letter Git source parsing, file URLs and ESM loading; do not weaken validation globally.                                                             |
+| High                 | theme loading and thread runtime config                                     | Native separator/source-root handling; verify real behavior before changing expectations.                                                                  |
+| High                 | fake-host-dependent public routes                                           | Reproduce on an isolated run before deciding whether timeout or host execution is faulty.                                                                  |
+| Medium               | install-machine-script, CLI documentation examples                          | POSIX-only shell fixtures need Windows equivalents; no unconditional green returns.                                                                        |
+| Medium               | SQLite/update cleanup EBUSY                                                 | Close handles and await owned workers before deleting fixture directories.                                                                                 |
+| Medium               | chmod/secret-mode and separator assertions                                  | Assert native ACLs/path contracts; preserve POSIX expectations on POSIX.                                                                                   |
+| Medium               | Desktop app-paths, browser-import, packaging, foreign-runtime, view-manager | Five baseline files are not fixed by the broker lifecycle patch.                                                                                           |
+| Investigate          | execution-options timeouts                                                  | All 38 tests passed in a focused single-worker repeat; this is not proof the full suite is green.                                                          |
 
 A clean VM with WSL disabled, real logon/restart, live Connect credential
 redemption, physical tray/Settings actions and signed-release verification have

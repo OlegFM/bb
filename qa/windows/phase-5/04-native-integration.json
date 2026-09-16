@@ -1,0 +1,250 @@
+{
+  "head": "43ff7f339b447cc0020d2083bba9e0574ae262ee",
+  "branch": "windows-native/phase-5",
+  "status": "isolated developer-workstation native integration passes; clean-VM/GA gates remain pending",
+  "versions": {
+    "capturedUtc": "2026-09-16T19:24:55.7582397Z",
+    "os": {
+      "Caption": "Майкрософт Windows 11 Pro",
+      "Version": "10.0.26200",
+      "BuildNumber": "26200",
+      "OSArchitecture": "64-разрядная"
+    },
+    "node": "v22.19.0",
+    "powershell7": "7.6.6",
+    "windowsPowerShell": "5.1.26100.9444",
+    "git": "git version 2.52.0.windows.1"
+  },
+  "build": {
+    "exit": 0,
+    "tasksPassed": 47,
+    "tasksTotal": 47,
+    "cacheHits": 44,
+    "duration": "1m49.21s"
+  },
+  "integration": {
+    "exit": 0,
+    "startedUtc": "2026-09-16T20:06:01.083Z",
+    "checks": [
+      {
+        "check": "isolated real server health",
+        "pass": true,
+        "bind": "127.0.0.1"
+      },
+      {
+        "check": "served/built/source installer exact byte equality",
+        "pass": true,
+        "sha256": "4329993232d4ae8106622abb445cbc527657217b2adb2467b70cd0c9558b1170",
+        "bytes": 29984
+      },
+      {
+        "check": "real artifact route prewarmed before issuance",
+        "pass": true,
+        "sha256": "c2251ffda48123a1037a9c9700a2dc3e980ce2150b376134e0f03e98b67d2fee",
+        "bytes": 1315027,
+        "durationMs": 5876
+      },
+      {
+        "check": "ps51 occupied unrelated port failure",
+        "pass": true,
+        "exit": 1,
+        "bystanderAlive": true,
+        "failedReservationRemoved": true,
+        "registrationAbsent": true
+      },
+      {
+        "check": "ps7 occupied unrelated port failure",
+        "pass": true,
+        "exit": 1,
+        "bystanderAlive": true,
+        "failedReservationRemoved": true,
+        "registrationAbsent": true
+      }
+    ],
+    "enrollment": [
+      {
+        "shell": "ps51",
+        "issuance": "built CLI",
+        "installExit": 0,
+        "rerunExit": 0,
+        "realNativeAddonsExit": 0,
+        "connectedStatus": true,
+        "publicHostConnected": true,
+        "artifactReuse": true,
+        "stableSupervisorAndPort": true,
+        "privateAcl": [
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "ps51-data",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "auth.json",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "config.json",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "start-host-daemon.ps1",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "stop-host-daemon.ps1",
+            "protected": true
+          }
+        ],
+        "actualRegistration": {
+          "run": false,
+          "task": 1,
+          "principals": [
+            {
+              "executionTimeLimit": "PT0S",
+              "runLevel": "Limited",
+              "logonType": "Interactive"
+            }
+          ],
+          "triggerKinds": ["MSFT_TaskLogonTrigger"]
+        },
+        "controlledStopExit": 0,
+        "controlledRestart": "Start-ScheduledTask",
+        "actualLogon": false,
+        "cleanupStopExit": 0,
+        "registrationAbsent": true,
+        "preexistingAutostartUnchanged": true
+      },
+      {
+        "shell": "ps7",
+        "issuance": "built SDK",
+        "installExit": 0,
+        "rerunExit": 0,
+        "realNativeAddonsExit": 0,
+        "connectedStatus": true,
+        "publicHostConnected": true,
+        "artifactReuse": true,
+        "stableSupervisorAndPort": true,
+        "privateAcl": [
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "ps7-data",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "auth.json",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "config.json",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "start-host-daemon.ps1",
+            "protected": true
+          },
+          {
+            "onlyCurrentUserFullControl": true,
+            "file": "stop-host-daemon.ps1",
+            "protected": true
+          }
+        ],
+        "actualRegistration": {
+          "run": false,
+          "task": 1,
+          "principals": [
+            {
+              "executionTimeLimit": "PT0S",
+              "runLevel": "Limited",
+              "logonType": "Interactive"
+            }
+          ],
+          "triggerKinds": ["MSFT_TaskLogonTrigger"]
+        },
+        "controlledStopExit": 0,
+        "controlledRestart": "Start-ScheduledTask",
+        "actualLogon": false,
+        "cleanupStopExit": 0,
+        "registrationAbsent": true,
+        "preexistingAutostartUnchanged": true
+      }
+    ],
+    "cleanup": {
+      "bystanderClosed": true,
+      "server": {
+        "leaderExited": true,
+        "descendantsKilled": 0,
+        "descendantsSkipped": 0,
+        "enumerationError": null
+      },
+      "preexistingAutostartUnchanged": true,
+      "qaRegistrationAbsent": true,
+      "existingBbCoreFilesUnchanged": true
+    },
+    "pass": true,
+    "finishedUtc": "2026-09-16T20:08:02.385Z"
+  },
+  "installedArtifactNativeProbe": {
+    "exit": 0,
+    "results": [
+      {
+        "shell": "ps51",
+        "nativeLoadExit": 0,
+        "ptyVersion": "1.2.0-beta.15",
+        "watcherVersion": "2.5.6",
+        "loadedNativeBinaries": [
+          {
+            "file": "node_modules/bb-app/node_modules/@parcel/watcher-win32-x64/watcher.node",
+            "sha256": "f316d0bcd926c4651f967a0d193609de1fc18d3b0408f525f7ce0d08e566774b"
+          },
+          {
+            "file": "node_modules/bb-app/node_modules/node-pty/prebuilds/win32-x64/conpty.node",
+            "sha256": "ec2fd8545c30e051ee3fa17d26127f7e615919814879c7f746cf4c80845226e0"
+          }
+        ],
+        "installedCliCmdExit": 0,
+        "installedCliVersion": "0.42.1",
+        "packagedHostCliCmdPresent": true
+      },
+      {
+        "shell": "ps7",
+        "nativeLoadExit": 0,
+        "ptyVersion": "1.2.0-beta.15",
+        "watcherVersion": "2.5.6",
+        "loadedNativeBinaries": [
+          {
+            "file": "node_modules/bb-app/node_modules/@parcel/watcher-win32-x64/watcher.node",
+            "sha256": "f316d0bcd926c4651f967a0d193609de1fc18d3b0408f525f7ce0d08e566774b"
+          },
+          {
+            "file": "node_modules/bb-app/node_modules/node-pty/prebuilds/win32-x64/conpty.node",
+            "sha256": "ec2fd8545c30e051ee3fa17d26127f7e615919814879c7f746cf4c80845226e0"
+          }
+        ],
+        "installedCliCmdExit": 0,
+        "installedCliVersion": "0.42.1",
+        "packagedHostCliCmdPresent": true
+      }
+    ]
+  },
+  "finalCleanupSupplement": {
+    "observedUtc": "2026-09-16T20:09:17.5873460Z",
+    "qaRunDirectories": 7,
+    "processesReferencingOwnedRunDirectories": 0
+  },
+  "limitations": [
+    "No clean VM available; pending by user agreement on 2026-09-16",
+    "No WSL feature change, logoff or reboot",
+    "No actual logon restart",
+    "No denied-task real HKCU Run fallback",
+    "No live Connect credential redemption",
+    "No real Desktop coexistence, Electron ABI or signing checks",
+    "No remote CI run or required-check mutation"
+  ]
+}

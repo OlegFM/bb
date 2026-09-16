@@ -1150,3 +1150,13 @@ dispatched on the fork (`42-build-desktop-run.md`). These files preserve the
 initial gate, including its failures. `43-continuation.md` records the later
 Windows broker fix, rebuilt installer, installed lifecycle verification,
 updater instrumentation and controlled server-test follow-up.
+
+[Phase 5 native integration](../qa/windows/phase-5/03-native-integration.md)
+and its [redacted structured results](../qa/windows/phase-5/04-native-integration.json)
+record real isolated server/artifact enrollment through PowerShell 5.1 and 7,
+CLI/SDK issuance, actual Scheduled Task registration, controlled registered-action
+restart, private ACLs, installed native bindings and identity-safe cleanup.
+The final local run exited 0 at head `43ff7f339`. Actual logon restart, clean VM
+with WSL disabled, live Connect, Desktop coexistence, signing and same-head
+external regression jobs remain pending; these measurements do not change
+native Windows from beta to supported.

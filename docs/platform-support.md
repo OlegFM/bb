@@ -39,8 +39,11 @@ Native Windows 11 x64 is a second, beta path. bb runs the server, the host
 daemon, terminals and providers directly on Windows, with drive-letter project
 paths, PowerShell terminals through ConPTY, and provider CLIs resolved through
 `Path` and `PATHEXT`; see [platform-windows.md](platform-windows.md) for what
-has been measured and what is known not to work. It is verified on the fork's
-`windows-native/*` branches and by the `windows-x64` CI job.
+has been measured and what is known not to work. Local measurements are
+recorded on the fork's `windows-native/*` branches; earlier `windows-x64` CI
+runs apply to their recorded heads, not to later unpushed changes. The latest
+[Phase 5 native integration](../qa/windows/phase-5/03-native-integration.md)
+records real isolated persistent-host enrollment in PowerShell 5.1 and 7.
 
 The Windows Desktop app lands as part of that beta path: a per-user NSIS
 installer packages the Electron shell together with the `bb-app` runtime it
@@ -49,8 +52,10 @@ the same `desktop-latest` release the other platforms use. It is unsigned
 today, so SmartScreen warns on first launch and the publish job withholds the
 unsigned installer from the release; maintainers build one from source with
 `pnpm --filter @bb/desktop run dist:windows`. Native Windows stays beta
-because the persistent host (Phase 5) has not landed and no Windows
-code-signing certificate exists yet.
+because clean-VM acceptance, actual logon restart, live Connect, the full
+Windows regression baseline and signing remain open. The native persistent
+host installer and pairing UI are implemented; local integration evidence
+does not close those external acceptance gates.
 
 ## Mobile app
 

@@ -290,6 +290,13 @@ jobs:
           --filter=bb-app
           --output-logs=new-only
 
+      - name: Test Windows persistent host
+        run: |
+          pnpm.cmd exec turbo run test --filter=@bb/server --output-logs=new-only -- --maxWorkers=2 test/app/install-machine-powershell.test.ts test/app/bb-app-artifact.test.ts test/app/skeleton.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd exec turbo run test --filter=@bb/app --output-logs=new-only -- --maxWorkers=2 src/components/dialogs/AddMachineDialog.test.tsx
+          exit $LASTEXITCODE
+
       # continue-on-error, not `|| true`: the step still renders as failed in
       # the run summary, so the baseline stays visible while the job stays
       # green. --continue so one package's failures do not hide the others'.

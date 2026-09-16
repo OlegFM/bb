@@ -142,7 +142,7 @@ Confirm the Connect package name from its manifest before running its command.
 
 ## Task 3: Integrated evidence and GA gate inventory
 
-Files: `qa/windows/phase-5/`, `qa/windows/CHECKLIST.md`,
+Files: `.github/workflows/ci.yml`, `qa/windows/phase-5/`, `qa/windows/CHECKLIST.md`,
 `docs/platform-windows.md`, `docs/platform-support.md`.
 
 1. Build the server with Turbo and verify the shipped installer bytes.
@@ -153,7 +153,9 @@ Files: `qa/windows/phase-5/`, `qa/windows/CHECKLIST.md`,
    unreachable capability with documented reason, or an open acceptance gap.
    Do not add blanket skips to produce a green Windows job.
 4. Capture current CI definitions and external workflow/branch-protection
-   availability. Separate required-check configuration from passing jobs.
+   availability. Add a gating Windows step for the new installer, artifact,
+   route and AddMachineDialog tests; the current baseline selection excludes
+   server and app. Separate required-check configuration from passing jobs.
 5. Create a clean-VM checklist covering every spec section 2 row, including WSL
    disabled, real logon restart, real Connect pairing, Desktop coexistence,
    CLI/SDK, signing and all regression jobs. Record unexecuted rows as pending.
@@ -172,3 +174,16 @@ live Connect validation require their actual environments; they cannot be
 substituted by fake service registrations or a WSL-enabled developer machine.
 Full Windows baseline remediation and required external CI/branch protection
 are a subsequent hardening slice, with no claim that Phase 5 is finished here.
+
+## Local execution result
+
+Tasks 1, 1b and 2 are implemented and independently reviewed. Task 3 completed
+isolated native integration on the final product head `43ff7f339b` with explicit
+exit 0 for both PowerShell versions. See
+[the portable verification report](../../../qa/windows/phase-5/03-native-integration.md)
+and its structured JSON for exact checks, hashes and limits. Whole-phase review
+and the final evidence commit are recorded with the local delivery.
+
+The user confirmed that no clean VM is available and agreed to leave that gate
+open. This does not close the umbrella Phase 5 gate or change native Windows
+from beta. The acceptance inventory and skip audit retain the remaining work.
