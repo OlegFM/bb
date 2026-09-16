@@ -3,6 +3,8 @@ import { posix as posixPath } from "node:path";
 import {
   terminateProcessTree,
   type SkippedProcessEvent,
+  type TerminateProcessTreeArgs,
+  type TerminateProcessTreeResult,
 } from "@bb/process-utils";
 
 interface RuntimeLogBuffer {
@@ -14,6 +16,10 @@ interface CreateRuntimeLogBufferArgs {
   maxLines: number;
 }
 
+type TerminateProcessTree = (
+  args: TerminateProcessTreeArgs,
+) => Promise<TerminateProcessTreeResult>;
+
 interface StartBbAppProcessArgs {
   bridgePath: string;
   cwd: string;
@@ -21,6 +27,7 @@ interface StartBbAppProcessArgs {
   logLineLimit: number;
   platform?: NodeJS.Platform;
   runtime: BbAppProcessRuntime;
+  terminateProcessTree?: TerminateProcessTree;
 }
 
 export interface BbAppProcess {
@@ -102,6 +109,13 @@ type WaitForProcessExitWithTimeoutResult = "exited" | "timed-out";
 type ResolveWaitForProcessExitWithTimeout = (
   result: WaitForProcessExitWithTimeoutResult,
 ) => void;
+
+interface RaceTerminateProcessTreeArgs {
+  terminate: Promise<TerminateProcessTreeResult>;
+  timeoutMs: number;
+}
+
+type RaceTerminateProcessTreeResult = "settled" | "timed-out";
 
 const APPIMAGE_BRIDGE_RELATIVE_PATH_ENV =
   "BB_DESKTOP_APPIMAGE_BRIDGE_RELATIVE_PATH";
@@ -400,9 +414,47 @@ function waitForProcessExitWithTimeout(
   });
 }
 
+function raceTerminateProcessTree(
+  args: RaceTerminateProcessTreeArgs,
+): Promise<RaceTerminateProcessTreeResult> {
+  return new Promise<RaceTerminateProcessTreeResult>(
+    (resolvePromise, rejectPromise) => {
+      let settled = false;
+      let timeout: ReturnType<typeof setTimeout>;
+      const finish = (result: RaceTerminateProcessTreeResult): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        resolvePromise(result);
+      };
+      timeout = setTimeout(() => {
+        finish("timed-out");
+      }, args.timeoutMs);
+      timeout.unref();
+
+      args.terminate.then(
+        () => {
+          finish("settled");
+        },
+        (error: unknown) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeout);
+          rejectPromise(error);
+        },
+      );
+    },
+  );
+}
+
 export function startBbAppProcess(args: StartBbAppProcessArgs): BbAppProcess {
   const logs = createRuntimeLogBuffer({ maxLines: args.logLineLimit });
   const platform = args.platform ?? process.platform;
+  const terminateTree = args.terminateProcessTree ?? terminateProcessTree;
   const launch = createBbAppProcessLaunch({
     bridgePath: args.bridgePath,
     env: args.env,
@@ -442,24 +494,35 @@ export function startBbAppProcess(args: StartBbAppProcessArgs): BbAppProcess {
     logs,
     pid,
     async stop(stopArgs) {
-      if (hasProcessExited(childProcess)) {
-        return;
-      }
       if (platform === "win32") {
-        await terminateProcessTree({
-          child: childProcess,
-          graceMs: WINDOWS_RUNTIME_STOP_GRACE_MS,
-          onSkippedProcess(event: SkippedProcessEvent) {
-            logs.append(
-              `bb desktop left pid ${String(event.pid)} alone: ${event.reason}\n`,
-            );
-          },
-          platform: "win32",
+        const treeResult = await raceTerminateProcessTree({
+          terminate: terminateTree({
+            child: childProcess,
+            graceMs: WINDOWS_RUNTIME_STOP_GRACE_MS,
+            onSkippedProcess(event: SkippedProcessEvent) {
+              logs.append(
+                `bb desktop left pid ${String(event.pid)} alone: ${event.reason}\n`,
+              );
+            },
+            platform: "win32",
+          }),
+          timeoutMs: stopArgs.timeoutMs,
         });
+        if (treeResult === "timed-out") {
+          logs.append(
+            `bb desktop gave up waiting for the runtime tree after ${String(stopArgs.timeoutMs)} ms\n`,
+          );
+          if (!hasProcessExited(childProcess)) {
+            childProcess.kill(stopArgs.killSignal);
+          }
+        }
         await waitForProcessExitWithTimeout({
           childProcess,
           timeoutMs: stopArgs.killTimeoutMs,
         });
+        return;
+      }
+      if (hasProcessExited(childProcess)) {
         return;
       }
       childProcess.kill(stopArgs.signal);

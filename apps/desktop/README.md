@@ -215,11 +215,12 @@ owned-runtime record, the window state and the cached Connect credential —
 deliberately survives uninstall, and `%USERPROFILE%\.bb`, bb's own runtime
 data directory, is never touched by the installer or the uninstaller.
 
-Closing the last window on Windows does not quit the app: it parks in the
-tray with the owned `bb-app` runtime still running. The tray menu offers
-`Open bb` and `Quit bb`, and Quit stops the whole runtime process tree —
-identity-verified, never a blind `taskkill` — before the app exits. Windows
-logoff and shutdown run that same stop.
+Closing the last window on Windows parks the app in the tray with the owned
+`bb-app` runtime still running instead of quitting; if the tray could not be
+created, closing the last window quits the app as it does on Linux. The tray
+menu offers `Open bb` and `Quit bb`, and Quit stops the whole runtime process
+tree — identity-verified, never a blind `taskkill` — before the app exits.
+Windows logoff and shutdown run that same stop.
 
 ### Windows signing
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TerminateProcessTreeResult } from "@bb/process-utils";
 import {
   createBbAppProcessLaunch,
   createBbAppProcessEnv,
@@ -403,7 +404,7 @@ setInterval(() => undefined, 1000);
     });
 
     expect(launch.env).not.toHaveProperty("BB_DESKTOP_PARENT_PID");
-    expect(launch.spawnOptions).toEqual({});
+    expect(launch.spawnOptions).toStrictEqual({});
   });
 
   it.runIf(process.platform === "win32")(
@@ -452,5 +453,100 @@ setInterval(() => undefined, 1000);
       );
       expect(isProcessAlive(grandchildPid)).toBe(false);
     },
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "gives up on a stalled Windows tree sweep within the stop budget",
+    async () => {
+      const script = await createTempScript({
+        contents: `
+process.stdout.write("ready\\n");
+setInterval(() => undefined, 1000);
+`,
+      });
+      const processEntry = startBbAppProcess({
+        bridgePath: script.path,
+        cwd: script.root,
+        env: process.env,
+        logLineLimit: 20,
+        platform: "win32",
+        runtime: {
+          executablePath: process.execPath,
+          kind: "direct",
+          mode: "node",
+        },
+        terminateProcessTree() {
+          return new Promise<TerminateProcessTreeResult>(() => undefined);
+        },
+      });
+      processes.push(processEntry);
+      await waitForLog({ process: processEntry, text: "ready" });
+
+      const startedAt = Date.now();
+      await processEntry.stop({
+        killSignal: "SIGKILL",
+        killTimeoutMs: 1_000,
+        signal: "SIGTERM",
+        timeoutMs: 500,
+      });
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(elapsedMs).toBeLessThan(2_000);
+      const exit = await processEntry.exit;
+      expect(exit.code !== null || exit.signal !== null).toBe(true);
+      expect(isProcessAlive(processEntry.pid)).toBe(false);
+      expect(processEntry.logs.text()).toContain(
+        "bb desktop gave up waiting for the runtime tree after 500 ms",
+      );
+    },
+    30_000,
+  );
+
+  it.skipIf(process.platform !== "win32")(
+    "sweeps descendants of a Windows runtime that already exited",
+    async () => {
+      const script = await createTempScript({
+        contents: `
+import { spawn } from "node:child_process";
+const grandchild = spawn(process.execPath, ["-e", "setInterval(() => undefined, 1000)"], { detached: true, stdio: "ignore", windowsHide: true });
+grandchild.unref();
+process.stdout.write(\`grandchild=\${grandchild.pid}\\n\`);
+process.stdout.write("ready\\n");
+setInterval(() => undefined, 1000);
+`,
+      });
+      const processEntry = startBbAppProcess({
+        bridgePath: script.path,
+        cwd: script.root,
+        env: process.env,
+        logLineLimit: 20,
+        platform: "win32",
+        runtime: {
+          executablePath: process.execPath,
+          kind: "direct",
+          mode: "node",
+        },
+      });
+      processes.push(processEntry);
+      await waitForLog({ process: processEntry, text: "ready" });
+      const grandchildPid = Number(
+        /grandchild=(\d+)/u.exec(processEntry.logs.text())?.[1],
+      );
+      expect(Number.isInteger(grandchildPid)).toBe(true);
+
+      processEntry.childProcess.kill("SIGKILL");
+      await processEntry.exit;
+      expect(isProcessAlive(grandchildPid)).toBe(true);
+
+      await processEntry.stop({
+        killSignal: "SIGKILL",
+        killTimeoutMs: 5_000,
+        signal: "SIGTERM",
+        timeoutMs: 30_000,
+      });
+
+      expect(isProcessAlive(grandchildPid)).toBe(false);
+    },
+    60_000,
   );
 });

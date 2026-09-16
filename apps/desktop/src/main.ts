@@ -110,10 +110,12 @@ import { createDesktopTray, type DesktopTrayHandle } from "./desktop-tray.js";
 import {
   shouldHandleSessionEnd,
   shouldQuitOnWindowAllClosed,
+  shouldStartQuitSequence,
 } from "./desktop-runtime-policy.js";
 import {
   resolveDesktopQuitRequestFile,
   watchDesktopQuitRequestFile,
+  type DesktopQuitRequestWatcher,
 } from "./desktop-quit-request.js";
 import {
   createDesktopWindowFactory,
@@ -333,7 +335,7 @@ const logViewerCopyRequestSchema = z
 
 let desktopWindowFactory: DesktopWindowFactory | null = null;
 let desktopTray: DesktopTrayHandle | null = null;
-let desktopQuitRequestWatcher: { stop(): void } | null = null;
+let desktopQuitRequestWatcher: DesktopQuitRequestWatcher | null = null;
 let desktopBrowserViewManager: DesktopBrowserViewManager | null = null;
 let desktopBrowserBroker: DesktopBrowserBroker | null = null;
 let desktopBrowserBrokerClient: ReturnType<
@@ -1633,7 +1635,7 @@ function handleBeforeQuit(event: Event): void {
 
 function handleSessionEnd(): void {
   quitting = true;
-  if (stoppingForQuit) {
+  if (!shouldStartQuitSequence({ stoppingForQuit })) {
     return;
   }
 
@@ -2097,7 +2099,12 @@ async function runDesktopApp(): Promise<void> {
   });
   app.on("before-quit", handleBeforeQuit);
   app.on("window-all-closed", () => {
-    if (shouldQuitOnWindowAllClosed({ platform: process.platform })) {
+    if (
+      shouldQuitOnWindowAllClosed({
+        hasTray: desktopTray !== null,
+        platform: process.platform,
+      })
+    ) {
       app.quit();
     }
   });

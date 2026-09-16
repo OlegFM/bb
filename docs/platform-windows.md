@@ -603,11 +603,13 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   set; there are no `node.exe` rows to look for. The process-hygiene smoke
   therefore identifies the bridge by the `bb-app-bridge.mjs` string in its
   command line and identifies every process by pid plus creation date.
-- **Tray and close policy.** On win32 `window-all-closed` never quits the app:
-  closing the last window parks it in the tray with the owned runtime still
-  running and still answering `/health`. Closing that window also persists an
-  empty window set, so the next launch opens the default window rather than
-  restoring none. The tray tooltip is the application name and its menu is
+- **Tray and close policy.** On win32 closing the last window parks the app in
+  the tray with the owned runtime still running and still answering `/health`;
+  `window-all-closed` quits only when there is no tray to park in, so a startup
+  where the tray could not be created still exits with its last window, as on
+  Linux. Closing that window also persists an empty window set, so the next
+  launch opens the default window rather than restoring none. The tray tooltip
+  is the application name and its menu is
   `Open bb` then a separator then `Quit bb` (`bb Nightly` on the nightly
   channel); clicking the tray icon focuses an existing window or creates one.
   Quit stops a spawned runtime and never an attached one — the ownership check

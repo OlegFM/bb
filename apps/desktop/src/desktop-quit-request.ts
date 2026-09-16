@@ -15,7 +15,7 @@ interface WatchDesktopQuitRequestFileArgs {
   pollMs: number;
 }
 
-interface DesktopQuitRequestWatcher {
+export interface DesktopQuitRequestWatcher {
   stop(): void;
 }
 
