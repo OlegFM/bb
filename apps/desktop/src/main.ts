@@ -8,12 +8,14 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   nativeImage,
   nativeTheme,
   net,
   safeStorage,
   session,
   shell,
+  Tray,
   type Event,
   type IpcMainInvokeEvent,
   type WebContents,
@@ -104,6 +106,15 @@ import {
   createDesktopShutdownState,
   registerDesktopShutdownSignalHandlers,
 } from "./desktop-shutdown.js";
+import { createDesktopTray, type DesktopTrayHandle } from "./desktop-tray.js";
+import {
+  shouldHandleSessionEnd,
+  shouldQuitOnWindowAllClosed,
+} from "./desktop-runtime-policy.js";
+import {
+  resolveDesktopQuitRequestFile,
+  watchDesktopQuitRequestFile,
+} from "./desktop-quit-request.js";
 import {
   createDesktopWindowFactory,
   type DesktopBrowserWindow,
@@ -317,6 +328,8 @@ const logViewerCopyRequestSchema = z
   .strict();
 
 let desktopWindowFactory: DesktopWindowFactory | null = null;
+let desktopTray: DesktopTrayHandle | null = null;
+let desktopQuitRequestWatcher: { stop(): void } | null = null;
 let desktopBrowserViewManager: DesktopBrowserViewManager | null = null;
 let desktopBrowserBroker: DesktopBrowserBroker | null = null;
 let desktopBrowserBrokerClient: ReturnType<
@@ -1569,6 +1582,16 @@ async function createApplicationWindow(
   return browserWindow;
 }
 
+function focusOrCreateApplicationWindow(): void {
+  if (desktopWindowFactory?.focusFirstWindow() === true) {
+    return;
+  }
+  void createApplicationWindow({
+    initialUrl: currentWindowUrl,
+    stateKey: null,
+  });
+}
+
 async function stopOwnedRuntime(): Promise<void> {
   const runtime = currentRuntime;
   if (runtime === null || runtime.ownership !== "spawned") {
@@ -1604,6 +1627,16 @@ function handleBeforeQuit(event: Event): void {
   });
 }
 
+function handleSessionEnd(): void {
+  quitting = true;
+  if (stoppingForQuit) {
+    return;
+  }
+
+  stoppingForQuit = true;
+  void finishQuit();
+}
+
 async function finishQuit(): Promise<void> {
   desktopBrowserBrokerClient?.stop();
   desktopBrowserBroker?.dispose();
@@ -1612,6 +1645,10 @@ async function finishQuit(): Promise<void> {
   desktopUpdateService?.stop();
   desktopAutoUpdateService?.stop();
   desktopBrowserViewManager?.destroyAll();
+  desktopQuitRequestWatcher?.stop();
+  desktopQuitRequestWatcher = null;
+  desktopTray?.destroy();
+  desktopTray = null;
   await desktopWindowFactory?.persistOpenWindows();
   await stopOwnedRuntime();
 }
@@ -1756,6 +1793,7 @@ async function startOwnedRuntime(
       [APP_SURFACE_ENV_NAME]: APP_SURFACE_DESKTOP,
     },
     logLineLimit: PROCESS_LOG_LINE_LIMIT,
+    platform: process.platform,
     runtime: resolveBbAppProcessRuntime({
       env: process.env,
       isPackaged: app.isPackaged,
@@ -2029,6 +2067,13 @@ async function runDesktopApp(): Promise<void> {
     ? DESKTOP_RELEASE_INFO.applicationName
     : "bb-dev";
   app.setName(applicationName);
+  if (process.platform === "win32") {
+    app.setAppUserModelId(
+      app.isPackaged
+        ? DESKTOP_RELEASE_INFO.appUserModelId
+        : "dev.bb.desktop.dev",
+    );
+  }
   installAboutPanel(applicationName);
 
   if (!app.requestSingleInstanceLock()) {
@@ -2037,20 +2082,19 @@ async function runDesktopApp(): Promise<void> {
   }
 
   app.on("second-instance", () => {
-    if (desktopWindowFactory?.focusFirstWindow() === true) {
-      return;
-    }
-    void createApplicationWindow({
-      initialUrl: currentWindowUrl,
-      stateKey: null,
-    });
+    focusOrCreateApplicationWindow();
   });
   app.on("before-quit", handleBeforeQuit);
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
+    if (shouldQuitOnWindowAllClosed({ platform: process.platform })) {
       app.quit();
     }
   });
+  if (shouldHandleSessionEnd({ platform: process.platform })) {
+    app.on("browser-window-created", (_event, browserWindow) => {
+      browserWindow.on("session-end", handleSessionEnd);
+    });
+  }
   app.on("activate", () => {
     if (desktopWindowFactory?.hasOpenWindows() === false) {
       void createApplicationWindow({
@@ -2420,6 +2464,44 @@ async function runDesktopApp(): Promise<void> {
     userDataPath,
   });
   installLogViewerIpcHandlers();
+  desktopTray = createDesktopTray({
+    applicationName,
+    deps: {
+      buildMenu(menuArgs) {
+        return Menu.buildFromTemplate([
+          { click: menuArgs.onShow, label: menuArgs.showLabel },
+          { type: "separator" },
+          { click: menuArgs.onQuit, label: menuArgs.quitLabel },
+        ]);
+      },
+      createIcon(imagePath) {
+        return new Tray(
+          nativeImage
+            .createFromPath(imagePath)
+            .resize({ height: 16, width: 16 }),
+        );
+      },
+    },
+    iconPath,
+    onQuit() {
+      app.quit();
+    },
+    onShow: focusOrCreateApplicationWindow,
+    platform: process.platform,
+  });
+  const quitRequestFile = resolveDesktopQuitRequestFile({
+    env: process.env,
+    platform: process.platform,
+  });
+  if (quitRequestFile !== null) {
+    desktopQuitRequestWatcher = watchDesktopQuitRequestFile({
+      filePath: quitRequestFile,
+      onRequest() {
+        app.quit();
+      },
+      pollMs: 500,
+    });
+  }
 
   refreshApplicationMenu();
   await loadLoadingView();
