@@ -2,6 +2,7 @@ import { extractErrorMessage, toRecord } from "@bb/core-ui";
 import type { SystemVoiceTranscriptionResponse } from "@bb/server-contract";
 import { apiClient, toRelativeUrl } from "./api-server";
 import { appSurfaceRequestInit } from "./app-surface";
+import { hostPathBasename } from "./host-path";
 import {
   buildFilePreview,
   normalizeFilePreviewMimeType,
@@ -236,7 +237,7 @@ export async function getThreadHostFilePreview(
 ): Promise<FilePreview> {
   return loadFilePreview(
     {
-      name: path.split("/").at(-1),
+      name: hostPathBasename(path),
       path,
       url: buildThreadHostFileContentUrl(id, path),
     },

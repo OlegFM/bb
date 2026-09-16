@@ -20,6 +20,7 @@ import {
 import { FilePreview } from "@/components/secondary-panel/FilePreview.js";
 import { ProvenancePill } from "@/components/tools/ProvenancePill";
 import { useClipboardCopy } from "@/lib/clipboard";
+import { hostPathBasename } from "@/lib/host-path";
 import type { MarkdownLinkRouting } from "@/components/ui/markdown-link-routing";
 
 type SkillDetailTitleBadge = {
@@ -191,7 +192,7 @@ function ScrollingSkillContent({
             state={{
               kind: "ready",
               file: {
-                name: path.split("/").at(-1) ?? path,
+                name: hostPathBasename(path) ?? path,
                 contents: chunk,
               },
               lineRange: null,

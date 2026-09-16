@@ -23,6 +23,7 @@ import { RuntimeManager } from "../runtime-manager.js";
 import { runtimeErrorLogFields } from "../error-utils.js";
 import { requireResolvedWorkspaceForCommand } from "../workspace-resolution.js";
 import { ExpectedCommandDispatchError } from "../command-dispatch-support.js";
+import { normalizeTerminalExitCode } from "./terminal-exit-code.js";
 
 const DEFAULT_SCROLLBACK_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_SCROLLBACK_MAX_CHUNKS = 10_000;
@@ -799,7 +800,11 @@ export class TerminalManager {
               operation: () =>
                 this.finishTerminalSession({
                   closeReason: session.closeReason ?? "process-exit",
-                  exitCode: event.exitCode,
+                  exitCode: normalizeTerminalExitCode({
+                    closeRequested: session.closeReason !== null,
+                    exitCode: event.exitCode,
+                    platform: this.platform,
+                  }),
                   session,
                 }),
               terminalId: session.terminalId,

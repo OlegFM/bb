@@ -22,6 +22,7 @@ import {
 } from "@bb/client-core";
 import { decodeBase64Bytes, encodeBase64Bytes } from "@/lib/base64-bytes";
 import { buildEnvironmentDiffFileContentUrl } from "@/lib/file-content-urls";
+import { hostPathBasename } from "@/lib/host-path";
 import { sdk } from "@/lib/sdk";
 import { useEnvironmentDetailRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import {
@@ -423,7 +424,7 @@ export function buildEnvironmentFilePreview({
   const preview = buildFilePreview({
     contentBytes,
     mimeType,
-    name: path.split("/").at(-1),
+    name: hostPathBasename(path),
     path,
     url: contentUrl,
   });

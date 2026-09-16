@@ -6,6 +6,7 @@ import {
   type SecondaryFileFixedPanelTab,
 } from "@/lib/fixed-panel-tabs-state";
 import type { FileOpenerPreferenceMap } from "@/lib/file-opener-preference";
+import { hostPathBasename } from "@/lib/host-path";
 import {
   resolveFileOpenerReplacement,
   type FileOpenerOverride,
@@ -43,7 +44,7 @@ export function buildFileOpenerPanelTab(
       actionId: `${FILE_OPENER_ACTION_ID_PREFIX}${opener.id}`,
       paramsJson: JSON.stringify({ path: file.path, source: file.source }),
       pluginId: opener.pluginId,
-      title: file.path.split("/").at(-1) ?? file.path,
+      title: hostPathBasename(file.path) ?? file.path,
     }),
     fileOpenerOwner: owner,
   };

@@ -3,6 +3,7 @@ import type {
   ComposerPlusMenuItem,
   PluginComposerScope,
 } from "@get-bb/plugin-sdk";
+import { hostPathBasename } from "./host-path";
 import type {
   PluginComposerCustomizationSlot,
   PluginFileOpenerSlot,
@@ -273,7 +274,7 @@ export type FileOpenerPreferenceMap = Record<string, string>;
 export const BUILT_IN_FILE_OPENER_PREFERENCE = "__builtin__";
 
 export function getFileExtension(path: string): string | null {
-  const name = path.split("/").at(-1) ?? path;
+  const name = hostPathBasename(path) ?? path;
   const dotIndex = name.lastIndexOf(".");
   if (dotIndex <= 0 || dotIndex === name.length - 1) return null;
   return name.slice(dotIndex + 1).toLowerCase();

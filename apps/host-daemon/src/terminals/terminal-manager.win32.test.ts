@@ -7,11 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RuntimeManager } from "../runtime-manager.js";
 import { TerminalManager } from "./terminal-manager.js";
 
-const WINDOWS_PTY_KILL_EXIT_CODE = -1073741510;
-const ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES: ReadonlySet<number> = new Set([
-  0,
-  WINDOWS_PTY_KILL_EXIT_CODE,
-]);
+const ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES: ReadonlySet<number | null> =
+  new Set([0, null]);
 const POLL_INTERVAL_MS = 50;
 
 interface Win32TerminalHarness {
@@ -284,7 +281,7 @@ describe.runIf(process.platform === "win32")(
         closeReason: "user",
       });
       expect(
-        ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES.has(exitedMessage.exitCode ?? NaN),
+        ACCEPTABLE_TERMINAL_CLOSE_EXIT_CODES.has(exitedMessage.exitCode),
       ).toBe(true);
       expect(
         await waitUntil(

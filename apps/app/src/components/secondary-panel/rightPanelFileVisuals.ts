@@ -1,4 +1,5 @@
 import type { IconName } from "@bb/shared-ui/icon";
+import { hostPathSegments } from "@/lib/host-path";
 
 interface RightPanelFileVisual {
   iconName: IconName;
@@ -36,7 +37,7 @@ function hasPathDirectorySegment({
   path,
   segment,
 }: HasPathDirectorySegmentArgs): boolean {
-  return path.toLowerCase().split("/").slice(0, -1).includes(segment);
+  return hostPathSegments(path.toLowerCase()).slice(0, -1).includes(segment);
 }
 
 export function resolveRightPanelFileVisual({

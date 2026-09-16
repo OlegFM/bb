@@ -14,6 +14,7 @@ import {
 } from "@bb/client-core";
 import { decodeBase64Bytes } from "@/lib/base64-bytes";
 import { buildProjectFileContentUrl } from "@/lib/file-content-urls";
+import { hostPathBasename } from "@/lib/host-path";
 import { readProjectBranchOptions } from "@/lib/project-branch-options";
 import { sdk } from "@/lib/sdk";
 import { useProjectDetailRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
@@ -273,7 +274,7 @@ export function useProjectFilePreview(
       return buildFilePreview({
         contentBytes,
         mimeType: normalizeFilePreviewMimeType(content.mimeType),
-        name: requiredPath.split("/").at(-1),
+        name: hostPathBasename(requiredPath),
         path: requiredPath,
         url: buildProjectFileContentUrl(requiredProjectId, requiredPath, {
           ...(routing.environmentId !== null

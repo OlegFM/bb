@@ -11,6 +11,7 @@ import { useSystemProviderInfo } from "@/hooks/queries/system-queries";
 import { useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { useDesktopBrowserReveal } from "@/lib/use-desktop-browser-reveal";
+import { hostPathBasename } from "@/lib/host-path";
 import { atomWithStorage } from "jotai/utils";
 import {
   isRunningThreadRuntimeDisplayStatus,
@@ -2716,7 +2717,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       }
     }
   };
-  const filenameOfPanelTab = (path: string) => path.split("/").at(-1) ?? path;
+  const filenameOfPanelTab = (path: string) => hostPathBasename(path) ?? path;
   const panelTabs: readonly SecondaryPanelRenderableTab[] =
     syncedOrderedSecondaryFileTabs.map((tab): SecondaryPanelRenderableTab => {
       const pluginAction =
