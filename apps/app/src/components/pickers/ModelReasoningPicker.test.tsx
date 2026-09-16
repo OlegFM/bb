@@ -100,6 +100,7 @@ const splitPaneContext: PaneContextValue = {
   isBoundedPane: true,
   isTopRow: true,
   ownsWindowTopLeft: true,
+  ownsWindowTopRight: true,
   navigateInPane: () => undefined,
 };
 

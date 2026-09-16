@@ -54,6 +54,7 @@ function renderButton(
     isBoundedPane: true,
     isTopRow: true,
     ownsWindowTopLeft: true,
+    ownsWindowTopRight: true,
     navigateInPane: noop,
   };
   return render(
@@ -255,6 +256,7 @@ describe("PaneMaximizeButton", () => {
       isBoundedPane: false,
       isTopRow: true,
       ownsWindowTopLeft: true,
+      ownsWindowTopRight: true,
       navigateInPane: noop,
     };
     render(

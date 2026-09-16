@@ -619,6 +619,7 @@ function SplitThreadAreaContent({ routeContent }: SplitThreadAreaProps) {
           isBoundedPane={false}
           isTopRow
           ownsWindowTopLeft
+          ownsWindowTopRight
           onNavigateInPane={navigateInPane}
         />
       </>
@@ -785,6 +786,11 @@ function SplitTree(props: SplitTreeProps) {
               ? isMaximized
               : isTopRow && isLeftEdge
           }
+          ownsWindowTopRight={
+            props.maximizedPaneId !== null
+              ? isMaximized
+              : isTopRow && isRightEdge
+          }
           onNavigateInPane={props.onNavigateInPane}
           onBeginPaneDrag={props.onBeginPaneDrag}
         />
@@ -858,6 +864,7 @@ interface WorkspacePaneContentProps {
   isBoundedPane: boolean;
   isTopRow: boolean;
   ownsWindowTopLeft: boolean;
+  ownsWindowTopRight: boolean;
   onNavigateInPane: NavigateInPane;
   onBeginPaneDrag?: BeginPaneDrag;
 }
@@ -876,6 +883,7 @@ function WorkspacePaneContent({
   isBoundedPane,
   isTopRow,
   ownsWindowTopLeft,
+  ownsWindowTopRight,
   onNavigateInPane,
   onBeginPaneDrag,
 }: WorkspacePaneContentProps) {
@@ -915,6 +923,7 @@ function WorkspacePaneContent({
       isBoundedPane,
       isTopRow,
       ownsWindowTopLeft,
+      ownsWindowTopRight,
       navigateInPane,
       beginPaneDrag,
     }),
@@ -925,6 +934,7 @@ function WorkspacePaneContent({
       isSplitPane,
       isTopRow,
       ownsWindowTopLeft,
+      ownsWindowTopRight,
       navigateInPane,
       onRequestClose,
       isMaximized,
@@ -946,6 +956,7 @@ function WorkspacePaneContent({
           isBoundedPane={isBoundedPane}
           isTopRow={isTopRow}
           ownsWindowTopLeft={ownsWindowTopLeft}
+          ownsWindowTopRight={ownsWindowTopRight}
         />
       </PaneContext.Provider>
     );
@@ -1031,6 +1042,7 @@ function NonThreadPaneContent({
   isBoundedPane,
   isTopRow,
   ownsWindowTopLeft,
+  ownsWindowTopRight,
 }: {
   content: Exclude<PaneContent, { kind: "thread" }>;
   onRequestClose: (() => void) | null;
@@ -1038,6 +1050,7 @@ function NonThreadPaneContent({
   isBoundedPane: boolean;
   isTopRow: boolean;
   ownsWindowTopLeft: boolean;
+  ownsWindowTopRight: boolean;
 }) {
   const navPanelChrome = usePluginNavPanelChrome();
   const resourceRouteLabel = useAtomValue(resourceRouteLabelAtom);
@@ -1126,6 +1139,7 @@ function NonThreadPaneContent({
         <AppPageHeader
           isWindowDragRegion={isTopRow}
           ownsWindowTopLeft={ownsWindowTopLeft}
+          ownsWindowTopRight={ownsWindowTopRight}
           className={isBoundedPane ? "z-[21]" : undefined}
           center={
             <div

@@ -142,6 +142,7 @@ function withHostedPane(
     isBoundedPane: true,
     isTopRow: true,
     ownsWindowTopLeft: true,
+    ownsWindowTopRight: true,
     navigateInPane: noop,
   };
   return <PaneContext.Provider value={value}>{children}</PaneContext.Provider>;

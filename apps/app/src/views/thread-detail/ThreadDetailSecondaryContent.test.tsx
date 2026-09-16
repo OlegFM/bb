@@ -351,6 +351,7 @@ function renderThreadDetail(
     isBoundedPane: true,
     isTopRow: true,
     ownsWindowTopLeft: true,
+    ownsWindowTopRight: true,
     navigateInPane: noop,
   };
   return render(

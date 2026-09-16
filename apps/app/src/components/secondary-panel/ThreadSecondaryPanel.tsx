@@ -79,7 +79,7 @@ import {
   shouldReserveMacosTrafficLights,
   shouldReserveWindowsCaptionControls,
   shouldUseDesktopWindowChrome,
-  WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS,
 } from "@/lib/bb-desktop";
 import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import { useOptionalIsSidebarShowing } from "@/components/ui/sidebar.js";
@@ -451,6 +451,7 @@ export function ThreadSecondaryPanel({
     onToggleFullScreen?: () => void;
     onFocusPane: () => void;
     onSurfaceTabReorder: SecondaryPanelTabReorderHandler;
+    ownsWindowTopRight: boolean;
     paneId: string | null;
     reserveLeadingChrome: boolean;
     reserveNewTabControl: boolean;
@@ -666,6 +667,7 @@ export function ThreadSecondaryPanel({
     onRemoveSplit,
     onToggleFullScreen,
     onSurfaceTabReorder,
+    ownsWindowTopRight,
     paneId,
     reserveLeadingChrome,
     reserveNewTabControl,
@@ -724,8 +726,9 @@ export function ThreadSecondaryPanel({
                 usesWindowChrome &&
                 MACOS_CHROME_CONTROL_AXIS_CLASS,
               usesWindowChrome &&
+                ownsWindowTopRight &&
                 reserveWindowsCaptionControls &&
-                WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
+                WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS,
             )}
           >
             <div
@@ -960,6 +963,7 @@ export function ThreadSecondaryPanel({
           onRemoveSplit: pane.onRemoveSplit,
           onToggleFullScreen: pane.onToggleMaximize,
           onSurfaceTabReorder: pane.onReorderTab,
+          ownsWindowTopRight: pane.isTopRow && pane.isRightEdge,
           paneId: pane.paneId,
           reserveLeadingChrome: pane.isTopRow && pane.isLeftEdge,
           reserveNewTabControl:
@@ -982,6 +986,7 @@ export function ThreadSecondaryPanel({
       isSurfaceDiffEligibilityPending: isDiffEligibilityPending,
       onFocusPane: onPanelFocus,
       onSurfaceTabReorder: onTabReorder,
+      ownsWindowTopRight: true,
       paneId: null,
       reserveLeadingChrome: true,
       reserveNewTabControl: false,

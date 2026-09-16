@@ -189,6 +189,7 @@ function withPaneContext(
     isBoundedPane: true,
     isTopRow,
     ownsWindowTopLeft: isTopRow,
+    ownsWindowTopRight: isTopRow,
     navigateInPane: noop,
   };
   return <PaneContext.Provider value={value}>{children}</PaneContext.Provider>;

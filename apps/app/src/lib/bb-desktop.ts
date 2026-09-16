@@ -54,6 +54,7 @@ export function shouldReserveMacosTrafficLights({
 }
 
 export const WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS = "pr-[138px]";
+export const WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS = "pr-[154px]";
 export const WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS =
   "right-[calc(138px+1rem)]";
 

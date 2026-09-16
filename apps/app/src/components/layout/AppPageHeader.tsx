@@ -41,6 +41,7 @@ interface AppPageHeaderProps {
   headerRef?: Ref<HTMLElement>;
   isWindowDragRegion?: boolean;
   ownsWindowTopLeft?: boolean;
+  ownsWindowTopRight?: boolean;
 }
 
 export function AppPageHeader({
@@ -50,6 +51,7 @@ export function AppPageHeader({
   headerRef,
   isWindowDragRegion = true,
   ownsWindowTopLeft = true,
+  ownsWindowTopRight = true,
 }: AppPageHeaderProps) {
   const isSidebarShowing = useIsSidebarShowing();
   const isCompactViewport = useIsCompactViewport();
@@ -89,7 +91,8 @@ export function AppPageHeader({
             (reserveMacosTrafficLights
               ? MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS
               : BROWSER_COLLAPSED_HEADER_RESERVE_CLASS),
-          reserveWindowsCaptionControls &&
+          ownsWindowTopRight &&
+            reserveWindowsCaptionControls &&
             WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
         )}
       >

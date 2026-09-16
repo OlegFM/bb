@@ -10,6 +10,7 @@ import {
   shouldUseDesktopWindowChrome,
   shouldUseWindowsDesktopChrome,
   WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS,
 } from "./bb-desktop";
 
 const desktopInfo: BbDesktopInfo = {
@@ -107,5 +108,22 @@ describe("Windows desktop chrome", () => {
         windowState: { isFullScreen: false },
       }),
     ).toBe(false);
+  });
+
+  it("adds a 16px gutter for rows that carry the reserve and their own padding", () => {
+    const px = (className: string): number => {
+      const match = /\[(\d+)px\]/.exec(className);
+      if (match === null) {
+        throw new Error(`no px token in "${className}"`);
+      }
+      return Number(match[1]);
+    };
+
+    expect(WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS).toBe(
+      "pr-[154px]",
+    );
+    expect(px(WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS)).toBe(
+      px(WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS) + 16,
+    );
   });
 });

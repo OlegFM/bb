@@ -78,6 +78,7 @@ function paneContext(paneId: string, isFocused: boolean): PaneContextValue {
     onRequestClose: vi.fn(),
     onToggleMaximize: vi.fn(),
     ownsWindowTopLeft: paneId === "pane-first",
+    ownsWindowTopRight: paneId !== "pane-first",
     paneId,
     reservesWindowPanelToggle: false,
     secondaryPanelHost: null,

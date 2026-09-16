@@ -68,6 +68,7 @@ const PANE_CONTEXT: PaneContextValue = {
   isBoundedPane: false,
   isTopRow: true,
   ownsWindowTopLeft: true,
+  ownsWindowTopRight: true,
   navigateInPane: vi.fn(),
 };
 

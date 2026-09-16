@@ -101,6 +101,7 @@ export function ThreadDetailHeader({
     isFocused,
     isTopRow,
     ownsWindowTopLeft,
+    ownsWindowTopRight,
     reservesWindowPanelToggle,
     secondaryPanelHost,
   } = usePaneContext();
@@ -304,6 +305,7 @@ export function ThreadDetailHeader({
       actions={actions}
       isWindowDragRegion={isTopRow}
       ownsWindowTopLeft={ownsWindowTopLeft}
+      ownsWindowTopRight={ownsWindowTopRight}
       className={beginPaneDrag ? "z-[21]" : undefined}
     />
   );

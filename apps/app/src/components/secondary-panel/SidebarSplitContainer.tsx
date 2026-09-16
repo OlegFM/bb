@@ -72,6 +72,7 @@ export interface SidebarSplitPaneRenderArgs {
   isFocused: boolean;
   isLeftEdge: boolean;
   isMaximized: boolean;
+  isRightEdge: boolean;
   isTopRow: boolean;
   onBeginTabDrag: (
     tabId: string,
@@ -496,6 +497,7 @@ export function SidebarSplitContainer({
       isFocused: true,
       isLeftEdge: true,
       isMaximized: isFullScreen,
+      isRightEdge: true,
       isTopRow: true,
       onBeginTabDrag: (tabId, event) =>
         beginTabDrag(firstPane.paneId, tabId, event),
@@ -676,6 +678,7 @@ function SidebarSplitLeaf(props: SidebarSplitLeafProps) {
     isBoundedPane: true,
     isTopRow: isMaximized || props.isTopRow,
     ownsWindowTopLeft: false,
+    ownsWindowTopRight: showOuterControls,
     navigateInPane: () => {},
   };
   return (
@@ -710,6 +713,7 @@ function SidebarSplitLeaf(props: SidebarSplitLeafProps) {
             isFocused,
             isLeftEdge: isMaximized || props.isLeftEdge,
             isMaximized,
+            isRightEdge: isMaximized || props.isRightEdge,
             isTopRow: isMaximized || props.isTopRow,
             onBeginTabDrag: (tabId, event) =>
               props.onBeginTabDrag(pane.paneId, tabId, event),

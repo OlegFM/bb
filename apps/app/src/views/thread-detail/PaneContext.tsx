@@ -29,6 +29,7 @@ export interface PaneContextValue {
   isBoundedPane: boolean;
   isTopRow: boolean;
   ownsWindowTopLeft: boolean;
+  ownsWindowTopRight: boolean;
   navigateInPane: (thread: ThreadRoutePathArgs) => void;
   beginPaneDrag?: (event: ReactPointerEvent, label: string) => void;
 }
@@ -160,6 +161,7 @@ export function DefaultPaneContextProvider({
       isBoundedPane: false,
       isTopRow: true,
       ownsWindowTopLeft: true,
+      ownsWindowTopRight: true,
       navigateInPane,
     }),
     [navigateInPane],
