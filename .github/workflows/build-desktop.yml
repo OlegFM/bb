@@ -244,11 +244,11 @@ jobs:
       - name: Typecheck desktop and launcher
         run: pnpm exec turbo run typecheck --filter=@bb/desktop --filter=bb-app --output-logs=new-only
 
+      # No test step here: the Windows desktop and launcher suites are a
+      # non-gating baseline measured by the windows-x64 job in ci.yml, so the
+      # release workflow does not gate on them.
       - name: Build desktop
         run: pnpm exec turbo run build --filter=@bb/desktop --output-logs=new-only
-
-      - name: Test desktop and launcher
-        run: pnpm exec turbo run test --filter=@bb/desktop --filter=bb-app --force --output-logs=new-only
 
       - name: Validate Windows signing secrets
         id: windows_signing
@@ -316,6 +316,7 @@ jobs:
           TMP: ${{ github.workspace }}\.smoke-temp
           TEMP: ${{ github.workspace }}\.smoke-temp
         run: |
+          New-Item -ItemType Directory -Force "$env:TEMP" | Out-Null
           pnpm exec turbo run smoke:windows-processes --filter=@bb/desktop --output-logs=new-only -- --evidence-dir qa-artifacts/process-hygiene
           exit $LASTEXITCODE
 
