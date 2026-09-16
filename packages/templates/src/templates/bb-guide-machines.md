@@ -8,13 +8,15 @@ editingNotes: Keep the user-facing noun machine; internal APIs and types use Hos
 Machine commands
 
 A machine is a host daemon that can run thread environments. Add remote
-machines under Settings → Machines.
+machines under Settings → Machines. Choose the target shell explicitly:
+macOS / Linux (default) or Windows PowerShell. The target can differ from the
+computer running the browser or server.
 
 The server listens on loopback by default. Remote execution machines need the
 account-gated bb connect route or a private Tailscale Serve URL; generate their
 installer while using that reachable server URL.
 
-The Settings installer first uses the exact `bb-app` tarball served by that bb
+The macOS/Linux Settings installer first uses the exact `bb-app` tarball served by that bb
 server at `/install/bb-app.tgz`; only servers that do not implement the route
 (HTTP 404) fall back to the npm registry. npm installs bb-app under this
 machine enrollment's bb data directory, so the installer needs neither `sudo`
@@ -25,6 +27,38 @@ restart. Failed attempts use a persisted exponential backoff that starts at 5
 seconds and caps at 5 minutes. A daemon never auto-downgrades to an older server
 protocol. Use Settings → Machines or `bb machine retry-update` to bypass the
 current backoff after a transient failure.
+
+Native Windows remains beta. The PowerShell installer requires Windows 11 x64,
+Windows PowerShell 5.1 or PowerShell 7, Node 22.19+ with npm, and drive-local
+NTFS storage. It downloads `/install.ps1` into a temporary file and invokes
+`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File` with
+`-JoinCode`, `-HostId`, `-Server`, optional `-MachineCode`, and optional
+`-HostDaemonPort`. It requires the server's SHA-256-verified host artifact;
+there is no registry or global-install fallback.
+
+Windows enrollment defaults to `%USERPROFILE%\.bb-machines\<SHA-256-of-server-origin>`;
+set `BB_DATA_DIR` before running the installer to choose an absolute drive-local
+directory. Its private npm prefix is `<data>\npm`. A hidden per-user logon
+Scheduled Task named `bb-host-daemon-<origin-hash>` starts the supervisor, with
+HKCU Run fallback if registration is denied. The launcher enables auto-update
+and restarts the daemon after exit. The installer prints the data directory,
+port, launcher, service name, logs, and exact removal commands. Follow
+`<data>\logs\host-daemon.log` and `supervisor.log`; restart using the printed
+`stop-host-daemon.ps1`, then `start-host-daemon.ps1`. Remove startup registration,
+stop the verified supervisor, then delete only that enrollment's data and port
+reservation. It uses a separate port from Desktop's `38887` and leaves `~/.bb`
+alone. Real logon, clean-VM, and live Connect acceptance remain pending; see
+`docs/platform-windows.md` and `qa/windows/CHECKLIST.md`.
+
+For CLI pairing, `bb machine join-code --json` returns `joinCode`, `hostId`, and
+`expiresAt` for those installer arguments. The SDK equivalent is
+`sdk.hosts.createJoinCode()`. Connect credentials use the existing
+`createMachineCode` Connect RPC through `sdk.plugins.callRpc`, or
+`bb connect machine-code --json`: the latter currently requires the **Mobile
+app** experiment (`bb settings experiment mobileApp true`) and a paired Connect
+server. Use its `code` as `-MachineCode` and `serverUrl` as `-Server`; otherwise
+use a reachable direct server URL and omit `-MachineCode`. Run before either
+code expires.
 
 To opt out, remove `--auto-update` from the launchd plist or systemd user unit
 and reload that service. Foreground/manual `bb-app host-daemon` runs leave it off
@@ -41,6 +75,7 @@ Use `tail -F` to follow them without coupling service logging to the terminal.
     --json                                Print the raw host list
   bb machine show <id-or-name>            Show machine details
   bb machine join-code                    Create a machine pairing code
+    --json                                Print joinCode, hostId, expiresAt
   bb machine rename <id-or-name> <name>   Rename a machine
   bb machine retry-update <id-or-name>    Retry a pending daemon update now
   bb machine remove <id-or-name> [--yes]  Revoke and remove a machine

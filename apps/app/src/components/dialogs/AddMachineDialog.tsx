@@ -124,12 +124,51 @@ function pairingCommand(
   hostId: string,
   machineCode: ConnectMachineCode | null,
   directServerUrl: string | null,
+  shell: "posix" | "powershell",
 ): string | null {
   const serverUrl = machineCode?.serverUrl ?? directServerUrl;
   if (serverUrl === null) return null;
+  if (shell === "powershell") {
+    const quote = (value: string) =>
+      `'${value.replace(/['\u2018-\u201b]/gu, "$&$&")}'`;
+    const quoteArgument = (value: string) => {
+      const escaped = value.replace(/(\\*)"/gu, '$1$1\\"');
+      if (/\s/u.test(value) && /\\$/u.test(value)) {
+        return `$(if ($PSVersionTable.PSVersion.Major -le 5) { ${quote(escaped.replace(/(\\+)$/gu, "$1$1"))} } else { ${quote(escaped)} })`;
+      }
+      return quote(escaped);
+    };
+    const machineFlag =
+      machineCode === null
+        ? ""
+        : ` -MachineCode ${quoteArgument(machineCode.code)}`;
+    return `& { $PSNativeCommandArgumentPassing = 'Legacy'; $bbInstaller = Join-Path ([System.IO.Path]::GetTempPath()) ('bb-install-' + [guid]::NewGuid().ToString('N') + '.ps1'); try { Invoke-WebRequest -UseBasicParsing -Uri ${quote(`${serverUrl}/install.ps1`)} -OutFile $bbInstaller -ErrorAction Stop; & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $bbInstaller -JoinCode ${quoteArgument(joinCode)} -HostId ${quoteArgument(hostId)} -Server ${quoteArgument(serverUrl)}${machineFlag}; if ($LASTEXITCODE -ne 0) { throw "bb installer failed with exit code $LASTEXITCODE" } } finally { if (Test-Path -LiteralPath $bbInstaller) { Remove-Item -LiteralPath $bbInstaller -Force } } }`;
+  }
   const machineFlag =
     machineCode === null ? "" : ` --machine-code ${machineCode.code}`;
   return `curl -fL --progress-meter --connect-timeout 10 --max-time 60 --retry 2 ${serverUrl}/install.sh | sh -s -- --join-code ${joinCode} --host-id ${hostId} --server ${serverUrl}${machineFlag}`;
+}
+
+function PairingCommandCopyButton({
+  command,
+  expired,
+}: {
+  command: string;
+  expired: boolean;
+}) {
+  const { copied, copy } = useClipboardCopy({ text: command });
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="ml-auto h-7 px-2.5 text-xs"
+      disabled={expired}
+      onClick={() => void copy()}
+    >
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  );
 }
 
 const REMOTE_ACCESS_ROUTE = getPluginConfigurationRoutePath({
@@ -257,6 +296,7 @@ function AddMachineDialogContent({
   const remainingMs =
     hasCountdown && expiresAt !== null ? expiresAt - now : null;
   const expired = remainingMs !== null && remainingMs <= 0;
+  const [shell, setShell] = useState<"posix" | "powershell">("posix");
   const command =
     showCommand && joinCode !== null
       ? pairingCommand(
@@ -264,9 +304,9 @@ function AddMachineDialogContent({
           joinCode.hostId,
           machineCode,
           serverUrl,
+          shell,
         )
       : null;
-  const { copied, copy } = useClipboardCopy({ text: command ?? "" });
 
   return (
     <>
@@ -308,6 +348,32 @@ function AddMachineDialogContent({
             data-add-machine-command
             className="overflow-hidden rounded-md border border-border bg-muted/30"
           >
+            <div
+              role="group"
+              aria-label="Target shell"
+              className="flex flex-wrap gap-2 border-b border-border px-3 py-2"
+            >
+              <Button
+                type="button"
+                aria-pressed={shell === "posix"}
+                variant={shell === "posix" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setShell("posix")}
+              >
+                macOS / Linux
+              </Button>
+              <Button
+                type="button"
+                aria-pressed={shell === "powershell"}
+                variant={shell === "powershell" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2.5 text-xs"
+                onClick={() => setShell("powershell")}
+              >
+                Windows PowerShell
+              </Button>
+            </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all p-3 font-mono text-xs text-foreground">
               {command}
             </pre>
@@ -333,16 +399,11 @@ function AddMachineDialogContent({
                   Code expires in {formatCountdown(remainingMs)}
                 </span>
               ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="ml-auto h-7 px-2.5 text-xs"
-                disabled={expired}
-                onClick={() => void copy()}
-              >
-                {copied ? "Copied" : "Copy"}
-              </Button>
+              <PairingCommandCopyButton
+                key={command}
+                command={command}
+                expired={expired}
+              />
             </div>
           </div>
         ) : (

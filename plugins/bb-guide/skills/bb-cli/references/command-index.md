@@ -69,7 +69,13 @@ This index lists every command path that the core CLI registers. Read the task-s
 - `bb machine`
 - `bb machine list`
 - `bb machine show`
-- `bb machine join-code`
+- `bb machine join-code [--json]` — creates `joinCode`, `hostId`, and `expiresAt`
+  for an execution-machine installer; SDK equivalent: `sdk.hosts.createJoinCode()`.
+  Settings → Machines → Add machine offers macOS / Linux and Windows PowerShell
+  commands. Native Windows beta enrollment uses `/install.ps1` with `-JoinCode`,
+  `-HostId`, `-Server`, optional `-MachineCode`, and `-HostDaemonPort`; see
+  `docs/multiple-devices.md` for direct/Connect pairing and its CLI prerequisite,
+  and `docs/platform-windows.md` for storage, restart, logs, and removal.
 - `bb machine rename`
 - `bb machine remove`
 - `bb machine retry-update`

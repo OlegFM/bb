@@ -8,22 +8,114 @@ Phase 3 landed terminals, provider launch and installation, the file watcher
 and the native `bb-app` runtime, and Phase 4 landed the Windows Desktop app:
 the server, the host daemon, terminals and providers run directly on Windows
 without WSL2, and the Electron shell packages, installs, supervises, updates
-and uninstalls that runtime from a per-user NSIS installer. That path is beta:
-the persistent host (Phase 5) has not landed, no Windows code-signing
-certificate exists yet, and WSL2 stays the stable Windows path described in
+and uninstalls that runtime from a per-user NSIS installer. Phase 5 adds the
+PowerShell persistent-host installer and explicit target-shell pairing UI;
+its real logon, clean-VM, live Connect, and full regression acceptance remain
+pending. That path is beta: no Windows code-signing certificate exists yet,
+and WSL2 stays the stable Windows path described in
 [platform-support.md](platform-support.md). This page records what has been
 measured on native Windows and what is known not to work.
 
 ## Status
 
-| Phase                                              | State                                        |
-| -------------------------------------------------- | -------------------------------------------- |
-| 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/` |
-| 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/` |
-| 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/` |
-| 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/` |
-| 4 Windows Desktop                                  | landed; evidence under `qa/windows/phase-4/` |
-| 5 Persistent host and GA hardening                 | not started                                  |
+| Phase                                              | State                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/`                  |
+| 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/`                  |
+| 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/`                  |
+| 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/`                  |
+| 4 Windows Desktop                                  | landed; evidence under `qa/windows/phase-4/`                  |
+| 5 Persistent host and GA hardening                 | installer/UI implemented; acceptance and GA hardening pending |
+
+## Persistent execution machine (beta)
+
+Settings → Machines → Add machine has an explicit **Windows PowerShell**
+choice; **macOS / Linux** remains the default regardless of the browser or
+server OS. The Windows choice downloads `/install.ps1` into a unique temporary
+`.ps1`, invokes `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy
+Bypass -File` with single-quoted named arguments, checks the child exit, and
+removes only the downloaded file in `finally`. Download errors terminate the
+command. This does not change the user's persistent execution policy or PATH.
+
+Enrollment requires Windows 11 x64, Windows PowerShell 5.1 or PowerShell 7,
+Node 22.19+ with npm available alongside Node, and drive-local NTFS storage
+whose user-only ACL can be enforced. Install provider CLIs separately; the
+source-checkout prerequisites below are only needed for source development or
+native dependency compilation when a prebuild is unavailable.
+
+The installer accepts:
+
+| Flag                     | Behavior                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `-JoinCode <code>`       | Required server-issued enrollment code.                                                                                           |
+| `-HostId <id>`           | Required host identity returned with the join code.                                                                               |
+| `-Server <origin>`       | Required HTTP(S) origin; credentials, paths, queries, and fragments are rejected.                                                 |
+| `-MachineCode <code>`    | Optional one-time Connect machine code for the account-gated server URL.                                                          |
+| `-HostDaemonPort <port>` | Optional loopback API port, `1`–`65535` except Desktop's `38887`; fail if an unrelated listener owns an explicitly selected port. |
+| `-Help` / `-h`           | Print usage without enrolling.                                                                                                    |
+
+`bb machine join-code --json` and `sdk.hosts.createJoinCode()` supply
+`{joinCode, hostId, expiresAt}`. For Connect, the server must already be paired;
+`bb connect machine-code --json` currently also requires the **Mobile app**
+experiment (`bb settings experiment mobileApp true`). Use the returned `code`
+and `serverUrl` for `-MachineCode` and `-Server`. The equivalent existing SDK
+operation is the Connect `createMachineCode` RPC through `sdk.plugins.callRpc`;
+the Add machine UI calls it directly. See
+[multiple-devices.md](multiple-devices.md#pair-through-cli-or-sdk) for inputs and
+code expiry. Direct reachable origins omit `-MachineCode`.
+
+The installer only installs the exact host-only `/install/bb-app.tgz` served by
+this server and requires its SHA-256 header before npm runs. It never reuses a
+global `bb-app` or falls back to a registry. Conditional artifact reuse requires
+a complete local install and its saved digest. The private npm prefix is
+`<data>\npm`; the daemon's launcher enables `--auto-update` against its own
+server and restarts it after exit.
+
+Storage defaults to
+`%USERPROFILE%\.bb-machines\<SHA-256-of-normalized-server-origin>`, with logs,
+identity, configuration, port metadata, and launcher isolated per server.
+Set `$env:BB_DATA_DIR` before running the installer to choose a custom absolute
+drive-local directory. Drive roots, UNC/device paths, reparse points, alternate
+streams, quotes, percent signs, and control characters are unsupported. The
+installer refuses incompatible existing host/server enrollment. Ports are
+atomically reserved under `%USERPROFILE%\.bb-machines\host-daemon-ports`, even
+for custom data; selection starts at `38888`. A stale occupied port is
+reassigned when no explicit port was requested. It never stops unrelated
+listeners. The full app/Desktop data directory `~/.bb` remains separate.
+
+After matching host/server connected status is confirmed, the installer
+registers a limited per-user Scheduled Task at logon named
+`bb-host-daemon-<origin-hash>`. If registration is denied, the same name is used
+under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run`. Reruns keep one
+startup registration. A hidden supervisor uses absolute executable paths and
+the enrollment's environment; no join or machine code is saved in the launcher.
+Logs append to `<data>\logs\host-daemon.log` and
+`<data>\logs\supervisor.log`.
+
+Use the exact data and service names printed by the installer. To restart,
+stop its verified supervisor with the generated helper, then start the launcher
+hidden:
+
+```powershell
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '<data>\stop-host-daemon.ps1'
+Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<data>\start-host-daemon.ps1"' -WindowStyle Hidden
+```
+
+The stop helper verifies the supervisor PID, executable, and start time before
+stopping its process tree; an identity mismatch stops nothing. For removal,
+follow the installer's printed commands in order: unregister its Scheduled
+Task and matching HKCU Run entry, run `stop-host-daemon.ps1`, then remove only
+that enrollment's data directory and its exact port reservation file. Remove
+the machine from Settings or with `bb machine remove <id-or-name>`, and revoke
+its Connect credential in the getbb.app dashboard when applicable. Startup
+removal alone leaves the current supervisor running and preserves data.
+
+Fixture tests of these commands do not establish real user logon restart,
+clean-VM installation with WSL disabled, live Connect pairing, or Desktop
+coexistence. Those gates, signing, full Windows baseline remediation, and
+external required-check configuration remain pending in
+[qa/windows/CHECKLIST.md](../qa/windows/CHECKLIST.md). Native Windows remains
+beta until measured acceptance closes them.
 
 ## Prerequisites for a source checkout
 
@@ -921,8 +1013,8 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   22.19.0, and `normalizeWatchEventPath` has an explicit extended-length-root
   arm. Extended-length paths in event data under an ordinary root are handled
   and tested.
-- The manual Windows QA checklist that spec §10 names, `qa/windows/CHECKLIST.md`,
-  does not exist yet; it is a Phase 5 deliverable.
+- The manual Windows QA checklist that spec §10 names now exists at
+  `qa/windows/CHECKLIST.md`; its unexecuted acceptance rows remain pending.
 - The secrets limitations from Phase 2 stand unchanged:
   `plugins/account-pool`, `plugins/secrets`, and the host daemon's own
   `auth-state.ts` and `identity.ts` own their secret files directly and are
@@ -994,9 +1086,9 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   the console code page: bb runs no `chcp` bootstrap, so a terminal that falls
   through to Windows PowerShell 5.1 or `cmd.exe` keeps the machine's code page
   and non-ASCII text can garble there.
-- The manual Windows QA checklist that spec §10 names,
-  `qa/windows/CHECKLIST.md`, still does not exist; it remains a Phase 5
-  deliverable.
+- The manual Windows QA checklist that spec §10 names exists at
+  `qa/windows/CHECKLIST.md`; real clean-VM/logon/live-Connect and remaining
+  baseline acceptance are not established by its presence.
 
 ## Evidence
 

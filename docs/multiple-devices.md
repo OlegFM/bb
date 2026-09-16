@@ -163,7 +163,10 @@ them when it starts, when it becomes active, and every five minutes.
 
 ## Add an execution machine
 
-Open Settings → Machines and choose Add machine. Run the generated one-line
+Open Settings → Machines and choose Add machine. Select the target shell:
+**macOS / Linux** (default) or **Windows PowerShell**. Select the shell on the
+execution computer, which can differ from the browser or server computer.
+Run the generated one-line
 installer on the computer that should
 execute work. It installs and enrolls a host daemon; when bb connect is paired,
 the installer also configures the machine credential used to reach the server
@@ -173,7 +176,7 @@ not directly reachable from another machine. When bb connect is not paired and
 the server URL is a loopback or unspecified address, the dialog does not show an
 installer. It links to Settings → Remote access instead.
 
-The installer always installs the exact host-only `bb-app` package exposed by
+The macOS/Linux installer installs the exact host-only `bb-app` package exposed by
 that server at `/install/bb-app.tgz`. The package contains the host daemon,
 provider/plugin workers, native host dependencies, and bundled `bb` CLI, but no
 web app or server. A `bb-app` already on PATH is reused, and the npm registry
@@ -181,7 +184,7 @@ consulted, only when the server provides no package. Version strings cannot
 distinguish unpublished builds, so the route also publishes a SHA-256 digest.
 The installer verifies that digest and uses a conditional request on later runs
 to skip an identical installed artifact. The package route is public like
-`/install.sh`: `bb-app` is public software, and exposing an unpublished build
+`/install.sh` and `/install.ps1`: `bb-app` is public software, and exposing an unpublished build
 slightly early through a paired tunnel is an accepted tradeoff. npm installs
 the package into the machine's bb data directory, not its system-wide global
 prefix, so enrollment needs neither `sudo` nor a PATH change.
@@ -197,6 +200,63 @@ serve several bb servers at once, and joining never touches a full local bb
 install's `~/.bb`. Each instance keeps its own `bb-app` under that data
 directory and self-updates against its own server, so servers running different
 bb versions on one machine remain isolated.
+
+### Native Windows execution machine (beta)
+
+Use Windows 11 x64, Windows PowerShell 5.1 or PowerShell 7, Node 22.19+ with
+npm installed alongside it, and an absolute drive-local NTFS data directory.
+The Windows command downloads `/install.ps1` to a temporary `.ps1`, runs it with
+`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`, and
+removes only that temporary file even on failure. It makes no persistent PATH or
+execution-policy changes. Installer flags are `-JoinCode`, `-HostId`, `-Server`
+(HTTP(S) origin), optional `-MachineCode`, and optional `-HostDaemonPort`.
+Windows requires the exact SHA-256-verified `/install/bb-app.tgz` artifact and
+fails if it is unavailable; it never falls back to a registry or global install.
+
+The default data directory is
+`%USERPROFILE%\.bb-machines\<SHA-256-of-server-origin>`; `BB_DATA_DIR` selects a
+custom directory for this enrollment. Each has a private `<data>\npm` install
+and a loopback daemon port, normally selected starting at `38888`; `38887` is
+reserved for Desktop. Reservations remain under
+`%USERPROFILE%\.bb-machines\host-daemon-ports` even with custom data. A stale
+occupied port is reassigned unless explicitly selected with `-HostDaemonPort`.
+The installer rejects incompatible existing enrollment instead of replacing it.
+
+A limited per-user Scheduled Task named `bb-host-daemon-<origin-hash>` runs the
+hidden supervisor at logon; HKCU Run with the same name is the fallback when
+task registration is denied. The launcher uses absolute paths, enables daemon
+auto-update, restarts after exit, and retains no join or machine code. Logs are
+`<data>\logs\host-daemon.log` and `<data>\logs\supervisor.log`. The installer
+prints exact paths and removal commands. See
+[platform-windows.md](platform-windows.md#persistent-execution-machine-beta)
+for restart and removal. This implementation leaves Desktop's own `~/.bb`
+profile and startup ownership separate; real logon, live Connect pairing,
+Desktop coexistence on a clean VM, and general Windows acceptance are still
+pending in [the checklist](../qa/windows/CHECKLIST.md).
+
+### Pair through CLI or SDK
+
+Run `bb machine join-code --json` against the server to obtain
+`{joinCode, hostId, expiresAt}`. Pass these as `-JoinCode` and `-HostId` to the
+Windows installer (`--join-code` and `--host-id` on macOS/Linux), with a
+reachable server origin. The SDK equivalent is `sdk.hosts.createJoinCode()`.
+
+For an account-gated Connect URL, the server must already be paired with
+Connect. The existing CLI `bb connect machine-code --json` also requires the
+**Mobile app** experiment: enable it in Settings → Experiments or with
+`bb settings experiment mobileApp true`. Its JSON includes
+`{code, serverUrl, apex, expiresAt}`; use `serverUrl` for `-Server` and `code`
+for `-MachineCode` (or `--server` and `--machine-code` on macOS/Linux).
+The same machine code is available through the existing Connect
+`createMachineCode` RPC using `sdk.plugins.callRpc` with `pluginId: "connect"`,
+`method: "createMachineCode"`, `input: null`, and an output schema validating
+`{code: string, serverUrl: string, expiresAt: number}`. The Add machine UI uses
+this RPC directly. Connect codes last 10 minutes and work once; run the
+installer before either pairing code expires. For direct reachable server
+origins, omit the machine code.
+
+Download `/install.ps1` into a temporary file and invoke its named parameters
+as shown by the UI. The CLI and SDK issue codes for the same installer.
 
 The installed launchd/systemd service enables `--auto-update`. If session open
 reports a newer server protocol, the daemon downloads the server artifact,

@@ -1173,8 +1173,19 @@ The Settings → Machines installer assigns every enrolled standalone host daemo
 a stable local API port so it can coexist with the desktop app and with daemons
 enrolled to other servers. Atomic reservations under
 `~/.bb-machines/host-daemon-ports/` cover both default and custom
-`BB_DATA_DIR` locations. Its generated command accepts `--host-daemon-port
-<port>` when an explicit port is required.
+`BB_DATA_DIR` locations. Its macOS/Linux command accepts `--host-daemon-port
+<port>`; the native Windows PowerShell installer accepts `-HostDaemonPort <port>`
+and reserves `38887` for Desktop, normally selecting an available port from
+`38888`. Native Windows enrollment defaults to
+`%USERPROFILE%\.bb-machines\<SHA-256-of-server-origin>`. Set `$env:BB_DATA_DIR`
+before running `/install.ps1` to select a different enrollment directory; it
+must be an absolute drive-local path on NTFS, without a drive root, UNC/device
+paths, reparse points, alternate streams, quotes, percent signs, or control
+characters. Port reservations stay under
+`%USERPROFILE%\.bb-machines\host-daemon-ports` regardless of that override.
+The installer records the chosen directory in its launcher and restores the
+caller's environment; it does not change the Desktop profile. See
+[the Windows beta installer](platform-windows.md#persistent-execution-machine-beta).
 
 ## Source Development
 
