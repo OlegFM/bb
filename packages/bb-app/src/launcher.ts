@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { spawnLoggedProcess } from "./logged-process.js";
+import { startParentProcessWatchdog } from "./parent-watchdog.js";
 import {
   access,
   mkdir,
@@ -3537,6 +3538,15 @@ export async function runBbApp(
       void shutdown(signal);
     },
   );
+  const stopParentProcessWatchdog = startParentProcessWatchdog({
+    env: runtime.env,
+    intervalMs: 2_000,
+    onParentExit() {
+      log(dim("●"), "Desktop parent process exited; shutting down");
+      void shutdown("SIGTERM");
+    },
+    platform: process.platform,
+  });
 
   try {
     beginStep("Starting server");
@@ -3609,6 +3619,7 @@ export async function runBbApp(
     await shutdown("SIGTERM");
     throw error;
   } finally {
+    stopParentProcessWatchdog();
     removeSignalForwarding();
     if (runtimeRecordOwned) {
       await clearOwnBbAppRuntimeFile({
