@@ -514,8 +514,10 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   typechecks and builds `@bb/domain`, `@bb/process-utils`, `@bb/host-daemon`,
   `@bb/desktop`, `@bb/scripts` and `bb-app`, records the per-package test
   baseline, and runs the `bb-app` tarball smoke. Only the test step carries
-  `continue-on-error: true`; the ConPTY and tarball smokes fail the job. The
-  job itself is still not a required check.
+  `continue-on-error: true`; the ConPTY and tarball smokes fail the job.
+  Phase 4 added the desktop packaging step and the two packaged-app smokes to
+  the same job, and they fail it as well — see "Windows Desktop (Phase 4)"
+  below. The job itself is still not a required check.
 
 ## Windows Desktop (Phase 4)
 
@@ -643,8 +645,9 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   `dev.bb.desktop.dev` for an unpackaged dev run).
 - **Updates.** Windows gets both update paths. The lightweight JSON feed is
   `desktop-version-windows.json` and electron-updater reads `latest.yml`
-  (`nightly.yml` on the nightly channel); both live in the same
-  `desktop-latest` release directory as the macOS and Linux metadata. An
+  (`nightly.yml` on the nightly channel); the stable pair lives in the
+  `desktop-latest` release directory beside the macOS and Linux metadata, the
+  nightly pair in `desktop-nightly`. An
   available update downloads automatically and installs on quit or from
   Settings. The install handler runs the normal quit sequence first, so the
   runtime tree is already stopped before `quitAndInstall` hands over to the
@@ -658,8 +661,10 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 - **App file names.** File names shown in the app come from `hostPathBasename`
   (`apps/app/src/lib/host-path.ts`): a drive-absolute (`C:\`, `C:/`) or UNC
   (`\\`) path splits on either separator, and every other input splits on `/`
-  exactly as before, so POSIX inputs are byte-identical. The nine sites that
-  derived a file name with `split("/")` now use it.
+  exactly as before, so POSIX inputs are byte-identical. Eight of the nine
+  sites that derived a file name with `split("/")` now use it;
+  `rightPanelFileVisuals.ts` uses the same module's `hostPathSegments` for its
+  directory-segment check.
 - **Terminal exit.** `normalizeTerminalExitCode`
   (`apps/host-daemon/src/terminals/terminal-exit-code.ts`) maps
   `-1073741510` to `null` on win32 only, and only when bb itself requested the
@@ -755,12 +760,14 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   provisioning error instead of a clean 409.
 - `listEnvironments`'s `path` query filter compares raw paths, not path keys.
 - App views that derived a file name with `split("/")` showed the full Windows
-  path through Phase 3. Phase 4 replaced that split with `hostPathBasename`
-  (`apps/app/src/lib/host-path.ts`) at all nine sites — the six named here
-  through Phase 3 (`environment-queries.ts`, `project-queries.ts`, `api.ts`,
-  `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`,
+  path through Phase 3. Phase 4 replaced that split with
+  `apps/app/src/lib/host-path.ts` at all nine sites — `hostPathBasename` at
+  eight of them and `hostPathSegments` in `rightPanelFileVisuals.ts`, whose
+  check is on directory segments rather than the file name. They are the six
+  named here through Phase 3 (`environment-queries.ts`, `project-queries.ts`,
+  `api.ts`, `plugin-slot-resolvers.ts`, `file-opener-tabs.ts`,
   `rightPanelFileVisuals.ts`) plus `SkillDetailView.tsx`,
-  `RootComposeView.tsx` and `ThreadDetailView.tsx` — so a Windows path now
+  `RootComposeView.tsx` and `ThreadDetailView.tsx`, so a Windows path now
   renders as its file name and a POSIX path renders exactly as it did before.
 - The host directory browser cannot switch drives.
 - The native folder picker was macOS-only after Phase 1; Phase 2 adds the

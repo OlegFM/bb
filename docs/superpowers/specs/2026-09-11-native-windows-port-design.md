@@ -381,7 +381,8 @@ Scope: electron-builder `win` target (NSIS per-user x64, `.ico` assets,
 windows arms, `app.setAppUserModelId`, `prepare-native-modules.cjs` staging
 ConPTY natives (`conpty.node`, `conpty_console_list.node`, `winpty.dll`,
 `winpty-agent.exe` (not present in node-pty 1.2.0-beta.15; ConPTY-only
-prebuild, see R6)) outside asar and fetching the Electron-ABI
+prebuild — see the Phase 4 plan, ruling R6)) outside asar and fetching the
+Electron-ABI
 `better-sqlite3`; `bb-process.ts` Windows runtime (non-detached child,
 `windowsHide`, runtime id and parent pid, tree-kill on quit, no SIGTERM path);
 tray and runtime policy; `session-end` handling; second-instance argv
