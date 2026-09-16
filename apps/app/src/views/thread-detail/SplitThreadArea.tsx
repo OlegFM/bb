@@ -101,7 +101,7 @@ import {
 import { ThreadDetailWorkerPoolProvider } from "./ThreadDetailWorkerPoolProvider";
 import {
   getBbDesktopInfo,
-  MACOS_WINDOW_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_NO_DRAG_CLASS,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
 import { SplitWorkspaceSecondaryPanelHost } from "./SplitWorkspaceSecondaryPanelHost";
@@ -1139,7 +1139,7 @@ function NonThreadPaneContent({
                 beginPaneDrag &&
                   cn(
                     "cursor-grab touch-none select-none",
-                    usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+                    usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
                   ),
               )}
               onPointerDown={beginPaneDrag ? handlePointerDown : undefined}

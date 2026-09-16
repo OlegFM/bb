@@ -20,9 +20,9 @@ import { CHROME_SECTION_LABEL_CLASS } from "@bb/shared-ui/chrome-style-tokens";
 import {
   CHROME_ROW_CLASS,
   getBbDesktopInfo,
-  MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
-  MACOS_WINDOW_DRAG_CLASS,
-  shouldUseMacosDesktopChrome,
+  DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_DRAG_CLASS,
+  shouldUseDesktopWindowChrome,
 } from "@/lib/bb-desktop";
 
 export function SectionSidebarIcon({ name }: { name: IconName }) {
@@ -161,7 +161,7 @@ export function SectionSidebar({
 }) {
   const closeOnMobile = useCloseMobileSidebar();
   const [desktopInfo] = useState(getBbDesktopInfo);
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
 
   const body = (
     <>
@@ -171,14 +171,14 @@ export function SectionSidebar({
           className={cn(
             CHROME_ROW_CLASS,
             "shrink-0 justify-end px-2",
-            usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_WINDOW_DRAG_CLASS,
           )}
         >
           <SidebarHistoryNavigationControls
             onNavigate={closeOnMobile}
             className={cn(
               "group-data-[collapsible=icon]:hidden",
-              usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+              usesDesktopChrome && DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS,
             )}
           />
         </div>

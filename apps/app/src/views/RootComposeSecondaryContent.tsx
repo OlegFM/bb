@@ -11,8 +11,8 @@ import { PAGE_SHELL_CONTENT_STYLE } from "@/components/ui/page-shell-content-sty
 import {
   CHROME_ROW_HEIGHT_CLASS,
   getBbDesktopInfo,
-  MACOS_APP_REGION_NO_DRAG_CLASS,
-  MACOS_WINDOW_DRAG_CLASS,
+  DESKTOP_APP_REGION_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_DRAG_CLASS,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
 import { RootComposeCompactHome } from "./RootComposeCompactHome";
@@ -92,7 +92,7 @@ export function RootComposeSecondaryContent({
           className={cn(
             "absolute inset-x-0 top-0 z-10 shrink-0",
             CHROME_ROW_HEIGHT_CLASS,
-            MACOS_WINDOW_DRAG_CLASS,
+            DESKTOP_WINDOW_DRAG_CLASS,
           )}
         >
           {!isSecondaryPanelOpen && secondaryPanelHost === null ? (
@@ -102,7 +102,7 @@ export function RootComposeSecondaryContent({
                 "absolute",
                 ROOT_COMPOSE_PINNED_PANEL_TOGGLE_POSITION_CLASS,
                 COARSE_POINTER_HEADER_ICON_BUTTON_CLASS,
-                MACOS_APP_REGION_NO_DRAG_CLASS,
+                DESKTOP_APP_REGION_NO_DRAG_CLASS,
               )}
             />
           ) : null}
@@ -153,9 +153,8 @@ export function RootComposeSecondaryContent({
         compactPresentation={getCompactPanelPresentation(
           threadSecondaryPanelProps.activeTab?.kind,
           threadSecondaryPanelProps.fixedTabs[0]?.tab.kind ??
-            threadSecondaryPanelProps.tabs.find(
-              (tab) => tab.isHidden !== true,
-            )?.tab.kind,
+            threadSecondaryPanelProps.tabs.find((tab) => tab.isHidden !== true)
+              ?.tab.kind,
         )}
         renderPanel={({
           presentation,

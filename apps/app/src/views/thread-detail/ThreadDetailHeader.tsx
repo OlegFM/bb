@@ -22,7 +22,7 @@ import {
 import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGitActionDialog";
 import {
   getBbDesktopInfo,
-  MACOS_WINDOW_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_NO_DRAG_CLASS,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
 import { cn } from "@bb/shared-ui/lib/utils";
@@ -150,8 +150,7 @@ export function ThreadDetailHeader({
     : "Show right panel";
   const rightPanelIconName = RIGHT_PANEL_TOGGLE_ICON_NAME;
   const showRightPanelToggle =
-    secondaryPanelHost === null &&
-    (!isSecondaryPanelOpen || isCompactViewport);
+    secondaryPanelHost === null && (!isSecondaryPanelOpen || isCompactViewport);
 
   const center = (
     <>
@@ -177,7 +176,7 @@ export function ThreadDetailHeader({
               !isEditing &&
               cn(
                 "cursor-grab touch-none select-none",
-                usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+                usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
               ),
           )}
           onDoubleClick={handleTitleDoubleClick}
@@ -198,7 +197,7 @@ export function ThreadDetailHeader({
           className={cn(
             "flex items-center",
             COMPACT_SHELF_HIDDEN_PAGE_HEADER_ACTIONS_CLASS,
-            usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
           )}
         >
           {actionsMenu(usesResponsiveActionOverflow)}

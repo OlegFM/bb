@@ -12,6 +12,10 @@ import {
   type DesktopWindowWebContents,
 } from "../src/desktop-window-factory.js";
 import type { DesktopContextMenuWebContents } from "../src/desktop-context-menu.js";
+import {
+  resolveWindowsTitleBarOverlay,
+  type DesktopTitleBarOverlay,
+} from "../src/desktop-window-frame.js";
 import { readPersistedWindowStateEntries } from "../src/window-state.js";
 import {
   MIN_WINDOW_HEIGHT,
@@ -107,6 +111,7 @@ class FakeDesktopWindow implements DesktopBrowserWindow {
   public readonly id: number;
   public readonly loadedUrls: string[] = [];
   public readonly options: BrowserWindowConstructorOptions;
+  public readonly titleBarOverlays: DesktopTitleBarOverlay[] = [];
   public readonly webContents: FakeDesktopWindowWebContents;
   public focused = false;
   public fullScreen = false;
@@ -207,6 +212,10 @@ class FakeDesktopWindow implements DesktopBrowserWindow {
     this.fullScreen = isFullScreen;
   }
 
+  setTitleBarOverlay(overlay: DesktopTitleBarOverlay): void {
+    this.titleBarOverlays.push(overlay);
+  }
+
   show(): void {
     this.shown = true;
   }
@@ -238,7 +247,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -333,7 +346,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -393,7 +410,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -450,7 +471,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -509,7 +534,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -571,7 +600,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: true,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -631,7 +664,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: false,
       isLinuxTransparent: false,
       isLinuxFrameless: false,
@@ -668,7 +705,11 @@ describe("desktop window factory", () => {
         return "transparent-linux-window";
       },
       displayWorkAreas: [{ height: 900, width: 1440, x: 0, y: 0 }],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isLinuxTransparent: true,
       isMac: false,
       isLinuxFrameless: false,
@@ -710,7 +751,11 @@ describe("desktop window factory", () => {
           y: 0,
         },
       ],
+      darkColors() {
+        return false;
+      },
       icon: undefined,
+      isWindows: false,
       isMac: false,
       isLinuxTransparent: false,
       isLinuxFrameless: true,
@@ -729,5 +774,57 @@ describe("desktop window factory", () => {
     expect(createdWindows[0]?.options).not.toHaveProperty(
       "trafficLightPosition",
     );
+  });
+
+  it("hides the Windows title bar behind a caption overlay and updates it with the theme", async () => {
+    const tempDir = await createTempDir();
+    const createdWindows: FakeDesktopWindow[] = [];
+    const browserWindowCreator: DesktopBrowserWindowCreator = {
+      create(options) {
+        const browserWindow = new FakeDesktopWindow({ options });
+        createdWindows.push(browserWindow);
+        return browserWindow;
+      },
+    };
+    let darkColors = false;
+    const factory = createDesktopWindowFactory({
+      browserWindowCreator,
+      createWindowStateKey() {
+        return "windows-window";
+      },
+      darkColors() {
+        return darkColors;
+      },
+      displayWorkAreas: [{ height: 900, width: 1440, x: 0, y: 0 }],
+      icon: undefined,
+      isLinuxFrameless: false,
+      isLinuxTransparent: false,
+      isMac: false,
+      isQuitting() {
+        return false;
+      },
+      isWindows: true,
+      openExternalUrl() {},
+      preloadPath: "C:\\bb\\preload.cjs",
+      userDataPath: tempDir.path,
+    });
+
+    await factory.createWindow({ initialUrl: null, stateKey: null });
+    darkColors = true;
+    factory.applyTitleBarOverlay(resolveWindowsTitleBarOverlay({ darkColors }));
+
+    expect(createdWindows[0]?.options.titleBarStyle).toBe("hidden");
+    expect(createdWindows[0]?.options.titleBarOverlay).toEqual({
+      color: "#f6f6f6",
+      height: 48,
+      symbolColor: "#1f1f1f",
+    });
+    expect(createdWindows[0]?.options).not.toHaveProperty("frame");
+    expect(createdWindows[0]?.options).not.toHaveProperty(
+      "trafficLightPosition",
+    );
+    expect(createdWindows[0]?.titleBarOverlays).toEqual([
+      { color: "#1f1f1f", height: 48, symbolColor: "#e8e8e8" },
+    ]);
   });
 });

@@ -121,7 +121,11 @@ import {
   type DesktopBrowserWindowCreator,
   type DesktopWindowFactory,
 } from "./desktop-window-factory.js";
-import { shouldUseLinuxFramelessWindow } from "./desktop-window-frame.js";
+import {
+  resolveWindowsTitleBarOverlay,
+  shouldUseLinuxFramelessWindow,
+  shouldUseWindowsTitleBarOverlay,
+} from "./desktop-window-frame.js";
 import { shouldUseLinuxTransparentWindow } from "./desktop-window-transparency.js";
 import {
   createDesktopAboutDialogOptions,
@@ -1699,6 +1703,13 @@ function registerDesktopUpdateIpc(): void {
       return;
     }
     nativeTheme.themeSource = parsed.data;
+    if (shouldUseWindowsTitleBarOverlay({ platform: process.platform })) {
+      desktopWindowFactory?.applyTitleBarOverlay(
+        resolveWindowsTitleBarOverlay({
+          darkColors: nativeTheme.shouldUseDarkColors,
+        }),
+      );
+    }
   });
   ipcMain.on(STARTUP_RETRY_CHANNEL, (event, ...payload: unknown[]) => {
     if (
@@ -2443,6 +2454,9 @@ async function runDesktopApp(): Promise<void> {
     createWindowStateKey() {
       return `window-${randomUUID()}`;
     },
+    darkColors() {
+      return nativeTheme.shouldUseDarkColors;
+    },
     displayWorkAreas: null,
     icon: nativeImage.createFromPath(iconPath),
     isLinuxTransparent: shouldUseLinuxTransparentWindow({
@@ -2450,6 +2464,7 @@ async function runDesktopApp(): Promise<void> {
       platform: process.platform,
     }),
     isMac: process.platform === "darwin",
+    isWindows: shouldUseWindowsTitleBarOverlay({ platform: process.platform }),
     isLinuxFrameless: shouldUseLinuxFramelessWindow({
       argv: process.argv,
       platform: process.platform,

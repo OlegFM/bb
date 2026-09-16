@@ -71,13 +71,15 @@ import { GitDiffTabContent } from "./ThreadSecondaryPanelTabContent";
 import {
   CHROME_ROW_CLASS,
   getBbDesktopInfo,
-  MACOS_APP_REGION_NO_DRAG_CLASS,
+  DESKTOP_APP_REGION_NO_DRAG_CLASS,
   MACOS_CHROME_CONTROL_AXIS_CLASS,
   MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS,
-  MACOS_WINDOW_DRAG_CLASS,
-  MACOS_WINDOW_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_DRAG_CLASS,
+  DESKTOP_WINDOW_NO_DRAG_CLASS,
   shouldReserveMacosTrafficLights,
-  shouldUseMacosDesktopChrome,
+  shouldReserveWindowsCaptionControls,
+  shouldUseDesktopWindowChrome,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
 } from "@/lib/bb-desktop";
 import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import { useOptionalIsSidebarShowing } from "@/components/ui/sidebar.js";
@@ -125,7 +127,7 @@ export function getReservedInlinePanelToggleClassName(
 ): string {
   return cn(
     SECONDARY_PANEL_HIDE_ICON_BUTTON_CLASS,
-    usesDesktopChrome && MACOS_APP_REGION_NO_DRAG_CLASS,
+    usesDesktopChrome && DESKTOP_APP_REGION_NO_DRAG_CLASS,
   );
 }
 
@@ -396,7 +398,7 @@ export function ThreadSecondaryPanel({
   const [desktopInfo] = useState(getBbDesktopInfo);
   const [gitDiffLineOverflowMode, setGitDiffLineOverflowMode] =
     useState<CodeOverflowMode>(DEFAULT_CODE_OVERFLOW_MODE);
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const desktopWindowState = useDesktopWindowState();
   const isSidebarShowing = useOptionalIsSidebarShowing();
   const collapsedPanelTrafficLightReserveClassName =
@@ -409,6 +411,10 @@ export function ThreadSecondaryPanel({
         windowState: desktopWindowState,
       }),
     });
+  const reserveWindowsCaptionControls = shouldReserveWindowsCaptionControls({
+    desktopInfo,
+    windowState: desktopWindowState,
+  });
   const gitDiffPresentation = useMemo<DiffPresentation>(
     () => ({
       view: gitDiffDisplayMode,
@@ -477,7 +483,7 @@ export function ThreadSecondaryPanel({
       className={cn(
         SECONDARY_PANEL_HIDE_ICON_BUTTON_CLASS,
         "relative",
-        usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+        usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
       )}
       onClick={onClose}
       aria-label={
@@ -505,7 +511,7 @@ export function ThreadSecondaryPanel({
           HEADER_PANE_ACTION_ICON_BUTTON_CLASS,
           CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
           "shrink-0",
-          usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+          usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
         )}
         aria-label="Remove split"
         onClick={onRemoveSplit}
@@ -531,7 +537,7 @@ export function ThreadSecondaryPanel({
         <PaneArrangementButton
           className={cn(
             "shrink-0",
-            usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
           )}
           isFullScreen={isFullScreen ?? false}
           onMoveToSide={onMoveActiveTabToSide}
@@ -551,7 +557,7 @@ export function ThreadSecondaryPanel({
               HEADER_PANE_ACTION_ICON_BUTTON_CLASS,
               CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS,
               "shrink-0",
-              usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+              usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
             )}
             onClick={conversationCollapseControl.onClick}
             aria-label={conversationCollapseControl.label}
@@ -638,7 +644,7 @@ export function ThreadSecondaryPanel({
             data-new-tab-control-reserved=""
             className={cn(
               SECONDARY_PANEL_CHROME_ICON_BUTTON_CLASS,
-              usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+              usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
             )}
           />
         ) : null}
@@ -711,10 +717,15 @@ export function ThreadSecondaryPanel({
             className={cn(
               CHROME_ROW_CLASS,
               "min-w-0 justify-between gap-2 px-4",
-              usesDesktopChrome && usesWindowChrome && MACOS_WINDOW_DRAG_CLASS,
+              usesDesktopChrome &&
+                usesWindowChrome &&
+                DESKTOP_WINDOW_DRAG_CLASS,
               usesDesktopChrome &&
                 usesWindowChrome &&
                 MACOS_CHROME_CONTROL_AXIS_CLASS,
+              usesWindowChrome &&
+                reserveWindowsCaptionControls &&
+                WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
             )}
           >
             <div
@@ -1101,7 +1112,7 @@ function PinnedIconTab({
           data-testid={label === "Info" ? "thread-info-tab" : undefined}
           className={cn(
             "shrink-0",
-            usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
           )}
           onPointerDown={onPointerDown}
         >
@@ -1136,7 +1147,7 @@ function NewTabButton({
       size="sm"
       className={cn(
         SECONDARY_PANEL_CHROME_ICON_BUTTON_CLASS,
-        usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+        usesDesktopChrome && DESKTOP_WINDOW_NO_DRAG_CLASS,
       )}
       onClick={onOpenNewTab}
       aria-label={shortcut ? `${ariaLabel} (${shortcut.label})` : ariaLabel}

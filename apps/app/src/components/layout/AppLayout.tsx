@@ -71,12 +71,12 @@ import {
   BROWSER_SIDEBAR_TRIGGER_INSET_CLASS,
   CHROME_ROW_CLASS,
   getBbDesktopInfo,
-  MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+  DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS,
   MACOS_CHROME_TRAFFIC_LIGHT_AXIS_NUDGE_CLASS,
   MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS,
-  MACOS_WINDOW_DRAG_CLASS,
+  DESKTOP_WINDOW_DRAG_CLASS,
   shouldReserveMacosTrafficLights,
-  shouldUseMacosDesktopChrome,
+  shouldUseDesktopWindowChrome,
 } from "@/lib/bb-desktop";
 import { useDesktopWindowState } from "@/hooks/useDesktopWindowState";
 import { useServerDaemonLogsCommand } from "@/hooks/useServerDaemonLogsCommand";
@@ -235,12 +235,12 @@ function SidebarTriggerOverlay({
             ? MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS
             : "left-0",
           !reserveMacosTrafficLights && BROWSER_SIDEBAR_TRIGGER_INSET_CLASS,
-          MACOS_WINDOW_DRAG_CLASS,
+          DESKTOP_WINDOW_DRAG_CLASS,
         )}
       >
         {}
         <SidebarTrigger
-          className={MACOS_CHROME_CONTROL_NO_DRAG_CLASS}
+          className={DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS}
           {...triggerProps}
         />
         <AppCommandShortcutHint
@@ -524,7 +524,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const showHeader = !isThreadView && !isRootView && pluginPanelMatch === null;
   const [desktopInfo] = useState(getBbDesktopInfo);
   const desktopWindowState = useDesktopWindowState();
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const reserveMacosTrafficLights = shouldReserveMacosTrafficLights({
     desktopInfo,
     windowState: desktopWindowState,

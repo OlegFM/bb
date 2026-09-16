@@ -16,6 +16,10 @@ import {
   type StatefulBrowserWindow,
 } from "./window-state.js";
 import type { DesktopContextMenuWebContents } from "./desktop-context-menu.js";
+import {
+  resolveWindowsTitleBarOverlay,
+  type DesktopTitleBarOverlay,
+} from "./desktop-window-frame.js";
 
 type DesktopWindowIcon = BrowserWindowConstructorOptions["icon"];
 
@@ -63,6 +67,7 @@ export interface DesktopBrowserWindow extends StatefulBrowserWindow {
   once(eventName: "ready-to-show", listener: () => void): void;
   restore(): void;
   setFullScreen(isFullScreen: boolean): void;
+  setTitleBarOverlay(overlay: DesktopTitleBarOverlay): void;
   show(): void;
   webContents: DesktopWindowWebContents;
 }
@@ -78,10 +83,12 @@ interface OpenExternalUrlArgs {
 interface CreateDesktopWindowFactoryArgs {
   browserWindowCreator: DesktopBrowserWindowCreator;
   createWindowStateKey(): WindowStateKey;
+  darkColors(): boolean;
   displayWorkAreas: DisplayWorkArea[] | null;
   icon: DesktopWindowIcon;
   isLinuxTransparent: boolean;
   isMac: boolean;
+  isWindows: boolean;
   isLinuxFrameless: boolean;
   isQuitting(): boolean;
   openExternalUrl(args: OpenExternalUrlArgs): void;
@@ -103,6 +110,7 @@ interface LoadDesktopWindowsUrlArgs {
 }
 
 export interface DesktopWindowFactory {
+  applyTitleBarOverlay(overlay: DesktopTitleBarOverlay): void;
   createWindow(args: CreateDesktopWindowArgs): Promise<DesktopBrowserWindow>;
   focusFirstWindow(): boolean;
   hasOpenWindows(): boolean;
@@ -134,8 +142,10 @@ interface CreateWindowOptionsArgs {
   icon: DesktopWindowIcon;
   isLinuxTransparent: boolean;
   isMac: boolean;
+  isWindows: boolean;
   isLinuxFrameless: boolean;
   preloadPath: string;
+  titleBarOverlay: DesktopTitleBarOverlay;
 }
 
 function resolveWindowStateKey(
@@ -174,6 +184,12 @@ function createWindowOptions(
           frame: false,
           titleBarStyle: "hiddenInset" as const,
           trafficLightPosition: MACOS_TRAFFIC_LIGHT_POSITION,
+        }
+      : {}),
+    ...(args.isWindows
+      ? {
+          titleBarOverlay: args.titleBarOverlay,
+          titleBarStyle: "hidden" as const,
         }
       : {}),
     height: args.bounds.height,
@@ -237,8 +253,12 @@ export function createDesktopWindowFactory(
           icon: args.icon,
           isLinuxTransparent: args.isLinuxTransparent,
           isMac: args.isMac,
+          isWindows: args.isWindows,
           isLinuxFrameless: args.isLinuxFrameless,
           preloadPath: args.preloadPath,
+          titleBarOverlay: resolveWindowsTitleBarOverlay({
+            darkColors: args.darkColors(),
+          }),
         }),
       );
       browserWindow.webContents.session.setSpellCheckerEnabled(true);
@@ -373,6 +393,12 @@ export function createDesktopWindowFactory(
     return sendToFirstWindow(channel, payload);
   }
 
+  function applyTitleBarOverlay(overlay: DesktopTitleBarOverlay): void {
+    for (const browserWindow of activeWindows.values()) {
+      browserWindow.setTitleBarOverlay(overlay);
+    }
+  }
+
   function openDevTools(): void {
     for (const browserWindow of activeWindows.values()) {
       browserWindow.webContents.openDevTools({ mode: "detach" });
@@ -392,6 +418,7 @@ export function createDesktopWindowFactory(
   }
 
   return {
+    applyTitleBarOverlay,
     createWindow,
     focusFirstWindow,
     hasOpenWindows() {

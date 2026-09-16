@@ -6,6 +6,10 @@ import {
   MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS,
   MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS,
   shouldReserveMacosTrafficLights,
+  shouldReserveWindowsCaptionControls,
+  shouldUseDesktopWindowChrome,
+  shouldUseWindowsDesktopChrome,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
 } from "./bb-desktop";
 
 const desktopInfo: BbDesktopInfo = {
@@ -65,5 +69,43 @@ describe("desktop chrome geometry", () => {
     expect(BASE_INSET + px(MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS)).toBe(
       TARGET,
     );
+  });
+});
+
+describe("Windows desktop chrome", () => {
+  const windowsApi = createBbDesktopApi({
+    ...desktopInfo,
+    platform: "windows",
+  });
+  const macosApi = createBbDesktopApi(desktopInfo);
+
+  it("treats macOS and Windows as desktop window chrome hosts", () => {
+    expect(shouldUseWindowsDesktopChrome(null)).toBe(false);
+    expect(shouldUseDesktopWindowChrome(null)).toBe(false);
+    expect(shouldUseDesktopWindowChrome(macosApi)).toBe(true);
+    expect(shouldUseDesktopWindowChrome(windowsApi)).toBe(true);
+    expect(shouldUseWindowsDesktopChrome(macosApi)).toBe(false);
+  });
+
+  it("reserves the caption-control width on Windows only outside full screen", () => {
+    expect(WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS).toBe("pr-[138px]");
+    expect(
+      shouldReserveWindowsCaptionControls({
+        desktopInfo: windowsApi,
+        windowState: { isFullScreen: false },
+      }),
+    ).toBe(true);
+    expect(
+      shouldReserveWindowsCaptionControls({
+        desktopInfo: windowsApi,
+        windowState: { isFullScreen: true },
+      }),
+    ).toBe(false);
+    expect(
+      shouldReserveWindowsCaptionControls({
+        desktopInfo: macosApi,
+        windowState: { isFullScreen: false },
+      }),
+    ).toBe(false);
   });
 });

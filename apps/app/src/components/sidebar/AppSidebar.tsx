@@ -30,9 +30,9 @@ import { useQuickCreateProjectController } from "@/hooks/useQuickCreateProject";
 import {
   CHROME_ROW_CLASS,
   getBbDesktopInfo,
-  MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
-  MACOS_WINDOW_DRAG_CLASS,
-  shouldUseMacosDesktopChrome,
+  DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_DRAG_CLASS,
+  shouldUseDesktopWindowChrome,
 } from "@/lib/bb-desktop";
 import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
 import { usePaneContentSplitDrag } from "./usePaneContentSplitDrag";
@@ -100,7 +100,7 @@ export function AppSidebar({
   const threadShortcutTargetsRef = useRef<
     readonly SidebarThreadShortcutTarget[]
   >([]);
-  const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const usesDesktopChrome = shouldUseDesktopWindowChrome(desktopInfo);
   const threadJumpShortcuts = useAppCommandShortcuts(
     THREAD_JUMP_APP_COMMAND_IDS,
   );
@@ -230,14 +230,14 @@ export function AppSidebar({
           className={cn(
             CHROME_ROW_CLASS,
             "shrink-0 justify-end px-2",
-            usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_WINDOW_DRAG_CLASS,
           )}
         >
           <SidebarHistoryNavigationControls
             onNavigate={closeOnMobile}
             className={cn(
               "group-data-[collapsible=icon]:hidden",
-              usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+              usesDesktopChrome && DESKTOP_CHROME_CONTROL_NO_DRAG_CLASS,
             )}
           />
         </div>

@@ -38,8 +38,8 @@ import { TabPill } from "@/components/ui/tab-pill";
 import { useDragClickSuppression } from "@/components/ui/use-drag-click-suppression";
 import { cn } from "@bb/shared-ui/lib/utils";
 import {
-  MACOS_APP_REGION_NO_DRAG_CLASS,
-  MACOS_WINDOW_NO_DRAG_CLASS,
+  DESKTOP_APP_REGION_NO_DRAG_CLASS,
+  DESKTOP_WINDOW_NO_DRAG_CLASS,
 } from "@/lib/bb-desktop";
 import type {
   SecondaryPanelRenderableTab,
@@ -330,9 +330,9 @@ export function SecondaryPanelTabStrip({
     [consumeDragClickSuppression],
   );
 
-  const noDragClass = usesDesktopChrome ? MACOS_WINDOW_NO_DRAG_CLASS : null;
+  const noDragClass = usesDesktopChrome ? DESKTOP_WINDOW_NO_DRAG_CLASS : null;
   const chevronNoDragClass = usesDesktopChrome
-    ? MACOS_APP_REGION_NO_DRAG_CLASS
+    ? DESKTOP_APP_REGION_NO_DRAG_CLASS
     : null;
   const dndTabs = useMemo(
     () => (
@@ -425,7 +425,7 @@ export function SecondaryPanelTabStrip({
           onClickCapture={handleClickCapture}
           className={cn(
             "no-scrollbar min-w-0 overflow-x-auto overflow-y-hidden",
-            usesDesktopChrome && MACOS_APP_REGION_NO_DRAG_CLASS,
+            usesDesktopChrome && DESKTOP_APP_REGION_NO_DRAG_CLASS,
           )}
         >
           <div
