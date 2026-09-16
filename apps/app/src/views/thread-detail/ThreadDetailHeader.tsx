@@ -152,6 +152,8 @@ export function ThreadDetailHeader({
   const rightPanelIconName = RIGHT_PANEL_TOGGLE_ICON_NAME;
   const showRightPanelToggle =
     secondaryPanelHost === null && (!isSecondaryPanelOpen || isCompactViewport);
+  const cedesWindowTopRightToPanel =
+    secondaryPanelHost === null && isSecondaryPanelOpen && !isCompactViewport;
 
   const center = (
     <>
@@ -305,7 +307,7 @@ export function ThreadDetailHeader({
       actions={actions}
       isWindowDragRegion={isTopRow}
       ownsWindowTopLeft={ownsWindowTopLeft}
-      ownsWindowTopRight={ownsWindowTopRight}
+      ownsWindowTopRight={ownsWindowTopRight && !cedesWindowTopRightToPanel}
       className={beginPaneDrag ? "z-[21]" : undefined}
     />
   );

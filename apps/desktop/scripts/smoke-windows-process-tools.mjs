@@ -5,10 +5,10 @@ export function windowsSystemToolPath(env, name) {
   return join(env.SystemRoot ?? "C:\\Windows", "System32", name);
 }
 
-export function taskkillTree(pid) {
+export function taskkillTree(pid, env = process.env) {
   return new Promise((resolvePromise) => {
     const child = spawn(
-      windowsSystemToolPath(process.env, "taskkill.exe"),
+      windowsSystemToolPath(env, "taskkill.exe"),
       ["/PID", String(pid), "/T", "/F"],
       { stdio: "ignore", windowsHide: true },
     );
@@ -17,12 +17,12 @@ export function taskkillTree(pid) {
   });
 }
 
-export function taskkillTreeSync(pid) {
+export function taskkillTreeSync(pid, env = process.env) {
   try {
     spawnSync(
-      windowsSystemToolPath(process.env, "taskkill.exe"),
+      windowsSystemToolPath(env, "taskkill.exe"),
       ["/PID", String(pid), "/T", "/F"],
-      { stdio: "ignore" },
+      { stdio: "ignore", windowsHide: true },
     );
   } catch {}
 }

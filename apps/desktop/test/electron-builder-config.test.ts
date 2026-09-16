@@ -211,9 +211,11 @@ type CreateScriptEnvironment = (
 ) => NodeJS.ProcessEnv;
 type RunConfigScript = (
   overrides: EnvironmentOverrides,
+  extraArguments?: string[],
 ) => Promise<ScriptRunResult>;
 type ReadResolvedConfig = (
   overrides: EnvironmentOverrides,
+  extraArguments?: string[],
 ) => Promise<ReadResolvedConfigResult>;
 type RunNativePrepScriptWithArgs = (
   appOutDir: string,
@@ -238,10 +240,13 @@ const createScriptEnvironment: CreateScriptEnvironment = (overrides) => {
   return env;
 };
 
-const runConfigScript: RunConfigScript = async (overrides) => {
+const runConfigScript: RunConfigScript = async (
+  overrides,
+  extraArguments = [],
+) => {
   const child = spawn(
     process.execPath,
-    ["scripts/run-electron-builder.mjs", "--print-config"],
+    ["scripts/run-electron-builder.mjs", "--print-config", ...extraArguments],
     {
       cwd: desktopPackageRoot,
       env: createScriptEnvironment(overrides),
@@ -295,8 +300,11 @@ const runNativePrepScriptWithArgs: RunNativePrepScriptWithArgs = async (
   };
 };
 
-const readResolvedConfig: ReadResolvedConfig = async (overrides) => {
-  const result = await runConfigScript(overrides);
+const readResolvedConfig: ReadResolvedConfig = async (
+  overrides,
+  extraArguments = [],
+) => {
+  const result = await runConfigScript(overrides, extraArguments);
 
   expect(result.exitCode).toBe(0);
   return {
@@ -815,15 +823,18 @@ describe("electron-builder signing config", () => {
   });
 
   it("signs Windows builds with Azure Trusted Signing when the secret set is complete", async () => {
-    const { config } = await readResolvedConfig({
-      AZURE_CLIENT_ID: "client",
-      AZURE_CLIENT_SECRET: "secret",
-      AZURE_SIGNING_ACCOUNT_NAME: "bb-signing",
-      AZURE_SIGNING_CERTIFICATE_PROFILE: "bb-desktop",
-      AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
-      AZURE_TENANT_ID: "tenant",
-      WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
-    });
+    const { config } = await readResolvedConfig(
+      {
+        AZURE_CLIENT_ID: "client",
+        AZURE_CLIENT_SECRET: "secret",
+        AZURE_SIGNING_ACCOUNT_NAME: "bb-signing",
+        AZURE_SIGNING_CERTIFICATE_PROFILE: "bb-desktop",
+        AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+        AZURE_TENANT_ID: "tenant",
+        WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+      },
+      ["--win"],
+    );
 
     expect(config.win.azureSignOptions).toEqual({
       certificateProfileName: "bb-desktop",
@@ -835,10 +846,13 @@ describe("electron-builder signing config", () => {
   });
 
   it("rejects partial Windows signing secret sets", async () => {
-    const result = await runConfigScript({
-      AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
-      WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
-    });
+    const result = await runConfigScript(
+      {
+        AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+        WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+      },
+      ["--win"],
+    );
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Incomplete Windows signing environment.");
@@ -848,6 +862,37 @@ describe("electron-builder signing config", () => {
     expect(result.stderr).toContain(
       "Missing: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SIGNING_ACCOUNT_NAME, AZURE_SIGNING_CERTIFICATE_PROFILE.",
     );
+  });
+
+  it("ignores a partial Windows signing secret set for a macOS build", async () => {
+    const { config } = await readResolvedConfig(
+      {
+        AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+        WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+      },
+      ["--mac"],
+    );
+
+    expect(config.win).not.toHaveProperty("azureSignOptions");
+    expect(config.win).not.toHaveProperty("publisherName");
+  });
+
+  it("ignores a complete Windows signing secret set for a Linux build", async () => {
+    const { config } = await readResolvedConfig(
+      {
+        AZURE_CLIENT_ID: "client",
+        AZURE_CLIENT_SECRET: "secret",
+        AZURE_SIGNING_ACCOUNT_NAME: "bb-signing",
+        AZURE_SIGNING_CERTIFICATE_PROFILE: "bb-desktop",
+        AZURE_SIGNING_ENDPOINT: "https://weu.codesigning.azure.net",
+        AZURE_TENANT_ID: "tenant",
+        WINDOWS_PUBLISHER_NAME: "bb Desktop Publisher",
+      },
+      ["--linux"],
+    );
+
+    expect(config.win).not.toHaveProperty("azureSignOptions");
+    expect(config.win).not.toHaveProperty("publisherName");
   });
 
   it("leaves the macOS and Linux blocks untouched by the Windows target", async () => {

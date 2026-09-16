@@ -47,6 +47,7 @@ const windowsSigningEnvironmentKeys = [
 ];
 
 const printConfigFlag = "--print-config";
+const windowsTargetFlag = "--win";
 
 function envValueIsSet(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -217,7 +218,7 @@ function createWindowsSigningPlan(env) {
   return { mode: "unsigned", azureSignOptions: null, publisherName: null };
 }
 
-function resolveElectronBuilderConfig(baseConfig, env) {
+function resolveElectronBuilderConfig(baseConfig, env, targetsWindows) {
   const signingPlan = createSigningPlan(env);
   const releaseChannel = resolveDesktopReleaseChannel(env);
   const releaseConfig = createDesktopReleaseConfig(releaseChannel);
@@ -244,7 +245,9 @@ function resolveElectronBuilderConfig(baseConfig, env) {
     icon: "assets/" + releaseConfig.iconFileName,
   };
 
-  const windowsSigningPlan = createWindowsSigningPlan(env);
+  const windowsSigningPlan = targetsWindows
+    ? createWindowsSigningPlan(env)
+    : null;
   const win = {
     ...config.win,
     icon: "assets/" + releaseConfig.iconFileName,
@@ -252,7 +255,7 @@ function resolveElectronBuilderConfig(baseConfig, env) {
   delete win.azureSignOptions;
   delete win.publisherName;
 
-  if (windowsSigningPlan.mode === "windows") {
+  if (windowsSigningPlan !== null && windowsSigningPlan.mode === "windows") {
     win.azureSignOptions = windowsSigningPlan.azureSignOptions;
     win.publisherName = windowsSigningPlan.publisherName;
   }
@@ -346,9 +349,10 @@ async function main() {
   const args = process.argv.slice(2);
   const printConfig = args.includes(printConfigFlag);
   const electronBuilderArgs = args.filter((arg) => arg !== printConfigFlag);
+  const targetsWindows = electronBuilderArgs.includes(windowsTargetFlag);
   const baseConfig = await readBaseConfig();
   const { config, signingPlan, windowsSigningPlan } =
-    resolveElectronBuilderConfig(baseConfig, process.env);
+    resolveElectronBuilderConfig(baseConfig, process.env, targetsWindows);
 
   if (printConfig) {
     console.log(JSON.stringify(config, null, 2));
@@ -361,7 +365,7 @@ async function main() {
   ) {
     console.log("macOS signing is not applicable for Linux-only builds.");
   } else if (
-    electronBuilderArgs.includes("--win") &&
+    windowsSigningPlan !== null &&
     !electronBuilderArgs.includes("--mac")
   ) {
     logWindowsSigningPlan(windowsSigningPlan);

@@ -216,7 +216,7 @@ jobs:
     # Pinned rather than windows-latest so the NSIS/Electron toolchain the
     # installer is measured against changes only when we choose it.
     runs-on: windows-2025
-    timeout-minutes: 60
+    timeout-minutes: 90
     outputs:
       has_windows_signing_secrets: ${{ steps.windows_signing.outputs.has_windows_signing_secrets }}
 

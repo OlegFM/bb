@@ -143,12 +143,13 @@ export function descendantsOf(rows, rootPid) {
   return result;
 }
 
+export function processIdentity(row) {
+  return `${String(row.pid)}@${row.creationDate}`;
+}
+
 export function findSurvivors(during, after) {
-  const afterByPid = new Map(after.map((row) => [row.pid, row]));
-  return during.filter((row) => {
-    const now = afterByPid.get(row.pid);
-    return now !== undefined && now.creationDate === row.creationDate;
-  });
+  const afterIdentities = new Set(after.map(processIdentity));
+  return during.filter((row) => afterIdentities.has(processIdentity(row)));
 }
 
 function evidenceRows(rows) {
@@ -335,10 +336,10 @@ async function smokeWindowsProcesses() {
       survivors = findSurvivors(during, after);
     }
     await writeJson(join(evidenceDir, "after.json"), evidenceRows(after));
-    const beforePids = new Set(before.map((row) => row.pid));
+    const beforeIdentities = new Set(before.map(processIdentity));
     const strays = after.filter(
       (row) =>
-        !beforePids.has(row.pid) &&
+        !beforeIdentities.has(processIdentity(row)) &&
         row.pid !== process.pid &&
         row.pid !== bystander.pid &&
         interestingImages.has(row.name) &&

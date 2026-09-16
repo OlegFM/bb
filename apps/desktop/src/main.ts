@@ -1622,7 +1622,7 @@ async function stopOwnedRuntime(): Promise<void> {
 
 function handleBeforeQuit(event: Event): void {
   quitting = true;
-  if (stoppingForQuit) {
+  if (!shouldStartQuitSequence({ stoppingForQuit })) {
     return;
   }
 
@@ -1653,10 +1653,10 @@ async function finishQuit(): Promise<void> {
   desktopBrowserViewManager?.destroyAll();
   desktopQuitRequestWatcher?.stop();
   desktopQuitRequestWatcher = null;
-  desktopTray?.destroy();
-  desktopTray = null;
   await desktopWindowFactory?.persistOpenWindows();
   await stopOwnedRuntime();
+  desktopTray?.destroy();
+  desktopTray = null;
 }
 
 function registerDesktopUpdateIpc(): void {

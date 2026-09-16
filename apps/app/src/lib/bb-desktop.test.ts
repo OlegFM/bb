@@ -10,8 +10,17 @@ import {
   shouldUseDesktopWindowChrome,
   shouldUseWindowsDesktopChrome,
   WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS,
+  WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS,
   WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS,
 } from "./bb-desktop";
+
+function paddingPx(className: string): number {
+  const match = /\[(\d+)px\]/u.exec(className);
+  if (match === null) {
+    throw new Error(`no px token in "${className}"`);
+  }
+  return Number(match[1]);
+}
 
 const desktopInfo: BbDesktopInfo = {
   lastCheckedAt: null,
@@ -111,19 +120,26 @@ describe("Windows desktop chrome", () => {
   });
 
   it("adds a 16px gutter for rows that carry the reserve and their own padding", () => {
-    const px = (className: string): number => {
-      const match = /\[(\d+)px\]/.exec(className);
-      if (match === null) {
-        throw new Error(`no px token in "${className}"`);
-      }
-      return Number(match[1]);
-    };
-
     expect(WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS).toBe(
       "pr-[154px]",
     );
-    expect(px(WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS)).toBe(
-      px(WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS) + 16,
+    expect(paddingPx(WINDOWS_CAPTION_CONTROLS_RESERVE_WITH_GUTTER_CLASS)).toBe(
+      paddingPx(WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS) + 16,
+    );
+  });
+
+  it("offsets absolutely positioned controls by the reserve width plus a gutter", () => {
+    expect(WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS).toBe(
+      "right-[calc(138px+1rem)]",
+    );
+
+    const match = /^right-\[calc\((\d+)px\+1rem\)\]$/u.exec(
+      WINDOWS_CAPTION_CONTROLS_RESERVE_RIGHT_CLASS,
+    );
+
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBe(
+      paddingPx(WINDOWS_CAPTION_CONTROLS_RESERVE_CLASS),
     );
   });
 });

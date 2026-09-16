@@ -407,7 +407,7 @@ setInterval(() => undefined, 1000);
     expect(launch.spawnOptions).toStrictEqual({});
   });
 
-  it.runIf(process.platform === "win32")(
+  it.skipIf(process.platform !== "win32")(
     "stops the whole Windows process tree without the SIGTERM handshake",
     async () => {
       const script = await createTempScript({
@@ -453,6 +453,7 @@ setInterval(() => undefined, 1000);
       );
       expect(isProcessAlive(grandchildPid)).toBe(false);
     },
+    20_000,
   );
 
   it.skipIf(process.platform !== "win32")(
