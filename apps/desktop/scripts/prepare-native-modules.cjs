@@ -1,5 +1,11 @@
 const { spawn } = require("node:child_process");
-const { chmod, readFile, readdir, writeFile } = require("node:fs/promises");
+const {
+  access,
+  chmod,
+  readFile,
+  readdir,
+  writeFile,
+} = require("node:fs/promises");
 const { createRequire } = require("node:module");
 const path = require("node:path");
 
@@ -149,6 +155,31 @@ async function prepareNodePtyPackageDirectory(packageDirectory) {
   );
 }
 
+const NODE_PTY_WINDOWS_PREBUILD_RELATIVE_PATHS = [
+  "conpty.node",
+  "conpty_console_list.node",
+  path.join("conpty", "conpty.dll"),
+  path.join("conpty", "OpenConsole.exe"),
+];
+
+async function assertNodePtyWindowsPrebuild(packageDirectory, arch) {
+  const prebuildDirectory = path.join(
+    packageDirectory,
+    "prebuilds",
+    `win32-${arch}`,
+  );
+  for (const relativePath of NODE_PTY_WINDOWS_PREBUILD_RELATIVE_PATHS) {
+    const filePath = path.join(prebuildDirectory, relativePath);
+    try {
+      await access(filePath);
+    } catch {
+      throw new Error(
+        `Packaged node-pty is missing ${path.join("prebuilds", `win32-${arch}`, relativePath)} under ${packageDirectory}; the ConPTY prebuild must ship outside asar.`,
+      );
+    }
+  }
+}
+
 function resolveBetterSqlite3PrebuildArguments({
   electronVersion,
   arch,
@@ -216,6 +247,14 @@ async function preparePackagedNativeModules(appOutDir, options = {}) {
     );
   }
   await Promise.all(nodePtyDirectories.map(prepareNodePtyPackageDirectory));
+
+  if (options.platform === "win32") {
+    await Promise.all(
+      nodePtyDirectories.map((packageDirectory) =>
+        assertNodePtyWindowsPrebuild(packageDirectory, options.arch),
+      ),
+    );
+  }
 
   // The Electron target is only known on the real afterPack path. Standalone
   // invocations (e.g. tests, manual node-pty repair) omit it and skip the fetch.
@@ -329,6 +368,8 @@ module.exports.preparePackagedNativeModules = preparePackagedNativeModules;
 module.exports.parseStandaloneArguments = parseStandaloneArguments;
 module.exports.resolveBetterSqlite3PrebuildArguments =
   resolveBetterSqlite3PrebuildArguments;
+module.exports.NODE_PTY_WINDOWS_PREBUILD_RELATIVE_PATHS =
+  NODE_PTY_WINDOWS_PREBUILD_RELATIVE_PATHS;
 
 if (require.main === module) {
   main().catch((error) => {

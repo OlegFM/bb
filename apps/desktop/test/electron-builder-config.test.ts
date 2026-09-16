@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
@@ -216,6 +216,10 @@ type ReadResolvedConfig = (
   overrides: EnvironmentOverrides,
 ) => Promise<ReadResolvedConfigResult>;
 type RunNativePrepScript = (appOutDir: string) => Promise<ScriptRunResult>;
+type RunNativePrepScriptWithArgs = (
+  appOutDir: string,
+  extraArguments: string[],
+) => Promise<ScriptRunResult>;
 
 const createScriptEnvironment: CreateScriptEnvironment = (overrides) => {
   const env = { ...process.env };
@@ -287,6 +291,33 @@ const runNativePrepScript: RunNativePrepScript = async (appOutDir) => {
     child.on("close", resolveExitCode);
   });
 
+  return {
+    exitCode,
+    stderr: stderrChunks.join(""),
+    stdout: stdoutChunks.join(""),
+  };
+};
+
+const runNativePrepScriptWithArgs: RunNativePrepScriptWithArgs = async (
+  appOutDir,
+  extraArguments,
+) => {
+  const child = spawn(
+    process.execPath,
+    ["scripts/prepare-native-modules.cjs", appOutDir, ...extraArguments],
+    { cwd: desktopPackageRoot },
+  );
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+  child.stdout.on("data", (chunk) => {
+    stdoutChunks.push(String(chunk));
+  });
+  child.stderr.on("data", (chunk) => {
+    stderrChunks.push(String(chunk));
+  });
+  const exitCode = await new Promise<number | null>((resolveExitCode) => {
+    child.on("close", resolveExitCode);
+  });
   return {
     exitCode,
     stderr: stderrChunks.join(""),
@@ -397,6 +428,21 @@ describe("electron-builder signing config", () => {
     ]);
   });
 
+  it("passes win32 x64 through to better-sqlite3 prebuild-install", () => {
+    expect(
+      nativeModulesScript.resolveBetterSqlite3PrebuildArguments({
+        arch: "x64",
+        electronVersion: "41.7.0",
+        platform: "win32",
+      }),
+    ).toEqual([
+      "--runtime=electron",
+      "--target=41.7.0",
+      "--arch=x64",
+      "--platform=win32",
+    ]);
+  });
+
   it("installs native plugin build packages for arm64 and x64", async () => {
     const packageJsonText = await readFile(
       resolve(desktopPackageRoot, "..", "..", "package.json"),
@@ -497,6 +543,84 @@ describe("electron-builder signing config", () => {
       );
       expect((await stat(helperPath)).mode & 0o777).toBe(0o755);
       expect((await stat(rebuiltHelperPath)).mode & 0o777).toBe(0o755);
+    } finally {
+      await rm(appOutDir, { force: true, recursive: true });
+    }
+  });
+
+  it("accepts a Windows app output whose node-pty carries the ConPTY prebuild", async () => {
+    const appOutDir = await mkdtemp(
+      resolve(tmpdir(), "bb-desktop-native-modules-win-"),
+    );
+    const nodePtyPackageDir = resolve(
+      appOutDir,
+      "resources",
+      "app.asar.unpacked",
+      "node_modules",
+      "node-pty",
+    );
+    try {
+      await mkdir(resolve(nodePtyPackageDir, "lib"), { recursive: true });
+      await writeFile(
+        resolve(nodePtyPackageDir, "lib", "unixTerminal.js"),
+        "helperPath = helperPath.replace('app.asar', 'app.asar.unpacked');",
+      );
+      const prebuildDir = resolve(nodePtyPackageDir, "prebuilds", "win32-x64");
+      await mkdir(resolve(prebuildDir, "conpty"), { recursive: true });
+      for (const relativePath of [
+        "conpty.node",
+        "conpty_console_list.node",
+        "conpty/conpty.dll",
+        "conpty/OpenConsole.exe",
+      ]) {
+        await writeFile(resolve(prebuildDir, relativePath), "binary");
+      }
+      const result = await runNativePrepScriptWithArgs(appOutDir, [
+        "--platform=win32",
+        "--arch=x64",
+      ]);
+
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(appOutDir, { force: true, recursive: true });
+    }
+  });
+
+  it("refuses a Windows app output whose ConPTY prebuild is incomplete", async () => {
+    const appOutDir = await mkdtemp(
+      resolve(tmpdir(), "bb-desktop-native-modules-win-"),
+    );
+    const nodePtyPackageDir = resolve(
+      appOutDir,
+      "resources",
+      "app.asar.unpacked",
+      "node_modules",
+      "node-pty",
+    );
+    try {
+      await mkdir(resolve(nodePtyPackageDir, "lib"), { recursive: true });
+      await writeFile(
+        resolve(nodePtyPackageDir, "lib", "unixTerminal.js"),
+        "helperPath = helperPath.replace('app.asar', 'app.asar.unpacked');",
+      );
+      const prebuildDir = resolve(nodePtyPackageDir, "prebuilds", "win32-x64");
+      await mkdir(resolve(prebuildDir, "conpty"), { recursive: true });
+      await writeFile(resolve(prebuildDir, "conpty.node"), "binary");
+      await writeFile(
+        resolve(prebuildDir, "conpty_console_list.node"),
+        "binary",
+      );
+      await writeFile(resolve(prebuildDir, "conpty", "conpty.dll"), "binary");
+      const result = await runNativePrepScriptWithArgs(appOutDir, [
+        "--platform=win32",
+        "--arch=x64",
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Packaged node-pty is missing");
+      expect(result.stderr).toContain(
+        join("prebuilds", "win32-x64", "conpty", "OpenConsole.exe"),
+      );
     } finally {
       await rm(appOutDir, { force: true, recursive: true });
     }
