@@ -1,7 +1,7 @@
 import { appendOutput, formatProcessOutput } from "./smoke-output.mjs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,26 @@ const startupTimeoutMs = 20_000;
 const exitTimeoutMs = 5_000;
 const outputFlushTimeoutMs = 2_000;
 const postReadySettleMs = 300;
+const windowsQuitTimeoutMs = 30_000;
+const quitRequestFileName = "quit-request";
+const removeAttempts = 3;
+const removeRetryDelayMs = 500;
+
+function resolveDesktopPlatform(platform) {
+  if (platform === "darwin") {
+    return "macos";
+  }
+  if (platform === "linux") {
+    return "linux";
+  }
+  if (platform === "win32") {
+    return "windows";
+  }
+  throw new Error(
+    "Packaged desktop smoke only runs on macOS, Linux or Windows.",
+  );
+}
+
 function writeJson(response, body) {
   response.writeHead(200, {
     "content-type": "application/json",
@@ -320,9 +340,62 @@ async function waitForProcessExit(child, timeoutMs) {
   });
 }
 
-async function stopPackagedApp(child) {
+function windowsSystemToolPath(env, name) {
+  return join(env.SystemRoot ?? "C:\\Windows", "System32", name);
+}
+
+function requestWindowsQuit(quitRequestFile) {
+  return writeFile(quitRequestFile, "quit\n", "utf8");
+}
+
+function taskkillTree(pid) {
+  return new Promise((resolvePromise) => {
+    const child = spawn(
+      windowsSystemToolPath(process.env, "taskkill.exe"),
+      ["/PID", String(pid), "/T", "/F"],
+      { stdio: "ignore", windowsHide: true },
+    );
+    child.once("error", () => resolvePromise());
+    child.once("exit", () => resolvePromise());
+  });
+}
+
+async function removeSmokeRoot(smokeRoot) {
+  if (process.platform !== "win32") {
+    await rm(smokeRoot, { force: true, recursive: true });
+    return;
+  }
+
+  for (let attempt = 1; attempt <= removeAttempts; attempt += 1) {
+    try {
+      await rm(smokeRoot, { force: true, recursive: true });
+      return;
+    } catch (error) {
+      if (attempt === removeAttempts) {
+        throw error;
+      }
+      await sleep(removeRetryDelayMs);
+    }
+  }
+}
+
+async function stopPackagedApp(child, quitRequestFile) {
   if (await waitForProcessExit(child, 0)) {
     return;
+  }
+
+  if (process.platform === "win32") {
+    await requestWindowsQuit(quitRequestFile);
+    if (await waitForProcessExit(child, windowsQuitTimeoutMs)) {
+      return;
+    }
+    if (child.pid !== undefined) {
+      await taskkillTree(child.pid);
+    }
+    await waitForProcessExit(child, exitTimeoutMs);
+    throw new Error(
+      "Packaged Electron app ignored the quit request file and was force-killed.",
+    );
   }
 
   child.kill("SIGTERM");
@@ -335,12 +408,8 @@ async function stopPackagedApp(child) {
 }
 
 async function smokePackagedApp() {
-  if (process.platform !== "darwin" && process.platform !== "linux") {
-    throw new Error("Packaged desktop smoke only runs on macOS or Linux.");
-  }
-
+  const desktopPlatform = resolveDesktopPlatform(process.platform);
   const desktopVersion = await readDesktopPackageVersion();
-  const desktopPlatform = process.platform === "darwin" ? "macos" : "linux";
   const appBinary = await resolvePackagedAppBinary({
     executableName: releaseConfig.linuxExecutableName,
     platform: process.platform,
@@ -350,6 +419,7 @@ async function smokePackagedApp() {
   const smokeRoot = await mkdtemp(join(tmpdir(), "bb-desktop-packaged-smoke-"));
   const dataDir = join(smokeRoot, "data");
   const userDataDir = join(smokeRoot, "user-data");
+  const quitRequestFile = join(smokeRoot, quitRequestFileName);
   const smokeServer = await startSmokeServer({
     dataDir,
     expectedDesktopPlatform: desktopPlatform,
@@ -368,6 +438,9 @@ async function smokePackagedApp() {
     BB_DESKTOP_OPEN_DEVTOOLS: "0",
     BB_DESKTOP_VERSION_FEED_URL: `${serverUrl}/desktop-version.json`,
     BB_SERVER_PORT: String(smokeServer.port),
+    ...(process.platform === "win32"
+      ? { BB_DESKTOP_QUIT_REQUEST_FILE: quitRequestFile }
+      : {}),
   };
   delete childEnv.BB_DESKTOP_APP_URL;
   delete childEnv.BB_DESKTOP_NODE_EXEC_PATH;
@@ -417,9 +490,12 @@ async function smokePackagedApp() {
 
     console.log(`Packaged desktop smoke passed: ${appBinary}`);
   } finally {
-    await stopPackagedApp(child);
-    await smokeServer.close();
-    await rm(smokeRoot, { force: true, recursive: true });
+    try {
+      await stopPackagedApp(child, quitRequestFile);
+    } finally {
+      await smokeServer.close();
+      await removeSmokeRoot(smokeRoot);
+    }
   }
 }
 
