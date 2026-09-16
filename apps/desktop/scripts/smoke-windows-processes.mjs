@@ -10,6 +10,10 @@ import {
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
 import { resolvePackagedAppBinary } from "./packaged-app-paths.mjs";
+import {
+  taskkillTree,
+  windowsSystemToolPath,
+} from "./smoke-windows-process-tools.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const desktopPackageRoot = resolve(scriptDirectory, "..");
@@ -43,14 +47,11 @@ export function parseEvidenceDir(argv) {
   return join("qa-artifacts", "process-hygiene");
 }
 
-function windowsSystemToolPath(name) {
-  return join(process.env.SystemRoot ?? "C:\\Windows", "System32", name);
-}
-
 function runPowerShellJson(script) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(
       windowsSystemToolPath(
+        process.env,
         join("WindowsPowerShell", "v1.0", "powershell.exe"),
       ),
       [
@@ -202,18 +203,6 @@ async function waitForExit(child, timeoutMs) {
       resolvePromise(true);
     };
     child.once("exit", onExit);
-  });
-}
-
-function taskkillTree(pid) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(
-      windowsSystemToolPath("taskkill.exe"),
-      ["/PID", String(pid), "/T", "/F"],
-      { stdio: "ignore", windowsHide: true },
-    );
-    child.once("error", () => resolvePromise());
-    child.once("exit", () => resolvePromise());
   });
 }
 

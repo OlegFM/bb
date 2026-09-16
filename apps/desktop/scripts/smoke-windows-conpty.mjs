@@ -1,10 +1,11 @@
-import { execFile, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { taskkillTreeSync } from "./smoke-windows-process-tools.mjs";
 
 const execFileAsync = promisify(execFile);
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -119,16 +120,6 @@ async function waitForPidInTasklist(pid, present, timeoutMs) {
     deadlineMs: timeoutMs,
   });
   return matched === true;
-}
-
-function taskkillTree(pid) {
-  try {
-    spawnSync(
-      join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"),
-      ["/PID", String(pid), "/T", "/F"],
-      { stdio: "ignore" },
-    );
-  } catch {}
 }
 
 function readWindowsEnvValue(env, name) {
@@ -268,7 +259,7 @@ async function destroyShell(session) {
   await Promise.race([session.exit, sleep(5_000)]);
   const pid = session.pty.pid;
   if (typeof pid === "number" && Number.isInteger(pid) && pid > 0) {
-    taskkillTree(pid);
+    taskkillTreeSync(pid);
     await Promise.race([session.exit, sleep(5_000)]);
   }
   releasePty(session.pty);
@@ -435,7 +426,7 @@ async function runClose(nodePty, shellFile) {
     const gone = await waitForPidInTasklist(pid, false, 5_000);
     if (!gone) {
       const stdout = await readTasklist(pid);
-      taskkillTree(pid);
+      taskkillTreeSync(pid);
       throw new Error(
         `Shell pid ${String(pid)} survived pty.kill() and is still in tasklist (zombie). tasklist:\n${stdout.trim()}`,
       );
@@ -480,7 +471,7 @@ async function runTree(nodePty, shellFile) {
         `Child pid ${String(childPid)} never appeared in tasklist; tree assertion would be vacuous.`,
       );
     }
-    taskkillTree(parentPid);
+    taskkillTreeSync(parentPid);
     await waitForExit(session.exit, stepTimeoutMs);
     const parentGone = await waitForPidInTasklist(parentPid, false, 5_000);
     if (!parentGone) {
@@ -503,7 +494,7 @@ async function runTree(nodePty, shellFile) {
     };
   } catch (error) {
     if (childPid !== null) {
-      taskkillTree(childPid);
+      taskkillTreeSync(childPid);
     }
     await destroyShell(session);
     throw error;

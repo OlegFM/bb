@@ -12,6 +12,7 @@ import {
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
 import { resolvePackagedAppBinary } from "./packaged-app-paths.mjs";
+import { taskkillTree } from "./smoke-windows-process-tools.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const desktopPackageRoot = resolve(scriptDirectory, "..");
@@ -326,24 +327,8 @@ async function waitForProcessExit(child, timeoutMs) {
   });
 }
 
-function windowsSystemToolPath(env, name) {
-  return join(env.SystemRoot ?? "C:\\Windows", "System32", name);
-}
-
 function requestWindowsQuit(quitRequestFile) {
   return writeFile(quitRequestFile, "quit\n", "utf8");
-}
-
-function taskkillTree(pid) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(
-      windowsSystemToolPath(process.env, "taskkill.exe"),
-      ["/PID", String(pid), "/T", "/F"],
-      { stdio: "ignore", windowsHide: true },
-    );
-    child.once("error", () => resolvePromise());
-    child.once("exit", () => resolvePromise());
-  });
 }
 
 async function removeSmokeRoot(smokeRoot) {
