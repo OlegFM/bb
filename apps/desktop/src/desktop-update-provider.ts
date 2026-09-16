@@ -7,6 +7,7 @@ type DesktopReleaseChannel = "latest" | "nightly";
 
 interface DesktopReleaseInfo {
   applicationName: "bb" | "bb Nightly";
+  appUserModelId: "dev.bb.desktop" | "dev.bb.desktop.nightly";
   channel: DesktopReleaseChannel;
   iconFileName: "icon.png" | "icon-nightly.png";
   releaseTag: "desktop-latest" | "desktop-nightly";
@@ -21,6 +22,7 @@ export function createDesktopReleaseInfo(
 
   return {
     applicationName: nightly ? "bb Nightly" : "bb",
+    appUserModelId: nightly ? "dev.bb.desktop.nightly" : "dev.bb.desktop",
     channel,
     iconFileName: nightly ? "icon-nightly.png" : "icon.png",
     releaseTag,
@@ -85,7 +87,7 @@ export function resolveDesktopUpdateSupport(
   args: ResolveDesktopUpdateSupportArgs,
 ): DesktopUpdateSupport {
   if (args.platform === "windows") {
-    return { autoUpdate: false, versionCheck: false };
+    return { autoUpdate: true, versionCheck: true };
   }
 
   if (args.platform === "macos") {

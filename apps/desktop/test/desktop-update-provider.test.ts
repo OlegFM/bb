@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createDesktopReleaseInfo,
   createDesktopUpdateFeedUrl,
   resolveDesktopUpdateSupport,
 } from "../src/desktop-update-provider.js";
@@ -70,14 +71,22 @@ describe("desktop update support", () => {
     expect(checked).toEqual([APP_IMAGE_PATH]);
   });
 
-  it("disables update checks on Windows until the Windows feed ships", () => {
+  it("enables both update paths on Windows now that the NSIS feed ships", () => {
     expect(
       resolveDesktopUpdateSupport({
-        canReplaceAppImage: () => true,
+        canReplaceAppImage: () => {
+          throw new Error("Windows must not consult the AppImage check");
+        },
         env: {},
         platform: "windows",
       }),
-    ).toEqual({ autoUpdate: false, versionCheck: false });
+    ).toEqual({ autoUpdate: true, versionCheck: true });
+  });
+
+  it("points the Windows JSON feed at the shared release tag", () => {
+    expect(createDesktopUpdateFeedUrl("windows")).toBe(
+      "https://github.com/get-bb/bb/releases/download/desktop-latest/desktop-version-windows.json",
+    );
   });
 
   it("does not consult the filesystem on macOS", () => {
@@ -93,5 +102,16 @@ describe("desktop update support", () => {
     });
 
     expect(consulted).toBe(false);
+  });
+});
+
+describe("desktop release info", () => {
+  it("carries the app user model id for each channel", () => {
+    expect(createDesktopReleaseInfo("latest").appUserModelId).toBe(
+      "dev.bb.desktop",
+    );
+    expect(createDesktopReleaseInfo("nightly").appUserModelId).toBe(
+      "dev.bb.desktop.nightly",
+    );
   });
 });

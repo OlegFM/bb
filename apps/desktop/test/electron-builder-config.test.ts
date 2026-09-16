@@ -690,6 +690,7 @@ describe("electron-builder signing config", () => {
     const nightlyRelease = createDesktopReleaseInfo("nightly");
 
     expect(config.appId).toBe("dev.bb.desktop.nightly");
+    expect(config.appId).toBe(nightlyRelease.appUserModelId);
     expect(config.productName).toBe("bb Nightly");
     expect(config.artifactName).toBe("bb-nightly-${version}-${arch}.${ext}");
     expect(config.linux.icon).toBe("assets/icon-nightly.png");
@@ -725,6 +726,9 @@ describe("electron-builder signing config", () => {
     expect(config.mac).not.toHaveProperty("identity");
     expect(config.mac.notarize).toBe(false);
     expect(config.dmg.sign).toBe(false);
+    expect(config.appId).toBe(
+      createDesktopReleaseInfo("latest").appUserModelId,
+    );
   });
 
   it("keeps builds unsigned when keychain auto-discovery is explicitly disabled", async () => {
