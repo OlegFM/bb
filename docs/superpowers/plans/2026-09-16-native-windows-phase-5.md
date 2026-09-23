@@ -187,3 +187,93 @@ and the final evidence commit are recorded with the local delivery.
 The user confirmed that no clean VM is available and agreed to leave that gate
 open. This does not close the umbrella Phase 5 gate or change native Windows
 from beta. The acceptance inventory and skip audit retain the remaining work.
+
+## Local hardening continuation, 2026-09-23
+
+The user authorized the remaining feasible Phase 5 work after a fresh parity
+audit at `c2045de98`. Continue on `windows-native/phase-5`, with one implementation
+owner at a time and independent review. Retain the existing external acceptance
+boundary and the design's non-goals. Browser Automation, cookie import and
+sandbox parity are not added by this continuation.
+
+### Task 4: Windows paths and Git
+
+- Repair drive-absolute local Git plugin sources without weakening URL,
+  traversal or cache containment validation; test both separators, drive
+  separation, spaces, Unicode and ref selectors.
+- Compute an empty Git tree through empty stdin, preserving the repository's
+  hash algorithm, so status and diff work before the first commit.
+- Use native containment for custom code-theme files; keep rejecting absolute,
+  parent and sibling-prefix escapes.
+- Verify real plugin install/update/marketplace flows, custom themes and
+  unborn-repository status/diff through Turbo, including boundary regressions.
+
+### Task 5: Workspace baseline and Git coverage
+
+- Replace POSIX-only test launchers with native fixtures where the capability
+  also exists on Windows. Preserve argv, environment, exit and timeout checks.
+- Diagnose the remaining workspace and open-target baseline failures; keep
+  platform-specific contracts explicit rather than removing assertions.
+- Add real Windows transport-descendant timeout coverage, proving the child
+  starts before the timeout and cannot produce a later side effect.
+- Add a Windows junction-alias equivalent for Git mutation-lock serialization.
+- Run the affected package suites and typechecks; retain exact residual failures.
+
+### Task 6: Desktop broker and baseline
+
+- Publish the token-bearing broker descriptor privately before writing content
+  on Windows. Validate Windows ACLs on read while retaining POSIX protections.
+- Discover the persistent host's origin-hash directory used by `install.ps1`,
+  retaining existing local and legacy lookup and matching the server origin.
+- Verify private descriptor readback, rejection, reconnect and server switching
+  with native fixtures; finish Desktop path/mode/signal fixture portability.
+- Run the Desktop suite, daemon broker checks and affected typechecks without
+  disturbing the user's running Desktop.
+
+### Task 7: Remaining skip gaps and acceptance evidence
+
+- Exercise early CLI pipe closure on Windows with real child processes.
+- Exercise npm toolchain policy sanitization with a native fixture and repair
+  Windows npm spawning if the test exposes a product defect.
+- Reproduce and repair Pi/Bun teardown on NTFS before removing its Windows skip.
+- Update the skip audit only from executed equivalent coverage. Add failing-on-
+  error CI coverage for verified slices; do not declare the unrelated baseline
+  green or change external required-check settings without their own evidence.
+- Record commands, exit codes, counts and limitations under `qa/windows/phase-5/`.
+  Signing, publication, clean VM, actual logon and live Connect stay pending
+  until their real environments are available and tested.
+
+### Task 8: Remaining server regression baseline
+
+- After Tasks 4–7 code fixes, reproduce the remaining server failures from
+  `qa/windows/phase-4/43-continuation.md` under a controlled Windows run.
+  Inspect executable/provider fixtures for isolation before running them.
+- Repair native ESM file-URL loading and path contracts where a product defect
+  is confirmed; correct simulated-host, mode and compiler fixtures without
+  weakening assertions or introducing broad Windows skips.
+- Await owned SQLite/worker cleanup before removing temporary files. Preserve
+  real database tests and diagnose timing failures before changing budgets.
+- Classify POSIX installer-shell execution separately from the native
+  PowerShell installer, retaining equivalent Windows coverage and static checks
+  that can run on every host.
+- Run the full server suite in the final controlled configuration and affected
+  typechecks. Update the CI gate and acceptance inventory only from measured
+  results; keep unresolved failures explicit if an external prerequisite blocks
+  them. Review this slice independently before its local commit.
+
+### Local hardening result
+
+Tasks 4–8 are implemented in local commits `5e1e5d7e5`, `b6678e3d1`,
+`e1b0c38fa`, `f2021d36e` and `edabbdeab`, with independent task reviews.
+The final full server run passed 2505 tests with 24 classified exclusions;
+Desktop, workspace, open-target, plugin-build and Pi package results and
+focused CLI/daemon coverage are recorded in
+[the portable hardening report](../../../qa/windows/phase-5/05-local-hardening.md).
+Affected typechecks and the final combined server/daemon/Desktop build passed
+(48/48 Turbo tasks). The CI definition now gates these verified slices.
+
+This completes the approved local hardening continuation, not the umbrella
+Phase 5 acceptance gate. Clean VM, actual logon, live Connect, manual Desktop
+coexistence, signing/publication and same-head external CI remain unverified.
+Other non-gating packages and the documented broader Windows product
+limitations retain their own work; native Windows remains beta.

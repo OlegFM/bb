@@ -18,14 +18,14 @@ measured on native Windows and what is known not to work.
 
 ## Status
 
-| Phase                                              | State                                                         |
-| -------------------------------------------------- | ------------------------------------------------------------- |
-| 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/`                  |
-| 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/`                  |
-| 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/`                  |
-| 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/`                  |
-| 4 Windows Desktop                                  | landed; evidence under `qa/windows/phase-4/`                  |
-| 5 Persistent host and GA hardening                 | installer/UI implemented; acceptance and GA hardening pending |
+| Phase                                              | State                                                                       |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| 0 Foundation and honest gating                     | landed; evidence under `qa/windows/phase-0/`                                |
+| 1 Host identity and host-owned paths               | landed; evidence under `qa/windows/phase-1/`                                |
+| 2 Processes, environment, Git, hooks, open targets | landed; evidence under `qa/windows/phase-2/`                                |
+| 3 ConPTY, providers, watcher, native `bb-app`      | landed; evidence under `qa/windows/phase-3/`                                |
+| 4 Windows Desktop                                  | landed; evidence under `qa/windows/phase-4/`                                |
+| 5 Persistent host and GA hardening                 | installer/UI and local regression hardening implemented; acceptance pending |
 
 ## Persistent execution machine (beta)
 
@@ -91,6 +91,15 @@ startup registration. A hidden supervisor uses absolute executable paths and
 the enrollment's environment; no join or machine code is saved in the launcher.
 Logs append to `<data>\logs\host-daemon.log` and
 `<data>\logs\supervisor.log`.
+
+Desktop broker discovery recognizes the origin-hash directory names produced
+by PowerShell 5.1 and 7, including their IDN and IPv6 spellings. A custom data
+directory must still be supplied explicitly. The broker descriptor is
+published with a current-user-only ACL before token content is written;
+Desktop checks its owner, permissions, file type and content through the same
+opened handle. The [local hardening report](../qa/windows/phase-5/05-local-hardening.md)
+records native discovery, rejection, reconnect and replacement-contention
+tests. These tests do not replace the pending Desktop coexistence acceptance.
 
 Use the exact data and service names printed by the installer. To restart,
 stop its verified supervisor with the generated helper, then start the launcher
@@ -603,13 +612,15 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 - **CI.** The `windows-x64` job (`.github/workflows/ci.yml`) installs, loads
   the native add-ons, runs the ConPTY smoke (teed to
   `qa-artifacts/conpty-smoke.txt` and uploaded with the Turbo run summaries),
-  typechecks and builds `@bb/domain`, `@bb/process-utils`, `@bb/host-daemon`,
-  `@bb/desktop`, `@bb/scripts` and `bb-app`, records the per-package test
-  baseline, and runs the `bb-app` tarball smoke. Only the test step carries
-  `continue-on-error: true`; the ConPTY and tarball smokes fail the job.
-  Phase 4 added the desktop packaging step and the two packaged-app smokes to
-  the same job, and they fail it as well — see "Windows Desktop (Phase 4)"
-  below. The job itself is still not a required check.
+  typechecks/builds, and runs the `bb-app` tarball smoke. Phase 4 added Desktop
+  packaging and the packaged-app/process-hygiene smokes. Phase 5 adds
+  failing-on-error workspace, open-target, secret-storage, Desktop,
+  plugin-build, Pi and full server tests, with focused daemon broker, CLI and
+  app-dialog coverage. Only the remaining baseline step has
+  `continue-on-error: true`. The
+  [hardening report](../qa/windows/phase-5/05-local-hardening.md) distinguishes
+  local verification from unrun external CI. These source changes do not
+  configure a required check or change Windows beta status.
 
 ## Windows Desktop (Phase 4)
 
@@ -874,10 +885,11 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
 - The `bb/no-tmp-path-literal` lint rule runs only in packages with a `lint`
   script (`@bb/app`, `@bb/mobile`); the vitest configs are covered by
   `packages/scripts/test/vitest-config-tmp-literals.test.mjs` instead.
-- The Windows CI leg (`windows-x64` in `.github/workflows/ci.yml`) is not a
-  required check and carries no Turbo cache; its test step runs with
-  `continue-on-error: true`, so it records a baseline and never fails the
-  job.
+- The original Windows CI test baseline used `continue-on-error: true`.
+  Phase 5 adds separate failing-on-error regression steps; the remaining
+  baseline packages keep that exemption. See the
+  [current hardening report](../qa/windows/phase-5/05-local-hardening.md).
+  This local work does not enable a remote required check.
 
 ## Known limitations after Phase 1
 
@@ -940,10 +952,11 @@ tried pwsh.exe, powershell.exe, ComSpec and cmd.exe`. The app renders the
   after checking only that the pid exists; verifying process identity before
   a forced kill is developer tooling, not a product seam, and stays
   unverified.
-- `apps/server/src/services/plugins/update-resolver.ts` calls
-  `git ls-remote <url>` with a Windows path as the URL when a plugin update
-  source is a local path; this is a pre-existing upstream finding, not fixed
-  in this phase.
+- Local Git plugin sources were still broken after Phase 2. Phase 5 hardening
+  recognizes drive-absolute paths, preserves their entered spelling and uses
+  a bounded, separate cache namespace, including for range and nested-plugin
+  installs. Native install/update/marketplace evidence is recorded in
+  [the local hardening report](../qa/windows/phase-5/05-local-hardening.md).
 - `plugins/github/server.ts`'s `run()` helper spawns `gh` with an unsanitized
   inherited environment; this is a pre-existing upstream finding, not fixed
   in this phase.
@@ -1160,3 +1173,7 @@ The final local run exited 0 at head `43ff7f339`. Actual logon restart, clean VM
 with WSL disabled, live Connect, Desktop coexistence, signing and same-head
 external regression jobs remain pending; these measurements do not change
 native Windows from beta to supported.
+
+[Phase 5 local hardening](../qa/windows/phase-5/05-local-hardening.md) records
+the 2026-09-23 regression baseline and subsequent fixes, with test selections,
+exit status and the acceptance checks that remain open.

@@ -238,9 +238,6 @@ jobs:
       - name: Smoke bb-app tarball
         run: pnpm exec turbo run smoke:tarball --filter=bb-app --cache-dir=.turbo/cache --output-logs=new-only
 
-  # Non-required: native Windows is a port in progress (see
-  # docs/superpowers/specs/2026-09-11-native-windows-port-design.md), so this
-  # leg reports a per-package failing-test baseline instead of gating merges.
   # It bypasses ./.github/actions/setup-workspace because install-pnpm.sh has
   # no MINGW64_NT case and no pnpm-win-x64 checksum, and it carries no Turbo
   # cache for the same reason the macOS legs do not.
@@ -290,11 +287,79 @@ jobs:
           --filter=bb-app
           --output-logs=new-only
 
-      - name: Test Windows persistent host
+      - name: Test Windows machine dialog
+        run: pnpm.cmd exec turbo run test --filter=@bb/app --output-logs=new-only -- --maxWorkers=2 src/components/dialogs/AddMachineDialog.test.tsx
+
+      - name: Test Windows workspace and Desktop regressions
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
         run: |
-          pnpm.cmd exec turbo run test --filter=@bb/server --output-logs=new-only -- --maxWorkers=2 test/app/install-machine-powershell.test.ts test/app/bb-app-artifact.test.ts test/app/skeleton.test.ts
+          New-Item -ItemType Directory -Force "$env:TEMP" | Out-Null
+          pnpm.cmd exec turbo run test --filter=@bb/host-workspace --output-logs=new-only -- --maxWorkers=1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm.cmd exec turbo run test --filter=@bb/app --output-logs=new-only -- --maxWorkers=2 src/components/dialogs/AddMachineDialog.test.tsx
+          pnpm.cmd exec turbo run test --filter=@bb/local-open-targets --filter=@bb/secret-storage --filter=@bb/desktop --continue --concurrency=1 --output-logs=new-only -- --maxWorkers=2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd exec turbo run test --filter=@bb/host-daemon --output-logs=new-only -- --maxWorkers=2 src/desktop-browser-broker.test.ts
+          exit $LASTEXITCODE
+
+      - name: Test Windows server regressions
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
+        run: |
+          New-Item -ItemType Directory -Force "$env:TEMP" | Out-Null
+          $taskIso = Join-Path $env:TEMP 'server-test-isolation'
+          @('profile', 'profile/AppData/Roaming', 'profile/AppData/Local', 'gh', 'npm-cache') |
+            ForEach-Object { New-Item -ItemType Directory -Force -Path (Join-Path $taskIso $_) | Out-Null }
+          Set-Content -LiteralPath (Join-Path $taskIso 'gitconfig') -Value "[core]`n  longpaths = true`n  symlinks = true"
+          Set-Content -LiteralPath (Join-Path $taskIso 'global.npmrc') -Value '' -NoNewline
+          $npmCachePath = (Join-Path $taskIso 'npm-cache').Replace('\', '/')
+          Set-Content -LiteralPath (Join-Path $taskIso 'user.npmrc') -Value "registry=http://127.0.0.1:1/`ncache=$npmCachePath"
+
+          $removedNames = @(
+            Get-ChildItem Env: |
+              Where-Object {
+                $_.Name -match '^(?i:(GH_|GITHUB_|NPM_CONFIG_|GIT_CONFIG_|GIT_ASKPASS$|SSH_ASKPASS$|SSH_AUTH_SOCK$|BB_DATA_DIR$|VSCODE_GIT_ASKPASS|GCM_))' -or
+                $_.Name -match '(?i)(TOKEN|AUTH|PASSWORD|SECRET|API_KEY|CREDENTIAL)'
+              } |
+              Select-Object -ExpandProperty Name
+          )
+          foreach ($taskName in $removedNames) {
+            [Environment]::SetEnvironmentVariable($taskName, $null, 'Process')
+          }
+
+          $env:HOME = Join-Path $taskIso 'profile'
+          $env:USERPROFILE = $env:HOME
+          $env:APPDATA = Join-Path $taskIso 'profile/AppData/Roaming'
+          $env:LOCALAPPDATA = Join-Path $taskIso 'profile/AppData/Local'
+          $env:GIT_CONFIG_GLOBAL = Join-Path $taskIso 'gitconfig'
+          $env:GIT_CONFIG_NOSYSTEM = '1'
+          $env:GIT_TERMINAL_PROMPT = '0'
+          $env:GCM_INTERACTIVE = 'never'
+          $env:GH_CONFIG_DIR = Join-Path $taskIso 'gh'
+          $env:NPM_CONFIG_USERCONFIG = Join-Path $taskIso 'user.npmrc'
+          $env:NPM_CONFIG_GLOBALCONFIG = Join-Path $taskIso 'global.npmrc'
+          Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
+
+          pnpm.cmd exec turbo run test --filter=@bb/server --env-mode=loose --output-logs=new-only -- --maxWorkers=1
+          exit $LASTEXITCODE
+
+      - name: Set up Bun for Windows provider regression
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.4.0"
+
+      - name: Test Windows CLI and plugin runtime regressions
+        env:
+          TMP: ${{ github.workspace }}\.smoke-temp
+          TEMP: ${{ github.workspace }}\.smoke-temp
+        run: |
+          pnpm.cmd exec turbo run test --filter=@bb/cli --output-logs=new-only -- --maxWorkers=2 src/__tests__/plugin-cli-broken-pipe.e2e.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd exec turbo run test --filter=@bb/plugin-build --output-logs=new-only -- --maxWorkers=2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd exec turbo run test --filter=bb-plugin-provider-pi --output-logs=new-only -- --maxWorkers=2
           exit $LASTEXITCODE
 
       # continue-on-error, not `|| true`: the step still renders as failed in
@@ -308,7 +373,6 @@ jobs:
           --filter=@bb/domain
           --filter=@bb/process-utils
           --filter=@bb/host-daemon
-          --filter=@bb/desktop
           --filter=@bb/scripts
           --filter=bb-app
           --continue

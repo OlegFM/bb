@@ -539,6 +539,12 @@ local path plugin is never removed to change it: edit it in place and
 `bb plugin reload <id>`, or `bb plugin install path:<new dir>` to move it to
 another directory; both keep its configuration.
 
+On native Windows, a local Git source accepts a drive-absolute path with either
+separator, for example `bb plugin install "git:C:/Work/My Plugin@main"`.
+Quote paths containing spaces. The repository must exist on the server host;
+`git:` installs a managed checkout, while `path:` uses the source in place.
+Drive-relative, UNC and device paths are not supported Git sources.
+
 Git semver ranges
 
 A git source can track releases the way an npm range does, over the

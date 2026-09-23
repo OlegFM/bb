@@ -86,6 +86,11 @@
     resolve that tag again if it moved. A bare spec that reads as a range
     resolves over tags only when no branch or tag has that literal name; when
     both exist the install fails — write `@semver:<range>` or `@ref:<name>`.
+    On native Windows, local Git sources accept drive-absolute paths with either
+    separator: `bb plugin install "git:C:/Work/My Plugin@main"`. Quote paths
+    containing spaces. The path belongs to the server host; `git:` installs a
+    managed checkout, while `path:` uses the source in place. Drive-relative,
+    UNC and device paths are not supported Git sources.
     Installs prompt for confirmation (plugins are full-trust code);
     pass `--yes` to skip. Reinstalling an already-installed managed plugin is
     refused — use `bb plugin update`. Installing a local path for an id that

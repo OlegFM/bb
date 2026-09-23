@@ -56,6 +56,11 @@ bb plugin install git:https://github.com/acme/bb-plugin-notes.git@^1.2.0
 
 A bare HTTP(S) repository URL tracks its default branch. Use the `git:` form
 with an explicit branch, tag, or commit when that tracking intent matters.
+On native Windows, a local repository on the server host can use a quoted
+drive-absolute source, for example `bb plugin install "git:C:/Work/My Plugin@main"`.
+Both path separators are accepted. This installs a managed checkout; use
+`path:` for development in place. Drive-relative, UNC and device paths are not
+supported Git sources.
 Install and update run third-party code with full trust. Interactive commands
 show the resolved source and ask for confirmation. Pass `--yes` only after the
 user confirms that exact source and version.

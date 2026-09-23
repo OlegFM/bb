@@ -44,6 +44,8 @@ recorded on the fork's `windows-native/*` branches; earlier `windows-x64` CI
 runs apply to their recorded heads, not to later unpushed changes. The latest
 [Phase 5 native integration](../qa/windows/phase-5/03-native-integration.md)
 records real isolated persistent-host enrollment in PowerShell 5.1 and 7.
+The subsequent [local hardening report](../qa/windows/phase-5/05-local-hardening.md)
+records Windows regression repairs and their separate verification scope.
 
 The Windows Desktop app lands as part of that beta path: a per-user NSIS
 installer packages the Electron shell together with the `bb-app` runtime it
@@ -255,11 +257,15 @@ rebuild the native dependency, for example `npm rebuild better-sqlite3`.
   `Package Smoke (macos-latest, Node 22.x)`. The Node.js 24 and 26 compatibility
   smoke jobs do not run on pull requests and should not be configured as
   required PR checks.
-- The native Windows job (`windows-x64`) runs the ConPTY smoke, a typecheck
-  and build, a non-blocking per-package test baseline, the `bb-app` tarball
-  smoke, and then packages the desktop app and runs the packaged-app and
-  process-hygiene smokes against it. It is intentionally not a required check
-  while the native Windows path is beta.
+- The native Windows job (`windows-x64`) runs ConPTY, typecheck/build, the
+  `bb-app` tarball smoke, Desktop packaging and packaged-app/process-hygiene
+  smokes. Phase 5 adds failing-on-error tests for workspace, open targets,
+  secret storage, Desktop, plugin-build, Pi and the full server suite, plus
+  focused daemon broker, CLI broken-pipe and app-dialog checks. Other packages retain their
+  non-blocking baseline. See the exact local results and remaining gates in
+  [Phase 5 hardening](../qa/windows/phase-5/05-local-hardening.md). These workflow
+  edits do not establish a passing external run or change required-check
+  settings; native Windows remains beta.
 - `apps/mobile` typecheck, lint, and unit tests run inside the Ubuntu
   `Checks` and `Tests (packages)` jobs like every other workspace package. The
   iOS simulator Maestro flows run in `Mobile E2E`
