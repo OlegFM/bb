@@ -487,53 +487,57 @@ describe("plugin update service and routes", () => {
     });
   });
 
-  it("serializes two updates for one plugin so only one applies", async () => {
-    const before = getInstalledPluginRegistration(db, "updater");
-    if (before === undefined) throw new Error("missing installed updater");
-    const oldRoot = before.rootDir;
-    const oldPackage = await readFile(join(oldRoot, "package.json"), "utf8");
-    const nextCommit = await commitPlugin(repo, "1.1.0");
-    const results = await Promise.all([
-      service.applyUpdate("updater"),
-      service.applyUpdate("updater"),
-    ]);
+  it(
+    "serializes two updates for one plugin so only one applies",
+    async () => {
+      const before = getInstalledPluginRegistration(db, "updater");
+      if (before === undefined) throw new Error("missing installed updater");
+      const oldRoot = before.rootDir;
+      const oldPackage = await readFile(join(oldRoot, "package.json"), "utf8");
+      const nextCommit = await commitPlugin(repo, "1.1.0");
+      const results = await Promise.all([
+        service.applyUpdate("updater"),
+        service.applyUpdate("updater"),
+      ]);
 
-    expect(results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          ok: true,
-          result: expect.objectContaining({ applied: true }),
-        }),
-        expect.objectContaining({
-          ok: true,
-          result: expect.objectContaining({
-            applied: false,
-            outcome: "current",
+      expect(results).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ok: true,
+            result: expect.objectContaining({ applied: true }),
           }),
-        }),
-      ]),
-    );
-    expect(service.listUpdateResults()).toMatchObject([
-      {
-        outcome: "current",
-        installed: { version: nextCommit },
-      },
-    ]);
-    expect(service.list()).toMatchObject([
-      { id: "updater", version: "1.1.0", status: "running" },
-    ]);
-    const updated = getInstalledPluginRegistration(db, "updater");
-    expect(updated).toMatchObject({
-      rootDir: expect.stringContaining(nextCommit),
-      activeArtifactId: expect.any(String),
-    });
-    expect(updated?.rootDir).not.toBe(oldRoot);
-    await stat(oldRoot);
-    expect(await readFile(join(oldRoot, "package.json"), "utf8")).toBe(
-      oldPackage,
-    );
-    expect(listPluginArtifacts(db, "updater")).toHaveLength(2);
-  });
+          expect.objectContaining({
+            ok: true,
+            result: expect.objectContaining({
+              applied: false,
+              outcome: "current",
+            }),
+          }),
+        ]),
+      );
+      expect(service.listUpdateResults()).toMatchObject([
+        {
+          outcome: "current",
+          installed: { version: nextCommit },
+        },
+      ]);
+      expect(service.list()).toMatchObject([
+        { id: "updater", version: "1.1.0", status: "running" },
+      ]);
+      const updated = getInstalledPluginRegistration(db, "updater");
+      expect(updated).toMatchObject({
+        rootDir: expect.stringContaining(nextCommit),
+        activeArtifactId: expect.any(String),
+      });
+      expect(updated?.rootDir).not.toBe(oldRoot);
+      await stat(oldRoot);
+      expect(await readFile(join(oldRoot, "package.json"), "utf8")).toBe(
+        oldPackage,
+      );
+      expect(listPluginArtifacts(db, "updater")).toHaveLength(2);
+    },
+    process.platform === "win32" ? 20_000 : 5_000,
+  );
 
   it("rolls back when a background service crashes during stabilization", async () => {
     const installedCommit = getInstalledPluginRegistration(
@@ -1124,7 +1128,12 @@ describe("plugin update service and routes", () => {
     const migrated = getInstalledPluginRegistration(db, "updater");
     expect(migrated).toMatchObject({
       rootDir: expect.stringContaining(
-        join("plugins", "cache", "git", "local"),
+        join(
+          "plugins",
+          "cache",
+          "git",
+          process.platform === "win32" ? "@local-win" : "local",
+        ),
       ),
       activeArtifactId: expect.any(String),
       gitResolvedCommit: nextCommit,

@@ -1762,18 +1762,34 @@ describe("plugin install flows", () => {
         await writePluginFixture(fixtureDir, { name, version });
         const packDir = join(workDir, "npm-pack");
         await mkdir(packDir, { recursive: true });
+        const packCache = join(workDir, "npm-pack-cache");
         const npm = await resolveTestNpm([
           "pack",
           "--pack-destination",
           packDir,
+          "--cache",
+          packCache,
         ]);
         if (npm === null) throw new Error("npm executable missing");
+        const npmConfig = await resolveTestNpm([
+          "config",
+          "get",
+          "cache",
+          "--cache",
+          packCache,
+        ]);
+        if (npmConfig === null) throw new Error("npm executable missing");
+        const packCacheConfig = await run(npmConfig.command, npmConfig.args, {
+          cwd: fixtureDir,
+          windowsHide: process.platform === "win32",
+        });
+        const normalizeCachePath = (value: string) =>
+          process.platform === "win32" ? value.toLowerCase() : value;
+        expect(normalizeCachePath(packCacheConfig.stdout.trim())).toBe(
+          normalizeCachePath(packCache),
+        );
         await run(npm.command, npm.args, {
           cwd: fixtureDir,
-          env: {
-            ...process.env,
-            npm_config_cache: join(workDir, "npm-pack-cache"),
-          },
           windowsHide: process.platform === "win32",
         });
         const [tarballName] = await readdir(packDir);
@@ -1823,24 +1839,44 @@ describe("plugin install flows", () => {
           server.listen(0, "127.0.0.1", () => resolvePromise(server));
         });
         const port = (registry.address() as AddressInfo).port;
-        const previousCache = process.env.npm_config_cache;
-        const previousPackageLock = process.env.npm_config_package_lock;
-        const previousUserConfig = process.env.NPM_CONFIG_USERCONFIG;
-        const userConfig = join(workDir, "npmrc");
-        await writeFile(
-          userConfig,
-          `@acme:registry=http://127.0.0.1:${port}\nregistry=http://127.0.0.1:${port}\n`,
+        const fixtureConfigNames = new Set([
+          "npm_config_cache",
+          "npm_config_package_lock",
+          "npm_config_registry",
+          "npm_config_userconfig",
+        ]);
+        const previousConfig = Object.entries(process.env).filter(([key]) =>
+          fixtureConfigNames.has(key.toLowerCase()),
         );
-        process.env.NPM_CONFIG_USERCONFIG = userConfig;
-        process.env.npm_config_registry = `http://127.0.0.1:${port}`;
-        process.env.npm_config_cache = join(workDir, "npm-cache");
-        process.env.npm_config_package_lock = "false";
+        const userConfig = join(workDir, "npmrc");
         try {
+          for (const [key] of previousConfig) delete process.env[key];
+          await writeFile(
+            userConfig,
+            `@acme:registry=http://127.0.0.1:${port}\nregistry=http://127.0.0.1:${port}\n`,
+          );
+          process.env.NPM_CONFIG_USERCONFIG = userConfig;
+          process.env.NPM_CONFIG_REGISTRY = `http://127.0.0.1:${port}`;
+          process.env.NPM_CONFIG_CACHE = join(workDir, "npm-cache");
+          process.env.NPM_CONFIG_PACKAGE_LOCK = "false";
+          const installCache = await runInstallCommand("npm", [
+            "config",
+            "get",
+            "cache",
+            "--prefix",
+            fixtureDir,
+          ]);
+          expect(normalizeCachePath(installCache)).toBe(
+            normalizeCachePath(join(workDir, "npm-cache")),
+          );
           const source = `npm:${name}@${version}`;
           const entry = await service.install(source, { kind: "root" });
+          expect(
+            entry.status,
+            entry.statusDetail ?? "missing status detail",
+          ).toBe("running");
           expect(tarballRequests).toBe(1);
           expect(entry.id).toBe("npmhero");
-          expect(entry.status).toBe("running");
           expect(entry.source).toBe(source);
           const prefix = join(
             dataDir,
@@ -1883,20 +1919,13 @@ describe("plugin install flows", () => {
           await stat(prefix);
           expect(listPluginArtifacts(db, "npmhero")).toHaveLength(1);
         } finally {
-          if (previousCache === undefined) {
-            delete process.env.npm_config_cache;
-          } else {
-            process.env.npm_config_cache = previousCache;
+          for (const key of Object.keys(process.env)) {
+            if (fixtureConfigNames.has(key.toLowerCase())) {
+              delete process.env[key];
+            }
           }
-          if (previousPackageLock === undefined) {
-            delete process.env.npm_config_package_lock;
-          } else {
-            process.env.npm_config_package_lock = previousPackageLock;
-          }
-          if (previousUserConfig === undefined) {
-            delete process.env.NPM_CONFIG_USERCONFIG;
-          } else {
-            process.env.NPM_CONFIG_USERCONFIG = previousUserConfig;
+          for (const [key, value] of previousConfig) {
+            if (value !== undefined) process.env[key] = value;
           }
           await new Promise<void>((resolvePromise) =>
             registry.close(() => resolvePromise()),

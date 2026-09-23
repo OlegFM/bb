@@ -5,6 +5,7 @@ import {
   mkdtemp,
   rename,
   rm,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -162,8 +163,15 @@ describe("injected skill source discovery", () => {
     expect(readSkillTreeManifest(secondRoot).treeHash).not.toBe(baseline);
     await rename(renamedReference, secondReference);
 
+    const originalMode = (await stat(secondReference)).mode & 0o777;
     await chmod(secondReference, 0o755);
-    expect(readSkillTreeManifest(secondRoot).treeHash).not.toBe(baseline);
+    const updatedMode = (await stat(secondReference)).mode & 0o777;
+    const updatedHash = readSkillTreeManifest(secondRoot).treeHash;
+    if (updatedMode === originalMode) {
+      expect(updatedHash).toBe(baseline);
+    } else {
+      expect(updatedHash).not.toBe(baseline);
+    }
   });
 
   it("hashes Unicode paths in locale-independent code-point order", () => {

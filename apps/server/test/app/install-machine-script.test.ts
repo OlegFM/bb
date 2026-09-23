@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { createServer as createNetServer } from "node:net";
 import { delimiter, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it as vitestIt } from "vitest";
 
 const SCRIPT_PATH = new URL(
   "../../src/assets/install-machine.sh",
@@ -271,7 +271,22 @@ afterEach(() => {
   }
 });
 
+describe("machine install script source", () => {
+  vitestIt(
+    "retains the POSIX installer entry and artifact integrity contract",
+    () => {
+      const script = readFileSync(SCRIPT_PATH, "utf8");
+      expect(script).toMatch(/^#!\/bin\/sh/u);
+      expect(script).toContain("--join-code");
+      expect(script).toContain("--host-id");
+      expect(script).toContain("--server");
+      expect(script).toContain("x-bb-artifact-sha256");
+    },
+  );
+});
+
 describe("machine install script", () => {
+  const it = vitestIt.skipIf(process.platform === "win32");
   it("rejects missing required flags with usage", () => {
     const fixture = createFixture();
     const result = runScript(["--join-code", "code-only"], fixture);

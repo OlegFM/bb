@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import path from "node:path";
+import { joinHostPath } from "@bb/domain";
 import { COMMAND_TIMEOUT_MS } from "../../constants.js";
 import { ApiError } from "../../errors.js";
 import type { LoggedWorkSessionDeps } from "../../types.js";
@@ -33,8 +33,8 @@ async function readProjectSkill(
     hostId: string;
   },
 ): Promise<ProjectInjectedSkillSource | null> {
-  const candidatePath = path.join(args.skillsRootPath, args.directoryName);
-  const skillFilePath = path.join(candidatePath, SKILL_FILE_NAME);
+  const candidatePath = joinHostPath(args.skillsRootPath, args.directoryName);
+  const skillFilePath = joinHostPath(candidatePath, SKILL_FILE_NAME);
   let result;
   try {
     result = await callHostRetryableOnlineRpc(deps, {
@@ -80,7 +80,7 @@ export async function resolveWorkspaceProjectSkills(
   deps: LoggedWorkSessionDeps,
   args: ResolveWorkspaceProjectSkillsArgs,
 ): Promise<ProjectInjectedSkillSource[]> {
-  const skillsRootPath = path.join(args.workspacePath, ".bb", "skills");
+  const skillsRootPath = joinHostPath(args.workspacePath, ".bb", "skills");
   const result = await callHostRetryableOnlineRpc(deps, {
     hostId: args.hostId,
     timeoutMs: COMMAND_TIMEOUT_MS,

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import matter from "gray-matter";
+import { joinHostPath } from "@bb/domain";
 import { resolveDataDirSkillsRootPath } from "@bb/config/skill-storage-paths";
 import type { HostDaemonInjectedSkillSource } from "@bb/host-daemon-contract";
 import { z } from "zod";
@@ -444,7 +445,7 @@ export function resolveProjectSkillSourceFromContent(
     name: frontmatter.data.name,
     description: frontmatter.data.description,
     sourceRootPath: args.candidatePath,
-    skillFilePath: toSkillFilePath(args.candidatePath),
+    skillFilePath: joinHostPath(args.candidatePath, SKILL_FILE_NAME),
   };
 }
 

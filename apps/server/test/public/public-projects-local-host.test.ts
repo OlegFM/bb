@@ -470,75 +470,88 @@ describe("public project local host routes", () => {
     });
   });
 
-  it("serves project source file content from the local primary source", async () => {
-    await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps, {
-        id: "host-project-file-content",
-      });
-      seedPrimaryHost(harness.deps, host.id);
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-        path: "/tmp/project-file-content",
-      });
+  it.each([
+    {
+      platform: "darwin" as const,
+      sourcePath: "/tmp/project-file-content",
+      filePath: "/tmp/project-file-content/src/app.ts",
+    },
+    {
+      platform: "win32" as const,
+      sourcePath: "C:\\Projects\\project-file-content",
+      filePath: "C:\\Projects\\project-file-content\\src\\app.ts",
+    },
+  ])(
+    "serves project source file content from a $platform host",
+    async ({ platform, sourcePath, filePath }) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps, {
+          id: "host-project-file-content",
+          platform,
+        });
+        seedPrimaryHost(harness.deps, host.id);
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+          path: sourcePath,
+        });
 
-      const filePromise = harness.app.request(
-        `/api/v1/projects/${project.id}/files/content?path=${encodeURIComponent("src/app.ts")}`,
-      );
-      const fileCommand = await waitForQueuedCommand(
-        harness,
-        ({ command }) =>
-          command.type === "host.read_file" &&
-          command.path === "/tmp/project-file-content/src/app.ts",
-      );
-      expect(fileCommand.command).toMatchObject({
-        path: "/tmp/project-file-content/src/app.ts",
-        rootPath: "/tmp/project-file-content",
-      });
-      await reportQueuedCommandSuccess(harness, fileCommand, {
-        path: "/tmp/project-file-content/src/app.ts",
-        content: "console.log('ok');",
-        contentEncoding: "utf8",
-        mimeType: "application/typescript",
-        sizeBytes: 18,
-        sha256: "0".repeat(64),
-      });
+        const filePromise = harness.app.request(
+          `/api/v1/projects/${project.id}/files/content?path=${encodeURIComponent("src/app.ts")}`,
+        );
+        const fileCommand = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "host.read_file" && command.path === filePath,
+        );
+        expect(fileCommand.command).toMatchObject({
+          path: filePath,
+          rootPath: sourcePath,
+        });
+        await reportQueuedCommandSuccess(harness, fileCommand, {
+          path: filePath,
+          content: "console.log('ok');",
+          contentEncoding: "utf8",
+          mimeType: "application/typescript",
+          sizeBytes: 18,
+          sha256: "0".repeat(64),
+        });
 
-      const fileResponse = await filePromise;
-      expect(fileResponse.status).toBe(200);
-      expect(fileResponse.headers.get("content-type")).toContain(
-        "application/typescript",
-      );
-      expect(fileResponse.headers.get("cache-control")).toBe(
-        "private, no-cache",
-      );
-      expect(fileResponse.headers.get("etag")).toBe(`"${"0".repeat(64)}"`);
-      expect(fileResponse.headers.get("x-bb-content-encoding")).toBe("utf8");
-      await expect(fileResponse.text()).resolves.toBe("console.log('ok');");
+        const fileResponse = await filePromise;
+        expect(fileResponse.status).toBe(200);
+        expect(fileResponse.headers.get("content-type")).toContain(
+          "application/typescript",
+        );
+        expect(fileResponse.headers.get("cache-control")).toBe(
+          "private, no-cache",
+        );
+        expect(fileResponse.headers.get("etag")).toBe(`"${"0".repeat(64)}"`);
+        expect(fileResponse.headers.get("x-bb-content-encoding")).toBe("utf8");
+        await expect(fileResponse.text()).resolves.toBe("console.log('ok');");
 
-      const revalidatePromise = harness.app.request(
-        `/api/v1/projects/${project.id}/files/content?path=${encodeURIComponent("src/app.ts")}`,
-        { headers: { "if-none-match": `"${"0".repeat(64)}"` } },
-      );
-      const revalidateCommand = await waitForQueuedCommandAfter(
-        harness,
-        fileCommand.row.cursor,
-        ({ command }) =>
-          command.type === "host.read_file" &&
-          command.path === "/tmp/project-file-content/src/app.ts",
-      );
-      await reportQueuedCommandSuccess(harness, revalidateCommand, {
-        path: "/tmp/project-file-content/src/app.ts",
-        content: "console.log('ok');",
-        contentEncoding: "utf8",
-        mimeType: "application/typescript",
-        sizeBytes: 18,
-        sha256: "0".repeat(64),
+        const revalidatePromise = harness.app.request(
+          `/api/v1/projects/${project.id}/files/content?path=${encodeURIComponent("src/app.ts")}`,
+          { headers: { "if-none-match": `"${"0".repeat(64)}"` } },
+        );
+        const revalidateCommand = await waitForQueuedCommandAfter(
+          harness,
+          fileCommand.row.cursor,
+          ({ command }) =>
+            command.type === "host.read_file" && command.path === filePath,
+        );
+        await reportQueuedCommandSuccess(harness, revalidateCommand, {
+          path: filePath,
+          content: "console.log('ok');",
+          contentEncoding: "utf8",
+          mimeType: "application/typescript",
+          sizeBytes: 18,
+          sha256: "0".repeat(64),
+        });
+        const revalidated = await revalidatePromise;
+        expect(revalidated.status).toBe(304);
+        expect(revalidated.headers.get("etag")).toBe(`"${"0".repeat(64)}"`);
+        expect(revalidated.headers.get("x-bb-content-encoding")).toBe("utf8");
+        expect((await revalidated.arrayBuffer()).byteLength).toBe(0);
       });
-      const revalidated = await revalidatePromise;
-      expect(revalidated.status).toBe(304);
-      expect(revalidated.headers.get("etag")).toBe(`"${"0".repeat(64)}"`);
-      expect(revalidated.headers.get("x-bb-content-encoding")).toBe("utf8");
-      expect((await revalidated.arrayBuffer()).byteLength).toBe(0);
-    });
-  });
+    },
+  );
 });

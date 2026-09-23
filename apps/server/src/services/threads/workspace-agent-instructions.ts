@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { Buffer } from "node:buffer";
 import path from "node:path";
+import { joinHostPath } from "@bb/domain";
 import { COMMAND_TIMEOUT_MS } from "../../constants.js";
 import { ApiError } from "../../errors.js";
 import type { LoggedWorkSessionDeps, ServerLogger } from "../../types.js";
@@ -10,10 +11,7 @@ import { isFsErrorWithCode } from "../lib/fs-errors.js";
 
 export const DATA_DIR_AGENT_INSTRUCTIONS_RELATIVE_PATH = "AGENTS.md";
 
-export const WORKSPACE_AGENT_INSTRUCTIONS_RELATIVE_PATH = path.join(
-  ".bb",
-  "AGENTS.md",
-);
+export const WORKSPACE_AGENT_INSTRUCTIONS_RELATIVE_PATH = ".bb/AGENTS.md";
 
 function readAgentInstructionsFile(
   logger: ServerLogger,
@@ -54,10 +52,7 @@ export async function readWorkspaceAgentInstructions(
   deps: LoggedWorkSessionDeps,
   args: { hostId: string; workspacePath: string },
 ): Promise<string | null> {
-  const filePath = path.join(
-    args.workspacePath,
-    WORKSPACE_AGENT_INSTRUCTIONS_RELATIVE_PATH,
-  );
+  const filePath = joinHostPath(args.workspacePath, ".bb", "AGENTS.md");
   let result;
   try {
     result = await callHostRetryableOnlineRpc(deps, {

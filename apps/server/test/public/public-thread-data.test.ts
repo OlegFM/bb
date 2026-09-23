@@ -42,6 +42,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TelemetryService } from "../../src/services/system/telemetry.js";
 import { readThreadProvisioningStage } from "../../src/services/threads/thread-provisioning-context.js";
 import {
+  listQueuedCommands,
   reportNextEnvironmentAttachSuccess,
   reportQueuedCommandError,
   reportQueuedCommandSuccess,
@@ -57,6 +58,7 @@ import {
   seedQueuedMessage,
   seedEnvironment,
   seedEvent,
+  seedHost,
   seedHostSession,
   seedProjectWithSource,
   seedStoredEvent,
@@ -4176,36 +4178,57 @@ describe("public thread data routes", () => {
     });
   });
 
-  it("resolves thread storage location without a host filesystem command", async () => {
-    await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps);
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-        path: "/tmp/project-source",
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        projectId: project.id,
-        path: "/tmp/project-source",
-      });
-      const thread = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-      });
+  it.each([
+    {
+      platform: "darwin" as const,
+      hostDataDir: "/tmp/bb-host-data",
+      projectPath: "/tmp/project-source",
+      separator: "/",
+    },
+    {
+      platform: "win32" as const,
+      hostDataDir: "C:\\bb-host-data",
+      projectPath: "C:\\Projects\\project-source",
+      separator: "\\",
+    },
+  ])(
+    "resolves $platform thread storage location without a host filesystem command",
+    async ({ platform, hostDataDir, projectPath, separator }) => {
+      await withTestHarness(async (harness) => {
+        const hostId = `host-storage-${platform}`;
+        const { host } = seedHostSession(harness.deps, {
+          id: hostId,
+          platform,
+          dataDir: `${hostDataDir}${separator}${hostId}`,
+        });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+          path: projectPath,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+          path: projectPath,
+        });
+        const thread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+        });
 
-      const response = await harness.app.request(
-        `/api/v1/threads/${thread.id}/thread-storage/location`,
-      );
+        const response = await harness.app.request(
+          `/api/v1/threads/${thread.id}/thread-storage/location`,
+        );
 
-      expect(response.status).toBe(200);
-      expect(
-        threadStorageLocationResponseSchema.parse(await readJson(response)),
-      ).toEqual({
-        hostId: host.id,
-        storageRootPath: `/tmp/bb-host-data/${host.id}/thread-storage/${thread.id}`,
+        expect(response.status).toBe(200);
+        expect(
+          threadStorageLocationResponseSchema.parse(await readJson(response)),
+        ).toEqual({
+          hostId: host.id,
+          storageRootPath: `${hostDataDir}${separator}${host.id}${separator}thread-storage${separator}${thread.id}`,
+        });
       });
-    });
-  });
+    },
+  );
 
   it("lists thread storage paths via host.list_paths", async () => {
     await withTestHarness(async (harness) => {
@@ -4583,9 +4606,123 @@ describe("public thread data routes", () => {
     });
   });
 
-  it("serves absolute-path HTML files via files/raw with preview headers", async () => {
+  it.each([
+    {
+      platform: "darwin" as const,
+      projectPath: "/tmp/project-source",
+      filePath: "/tmp/anywhere/nested/../report.html",
+      normalizedPath: "/tmp/anywhere/report.html",
+    },
+    {
+      platform: "win32" as const,
+      projectPath: "C:\\Projects\\project-source",
+      filePath: "C:\\anywhere\\nested\\..\\report.html",
+      normalizedPath: "C:\\anywhere\\report.html",
+    },
+  ])(
+    "serves absolute-path HTML files from a $platform host with preview headers",
+    async ({ platform, projectPath, filePath, normalizedPath }) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps, { platform });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+          path: projectPath,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+          path: projectPath,
+        });
+        const thread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+        });
+        const html = "<!doctype html><h1>Raw preview</h1>";
+
+        const filePromise = harness.app.request(
+          `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent(filePath)}`,
+        );
+        const fileCommand = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "host.read_file" &&
+            command.path === normalizedPath,
+        );
+        expect(fileCommand.command).toMatchObject({
+          type: "host.read_file",
+          path: normalizedPath,
+        });
+        await reportQueuedCommandSuccess(harness, fileCommand, {
+          path: normalizedPath,
+          content: html,
+          contentEncoding: "utf8",
+          mimeType: "text/html",
+          sizeBytes: Buffer.byteLength(html),
+          sha256: "0".repeat(64),
+        });
+
+        const fileResponse = await filePromise;
+        expect(fileResponse.status).toBe(200);
+        expect(fileResponse.headers.get("content-type")).toBe(
+          "text/html; charset=utf-8",
+        );
+        expect(fileResponse.headers.get("content-security-policy")).toBe(
+          "sandbox allow-scripts",
+        );
+        expect(fileResponse.headers.get("cache-control")).toBe("no-store");
+        expect(fileResponse.headers.get("x-content-type-options")).toBe(
+          "nosniff",
+        );
+        expect(await fileResponse.text()).toBe(html);
+      });
+    },
+  );
+
+  it.each([
+    {
+      platform: "win32" as const,
+      projectPath: "C:\\Projects\\project-source",
+      rawPath: "/tmp/anywhere/report.html",
+    },
+    {
+      platform: "darwin" as const,
+      projectPath: "/tmp/project-source",
+      rawPath: "C:\\anywhere\\report.html",
+    },
+  ])(
+    "rejects a mismatched raw HTML path on a $platform host before RPC",
+    async ({ platform, projectPath, rawPath }) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps, { platform });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+          path: projectPath,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+          path: projectPath,
+        });
+        const thread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+        });
+
+        const response = await harness.app.request(
+          `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent(rawPath)}`,
+        );
+        expect(response.status).toBe(400);
+        await expect(readJson(response)).resolves.toMatchObject({
+          code: "invalid_path",
+        });
+        expect(listQueuedCommands(harness, "host.read_file")).toEqual([]);
+      });
+    },
+  );
+
+  it("preserves host-unavailable response for a valid raw HTML path on an offline host", async () => {
     await withTestHarness(async (harness) => {
-      const { host } = seedHostSession(harness.deps);
+      const host = seedHost(harness.deps);
       const { project } = seedProjectWithSource(harness.deps, {
         hostId: host.id,
         path: "/tmp/project-source",
@@ -4599,43 +4736,15 @@ describe("public thread data routes", () => {
         projectId: project.id,
         environmentId: environment.id,
       });
-      const html = "<!doctype html><h1>Raw preview</h1>";
 
-      const filePromise = harness.app.request(
-        `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent("/tmp/anywhere/report.html")}`,
+      const response = await harness.app.request(
+        `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent("/tmp/report.html")}`,
       );
-      const fileCommand = await waitForQueuedCommand(
-        harness,
-        ({ command }) =>
-          command.type === "host.read_file" &&
-          command.path === "/tmp/anywhere/report.html",
-      );
-      expect(fileCommand.command).toMatchObject({
-        type: "host.read_file",
-        path: "/tmp/anywhere/report.html",
+      expect(response.status).toBe(502);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "host_unavailable",
       });
-      await reportQueuedCommandSuccess(harness, fileCommand, {
-        path: "/tmp/anywhere/report.html",
-        content: html,
-        contentEncoding: "utf8",
-        mimeType: "text/html",
-        sizeBytes: Buffer.byteLength(html),
-        sha256: "0".repeat(64),
-      });
-
-      const fileResponse = await filePromise;
-      expect(fileResponse.status).toBe(200);
-      expect(fileResponse.headers.get("content-type")).toBe(
-        "text/html; charset=utf-8",
-      );
-      expect(fileResponse.headers.get("content-security-policy")).toBe(
-        "sandbox allow-scripts",
-      );
-      expect(fileResponse.headers.get("cache-control")).toBe("no-store");
-      expect(fileResponse.headers.get("x-content-type-options")).toBe(
-        "nosniff",
-      );
-      expect(await fileResponse.text()).toBe(html);
+      expect(listQueuedCommands(harness, "host.read_file")).toEqual([]);
     });
   });
 
@@ -4664,6 +4773,24 @@ describe("public thread data routes", () => {
         code: "invalid_path",
       });
 
+      for (const rawPath of [
+        "C:",
+        "C:relative.html",
+        "K:\\report.html",
+        "\\rooted.html",
+        "\\\\server\\share\\report.html",
+        "\\\\?\\C:\\report.html",
+        "//server/share/report.html",
+      ]) {
+        const driveRelativeResponse = await harness.app.request(
+          `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent(rawPath)}`,
+        );
+        expect(driveRelativeResponse.status).toBe(400);
+        await expect(readJson(driveRelativeResponse)).resolves.toMatchObject({
+          code: "invalid_path",
+        });
+      }
+
       const nonHtmlResponse = await harness.app.request(
         `/api/v1/threads/${thread.id}/files/raw?path=${encodeURIComponent("/tmp/anywhere/data.json")}`,
       );
@@ -4679,6 +4806,7 @@ describe("public thread data routes", () => {
       await expect(readJson(missingPathResponse)).resolves.toMatchObject({
         code: "invalid_request",
       });
+      expect(listQueuedCommands(harness, "host.read_file")).toEqual([]);
     });
   });
 

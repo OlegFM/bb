@@ -10,6 +10,7 @@ import {
 import {
   defaultExperiments,
   encodeClientTurnRequestIdNumber,
+  joinHostPath,
 } from "@bb/domain";
 import { validatePluginProviderDeclaration } from "@get-bb/plugin-sdk/internal/host-policy";
 import type { PluginAgentConfigurationContext } from "@get-bb/plugin-sdk";
@@ -109,19 +110,20 @@ function registerRemoteRuntimeFileResponder(
     sessionId: args.sessionId,
     handle: ({ command }) => {
       if (command.type === "host.list_files") {
-        const prefix = `${command.path}${path.sep}`;
+        const separator = command.path.startsWith("/") ? "/" : "\\";
+        const prefix = `${command.path}${separator}`;
         const files = [...args.files.keys()]
           .filter((filePath) => filePath.startsWith(prefix))
-          .map((filePath) => path.relative(command.path, filePath))
+          .map((filePath) => filePath.slice(prefix.length))
           .filter((relativePath) => {
-            const segments = relativePath.split(path.sep);
+            const segments = relativePath.split(separator);
             return segments.length === 2 && segments[1] === "SKILL.md";
           })
           .sort()
           .slice(0, command.limit)
           .map((relativePath) => ({
-            name: path.basename(relativePath),
-            path: relativePath.split(path.sep).join("/"),
+            name: relativePath.split(separator).at(-1) ?? "",
+            path: relativePath.split(separator).join("/"),
           }));
         return { ok: true, result: { files, truncated: false } };
       }
@@ -1272,7 +1274,7 @@ describe("thread runtime config", () => {
         ...defaultExperiments,
       });
       const workspacePath = "/remote/runtime-agents-workspace";
-      const agentInstructionsPath = path.join(
+      const agentInstructionsPath = joinHostPath(
         workspacePath,
         ".bb",
         "AGENTS.md",
@@ -1370,89 +1372,101 @@ describe("thread runtime config", () => {
     });
   });
 
-  it("enumerates project skills through a non-primary host", async () => {
-    await withTestHarness(async (harness) => {
-      const { host: primary } = seedHostSession(harness.deps, {
-        id: "host-runtime-skills-primary",
-      });
-      const { host, session } = seedHostSession(harness.deps, {
-        id: "host-runtime-skills-remote",
-      });
-      seedPrimaryHost(harness.deps, primary.id);
-      setExperiments(harness.db, {
-        ...defaultExperiments,
-      });
-      const workspacePath = "/remote/runtime-skills-workspace";
-      const skillRootPath = path.join(
-        workspacePath,
-        ".bb",
-        "skills",
-        "remote-review",
-      );
-      const skillFilePath = path.join(skillRootPath, "SKILL.md");
-      const responder = registerRemoteRuntimeFileResponder(harness, {
-        hostId: host.id,
-        sessionId: session.id,
-        files: new Map([
-          [
-            skillFilePath,
+  it.each([
+    {
+      platform: "darwin" as const,
+      workspacePath: "/remote/runtime-skills-workspace",
+    },
+    {
+      platform: "win32" as const,
+      workspacePath: "C:\\remote\\runtime-skills-workspace",
+    },
+  ])(
+    "enumerates project skills through a non-primary $platform host",
+    async ({ platform, workspacePath }) => {
+      await withTestHarness(async (harness) => {
+        const { host: primary } = seedHostSession(harness.deps, {
+          id: "host-runtime-skills-primary",
+        });
+        const { host, session } = seedHostSession(harness.deps, {
+          id: "host-runtime-skills-remote",
+          platform,
+        });
+        seedPrimaryHost(harness.deps, primary.id);
+        setExperiments(harness.db, {
+          ...defaultExperiments,
+        });
+        const skillRootPath = joinHostPath(
+          workspacePath,
+          ".bb",
+          "skills",
+          "remote-review",
+        );
+        const skillFilePath = joinHostPath(skillRootPath, "SKILL.md");
+        const responder = registerRemoteRuntimeFileResponder(harness, {
+          hostId: host.id,
+          sessionId: session.id,
+          files: new Map([
             [
-              "---",
-              "name: remote-review",
-              "description: Review code on the remote host.",
-              "---",
-              "",
-              "# Remote Review",
-            ].join("\n"),
-          ],
-        ]),
-      });
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-        path: workspacePath,
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        projectId: project.id,
-        path: workspacePath,
-      });
-      const thread = seedThread(harness.deps, {
-        environmentId: environment.id,
-        projectId: project.id,
-      });
+              skillFilePath,
+              [
+                "---",
+                "name: remote-review",
+                "description: Review code on the remote host.",
+                "---",
+                "",
+                "# Remote Review",
+              ].join("\n"),
+            ],
+          ]),
+        });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+          path: workspacePath,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+          path: workspacePath,
+        });
+        const thread = seedThread(harness.deps, {
+          environmentId: environment.id,
+          projectId: project.id,
+        });
 
-      const runtimeConfig = await resolveThreadRuntimeCommandConfig(
-        harness.deps,
-        { thread, environment, model: "test-model" },
-      );
+        const runtimeConfig = await resolveThreadRuntimeCommandConfig(
+          harness.deps,
+          { thread, environment, model: "test-model" },
+        );
 
-      expect(runtimeConfig.injectedSkillSources).toContainEqual({
-        kind: "workspace-path",
-        sourceType: "project",
-        name: "remote-review",
-        description: "Review code on the remote host.",
-        sourceRootPath: skillRootPath,
-        skillFilePath,
+        expect(runtimeConfig.injectedSkillSources).toContainEqual({
+          kind: "workspace-path",
+          sourceType: "project",
+          name: "remote-review",
+          description: "Review code on the remote host.",
+          sourceRootPath: skillRootPath,
+          skillFilePath,
+        });
+        expect(responder.requests).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              command: expect.objectContaining({
+                type: "host.list_files",
+                path: joinHostPath(workspacePath, ".bb", "skills"),
+              }),
+            }),
+            expect.objectContaining({
+              command: expect.objectContaining({
+                type: "host.read_file",
+                path: skillFilePath,
+                rootPath: workspacePath,
+              }),
+            }),
+          ]),
+        );
       });
-      expect(responder.requests).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            command: expect.objectContaining({
-              type: "host.list_files",
-              path: path.join(workspacePath, ".bb", "skills"),
-            }),
-          }),
-          expect.objectContaining({
-            command: expect.objectContaining({
-              type: "host.read_file",
-              path: skillFilePath,
-              rootPath: workspacePath,
-            }),
-          }),
-        ]),
-      );
-    });
-  });
+    },
+  );
 
   it("injects shared host skills into thread runtime configuration", async () => {
     await withTestHarness(
@@ -1467,7 +1481,7 @@ describe("thread runtime config", () => {
           id: "host-runtime-shared-skills",
         });
         const workspacePath = "/remote/runtime-shared-skills";
-        const skillFilePath = path.join(
+        const skillFilePath = joinHostPath(
           workspacePath,
           ".agents",
           "skills",
@@ -1514,7 +1528,12 @@ describe("thread runtime config", () => {
           sourceType: "shared-project",
           name: "portable-review",
           description: "Review code from one shared source.",
-          sourceRootPath: path.dirname(skillFilePath),
+          sourceRootPath: joinHostPath(
+            workspacePath,
+            ".agents",
+            "skills",
+            "portable-review",
+          ),
           skillFilePath,
         });
       },

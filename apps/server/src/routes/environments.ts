@@ -1,5 +1,4 @@
 import { parseOptionalInteger } from "../services/lib/validation.js";
-import path from "node:path";
 import {
   countLiveThreadsInEnvironment,
   listEnvironments,
@@ -7,6 +6,7 @@ import {
 } from "@bb/db";
 import {
   environmentStatusValues,
+  joinHostPath,
   type EnvironmentStatus,
   type ThreadPullRequest,
 } from "@bb/domain";
@@ -539,7 +539,7 @@ export function registerEnvironmentRoutes(app: Hono, deps: AppDeps): void {
     ) {
       throw new ApiError(400, "invalid_request", "Invalid path");
     }
-    const absolutePath = path.join(environment.path, repoRelativePath);
+    const absolutePath = joinHostPath(environment.path, repoRelativePath);
     const ref = resolveDiffFileRef(query);
     const result = await callHostRetryableOnlineRpc(deps, {
       hostId: environment.hostId,

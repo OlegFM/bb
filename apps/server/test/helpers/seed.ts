@@ -95,10 +95,15 @@ export function seedHost(
 
 export function seedHostSession(
   deps: Pick<AppDeps, "db" | "hub">,
-  args: { id?: string; name?: string; platform?: HostPlatform } = {},
+  args: {
+    dataDir?: string;
+    id?: string;
+    name?: string;
+    platform?: HostPlatform;
+  } = {},
 ) {
   const host = seedHost(deps, args);
-  const session = seedSession(deps, host.id, args.platform);
+  const session = seedSession(deps, host.id, args.platform, args.dataDir);
   return { host, session };
 }
 
@@ -113,13 +118,14 @@ export function seedSession(
   deps: Pick<AppDeps, "db" | "hub">,
   hostId: string,
   platform: HostPlatform = "darwin",
+  dataDir = `/tmp/bb-host-data/${hostId}`,
 ) {
   const session = openSession(deps.db, {
     hostId,
     instanceId: "instance-1",
     hostName: "Test Host",
     hostType: "persistent",
-    dataDir: `/tmp/bb-host-data/${hostId}`,
+    dataDir,
     protocolVersion: HOST_DAEMON_PROTOCOL_VERSION,
     heartbeatIntervalMs: 5_000,
     leaseTimeoutMs: 30_000,

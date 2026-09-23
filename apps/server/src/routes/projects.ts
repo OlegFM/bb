@@ -1,4 +1,3 @@
-import path from "node:path";
 import {
   countProjectSources,
   findOrCreateProjectByLocalPathSource,
@@ -47,7 +46,11 @@ import {
   requirePublicProject,
   requirePublicStandardProject,
 } from "../services/lib/entity-lookup.js";
-import { buildHostPathKey, PROMPT_HISTORY_ENTRY_LIMIT } from "@bb/domain";
+import {
+  buildHostPathKey,
+  joinHostPath,
+  PROMPT_HISTORY_ENTRY_LIMIT,
+} from "@bb/domain";
 import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
 import { canonicalizeHostPath } from "../services/hosts/host-paths.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
@@ -700,7 +703,7 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
       {
         hostId: target.hostId,
         ifNoneMatch: context.req.header("if-none-match"),
-        path: path.join(target.path, filePath.relativePath),
+        path: joinHostPath(target.path, filePath.relativePath),
         rootPath: target.path,
       },
       (result) =>

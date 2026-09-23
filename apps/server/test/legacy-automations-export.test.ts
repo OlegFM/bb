@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -75,7 +82,7 @@ describe("exportLegacyAutomationsForPluginImport", () => {
     ).not.toThrow();
   });
 
-  it("refuses to migrate legacy automation rows without plugin export context", () => {
+  it("releases the database after refusing a migration without plugin export context", async () => {
     const dbPath = join(dataDir, "legacy.sqlite");
     const legacyDb = createConnection(dbPath);
     legacyDb.$client.exec(`
@@ -87,6 +94,7 @@ describe("exportLegacyAutomationsForPluginImport", () => {
     expect(() => initDb(dbPath)).toThrow(
       "Cannot migrate legacy automations without dataDir and logger",
     );
+    await rename(dbPath, join(dataDir, "legacy-renamed.sqlite"));
   });
 
   it("exports legacy rows and referenced script files for plugin import", async () => {

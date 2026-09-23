@@ -26,7 +26,10 @@ import {
   assertUsableHostId,
   requirePrimaryHostId,
 } from "../services/hosts/primary-host.js";
-import { requirePublicThreadEnvironment } from "../services/lib/entity-lookup.js";
+import {
+  requireConnectedHostSession,
+  requirePublicThreadEnvironment,
+} from "../services/lib/entity-lookup.js";
 import {
   DEFAULT_PATH_LIST_EXCLUDE_NAMES,
   WORKSPACE_PATH_LIST_INCLUDE_HIDDEN,
@@ -87,10 +90,14 @@ function createRawFilesystemPathUnsupportedError(): ApiError {
 }
 
 function parseRawFilesystemPath(rawPath: string): string {
-  if (rawPath.includes("\0") || !path.isAbsolute(rawPath)) {
+  const isPosixAbsolute = rawPath.startsWith("/") && !rawPath.startsWith("//");
+  const isWindowsDriveAbsolute = /^[A-Za-z]:[\\/]/u.test(rawPath);
+  if (rawPath.includes("\0") || (!isPosixAbsolute && !isWindowsDriveAbsolute)) {
     throw createRawFilesystemPathInvalidError();
   }
-  return path.resolve(rawPath);
+  return isWindowsDriveAbsolute
+    ? path.win32.normalize(rawPath)
+    : path.posix.normalize(rawPath);
 }
 
 function assertHtmlPreviewPath(filePath: string): void {
@@ -138,6 +145,20 @@ async function serveRawFilesystemHtmlFile(
   const filePath = parseRawFilesystemPath(rawPath);
   assertHtmlPreviewPath(filePath);
   const { environment } = requirePublicThreadEnvironment(deps.db, threadId);
+  const hostPlatform = deps.hub.getDaemonPlatformForHost(environment.hostId);
+  if (hostPlatform === null) {
+    requireConnectedHostSession(deps, environment.hostId);
+    throw new ApiError(
+      502,
+      "host_unavailable",
+      "Host platform is unavailable",
+      false,
+    );
+  }
+  const isWindowsDrivePath = !filePath.startsWith("/");
+  if ((hostPlatform === "win32") !== isWindowsDrivePath) {
+    throw createRawFilesystemPathInvalidError();
+  }
   return serveDaemonFileContent(
     deps,
     {

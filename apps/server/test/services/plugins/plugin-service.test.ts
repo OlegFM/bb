@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import semver from "semver";
 import {
@@ -24,7 +25,11 @@ import {
   upsertPluginMarketplace,
   type DbConnection,
 } from "@bb/db";
-import { PLUGIN_SDK_VERSION, type SystemChangeKind } from "@bb/domain";
+import {
+  buildHostPathKey,
+  PLUGIN_SDK_VERSION,
+  type SystemChangeKind,
+} from "@bb/domain";
 import type { Logger } from "@bb/logger";
 import { pluginListResponseSchema } from "@bb/server-contract";
 import { createAiServiceRegistry } from "../../../src/services/ai/ai-service-registry.js";
@@ -431,7 +436,7 @@ describe("plugin service", () => {
       join(importerDir, "server.js"),
       `export default function plugin() {
          globalThis.importerReadShared = async () =>
-           (await import(${JSON.stringify(join(importedDir, "shared.js"))})).SHARED;
+           (await import(${JSON.stringify(pathToFileURL(join(importedDir, "shared.js")).href)})).SHARED;
        }\n`,
     );
     await writeFile(
@@ -465,10 +470,10 @@ describe("plugin service", () => {
       `export default function plugin() {
          globalThis.failImporterRead = async () => {
            const shared = await import(
-             ${JSON.stringify(join(importedDir, "shared.js"))}
+             ${JSON.stringify(pathToFileURL(join(importedDir, "shared.js")).href)}
            );
            const helper = (await import(
-             ${JSON.stringify(join(importedDir, "helper.cjs"))}
+             ${JSON.stringify(pathToFileURL(join(importedDir, "helper.cjs")).href)}
            )).default;
            return shared.SHARED + ":" + helper.H;
          };
@@ -1390,14 +1395,14 @@ function seedEnvironmentAtPath(
       type: "local_path",
       hostId: host.id,
       path: args.path,
-      pathKey: args.path,
+      pathKey: buildHostPathKey(args.path),
     },
   });
   createEnvironment(db, noopNotifier, {
     projectId: project.id,
     hostId: host.id,
     path: args.path,
-    pathKey: args.path,
+    pathKey: buildHostPathKey(args.path),
     status: "ready",
     providerOwnsPath: args.providerOwnsPath,
     environmentProvider: {
