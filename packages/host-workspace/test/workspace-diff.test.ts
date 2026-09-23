@@ -138,6 +138,24 @@ afterEach(async () => {
 });
 
 describe("Workspace.diffFiles", () => {
+  it("diffs an unborn SHA-256 repository using its own empty tree", async () => {
+    const repoPath = await makeTempDir("bb-diff-sha256-");
+    await runGit(["init", "--object-format=sha256", "-b", "main"], {
+      cwd: repoPath,
+    });
+    await write(repoPath, "staged.txt", "pending\n");
+    await runGit(["add", "staged.txt"], { cwd: repoPath });
+    const objectFormat = await runGit(["rev-parse", "--show-object-format"], {
+      cwd: repoPath,
+    });
+    expect(objectFormat.stdout.trim()).toBe("sha256");
+
+    const workspace = new Workspace(repoPath);
+    const diff = await workspace.getDiff({ target: UNCOMMITTED });
+    expect(diff.files).toContain("staged.txt");
+    expect(diff.diff).toContain("+pending");
+  });
+
   it("reports staged and untracked files before the initial commit", async () => {
     const repoPath = await initRepo();
     await write(repoPath, "staged.txt", "staged pending\n");

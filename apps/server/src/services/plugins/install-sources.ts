@@ -169,10 +169,35 @@ function parseGitSource(spec: string): ParsedPluginSource {
   } catch {
     throw new Error(`invalid git url "${urlish}"`);
   }
-  if (decodedUrlish.split("/").some((segment) => segment === "..")) {
+  const windowsDrivePath = /^[A-Za-z]:[\\/]/u.test(urlish);
+  const localUrlish = windowsDrivePath ? urlish.replace(/\\/gu, "/") : urlish;
+  if (
+    decodedUrlish
+      .replace(/\\/gu, "/")
+      .split("/")
+      .some((segment) => segment === "..")
+  ) {
     throw new Error(`invalid git repository path "${urlish}"`);
   }
-  if (/^https?:\/\//.test(urlish)) {
+  if (/^[A-Za-z]:/u.test(urlish) && !windowsDrivePath) {
+    throw new Error(`invalid git url "${urlish}"`);
+  }
+  if (urlish.startsWith("//") || urlish.startsWith("\\\\")) {
+    throw new Error(`invalid git url "${urlish}"`);
+  }
+  if (windowsDrivePath) {
+    assertSafeSegments(
+      decodedUrlish.replace(/\\/gu, "/").slice(3),
+      "git repository path",
+    );
+    const drive = urlish.charAt(0).toUpperCase();
+    url = urlish;
+    host = "@local-win";
+    repoPath = `${drive}/${createHash("sha256")
+      .update(`${drive}${localUrlish.slice(1)}`)
+      .digest("hex")
+      .slice(0, 32)}`;
+  } else if (/^https?:\/\//.test(urlish)) {
     const parsed = new URL(urlish);
     url = urlish;
     host = parsed.host;

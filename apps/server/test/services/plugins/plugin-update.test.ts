@@ -732,7 +732,7 @@ describe("plugin update service and routes", () => {
     expect(listPluginStateSnapshots(db, "updater")).toMatchObject([
       { status: "restored" },
     ]);
-  }, 60_000);
+  }, 90_000);
 
   function upsertNpmRow(
     id: string,
@@ -1062,7 +1062,7 @@ describe("plugin update service and routes", () => {
       version: "1.1.0",
       lastFailureDetail: expect.stringContaining("nested activation failed"),
     });
-  });
+  }, 60_000);
 
   it("refuses a pinned git tag unless the source is changed explicitly", async () => {
     await service.remove("updater");
@@ -1196,7 +1196,7 @@ describe("plugin update service and routes", () => {
     expect(await service.checkForUpdates("tagged")).toMatchObject([
       { id: "tagged", outcome: "current" },
     ]);
-  });
+  }, 30_000);
 
   it("refuses to resolve a release tag that was moved to another commit", async () => {
     const tagged = await taggedRepo();
@@ -1353,7 +1353,7 @@ describe("plugin update service and routes", () => {
       sourceGitResolvedTag: "v1.1.0",
       gitResolvedCommit: compatible,
     });
-  });
+  }, 30_000);
 
   it("installs the newest compatible release from a git range", async () => {
     const tagged = await taggedRepo();

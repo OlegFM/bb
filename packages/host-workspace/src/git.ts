@@ -34,6 +34,7 @@ export interface GitProcessOptions {
 
 export interface RunGitOptions extends GitProcessOptions {
   cwd: string;
+  input?: string;
   timeoutMs?: number;
   allowFailure?: boolean;
   env?: NodeJS.ProcessEnv;
@@ -275,7 +276,7 @@ export async function runGit(
     throw createGitCommandCancelledError(args, options.signal.reason);
   }
   try {
-    const result = await execFileAsync("git", args, {
+    const command = execFileAsync("git", args, {
       cwd: options.cwd,
       encoding: "utf8",
       env: resolveGitProcessEnv({
@@ -286,6 +287,8 @@ export async function runGit(
       signal: options.signal,
       timeout: options.timeoutMs,
     });
+    if (options.input !== undefined) command.child.stdin?.end(options.input);
+    const result = await command;
     return {
       stdout: result.stdout,
       stderr: result.stderr,

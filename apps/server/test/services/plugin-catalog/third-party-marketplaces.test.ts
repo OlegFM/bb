@@ -144,11 +144,13 @@ describe("third-party marketplaces", () => {
 
   async function useGitUrlRewrite(url: string, repo: string): Promise<void> {
     const configFile = join(dataDir, "gitconfig");
-    await writeFile(
+    await run("git", [
+      "config",
+      "--file",
       configFile,
-      `[url "${repo}"]\n\tinsteadOf = ${url}\n`,
-      "utf8",
-    );
+      `url.${repo}.insteadOf`,
+      url,
+    ]);
     const previous = process.env.GIT_CONFIG_GLOBAL;
     process.env.GIT_CONFIG_GLOBAL = configFile;
     restoreEnv.push(() => {

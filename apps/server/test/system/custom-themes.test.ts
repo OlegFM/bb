@@ -13,6 +13,7 @@ import {
   resolveAppTheme,
   resolveThemeRootPath,
 } from "../../src/services/system/custom-themes.js";
+import { resolvePluginCodeThemePath } from "../../src/services/system/code-themes.js";
 
 async function writeTheme(root: string, name: string, css: string) {
   await mkdir(join(root, name), { recursive: true });
@@ -105,5 +106,28 @@ describe("custom themes service", () => {
         files: { "bb:ocean:dark": { ...darkTheme, name: "bb:ocean:dark" } },
       },
     });
+  });
+
+  it("keeps plugin code theme paths within the native root", async () => {
+    const root = join(themeRoot, "ocean");
+    expect(
+      resolvePluginCodeThemePath(root, "ocean", "dark", "nested/dark.json"),
+    ).toBe(join(root, "nested", "dark.json"));
+    expect(() =>
+      resolvePluginCodeThemePath(
+        root,
+        "ocean",
+        "dark",
+        "../ocean-extra/dark.json",
+      ),
+    ).toThrow(/escapes the theme directory/);
+    expect(() =>
+      resolvePluginCodeThemePath(
+        root,
+        "ocean",
+        "dark",
+        join(themeRoot, "outside.json"),
+      ),
+    ).toThrow(/must be relative/);
   });
 });
