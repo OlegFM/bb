@@ -621,6 +621,8 @@ describe("browser cookie readers", () => {
   });
 
   it("parses Firefox profiles.ini and keeps them inside the root", () => {
+    const firefoxRoot = join(directory, "firefox");
+    const absoluteProfile = join(directory, "custom", "profile");
     const profiles = parseFirefoxProfiles(
       [
         "[Install1]",
@@ -636,13 +638,13 @@ describe("browser cookie readers", () => {
         "[Profile2]",
         "Name=absolute",
         "IsRelative=0",
-        "Path=/custom/profile",
+        `Path=${absoluteProfile}`,
       ].join("\n"),
-      "/home/u/.mozilla/firefox",
+      firefoxRoot,
     );
     expect(profiles).toEqual([
-      { directory: "Profiles/abc.default", name: "default" },
-      { directory: "/custom/profile", name: "absolute" },
+      { directory: join("Profiles", "abc.default"), name: "default" },
+      { directory: absoluteProfile, name: "absolute" },
     ]);
   });
 
@@ -663,7 +665,9 @@ describe("browser cookie readers", () => {
     expect(sources.find((source) => source.id === "firefox")).toEqual({
       id: "firefox",
       name: "Firefox",
-      profiles: [{ directory: "Profiles/p1", name: "main", cookieCount: 2 }],
+      profiles: [
+        { directory: join("Profiles", "p1"), name: "main", cookieCount: 2 },
+      ],
     });
     expect(sources.find((source) => source.id === "safari")?.unavailable).toBe(
       "unsupportedPlatform",
@@ -678,7 +682,10 @@ describe("browser cookie readers", () => {
     const session = { cookies: { set, flushStore } };
     await expect(
       service.importCookies(
-        { sourceId: "firefox", sourceProfileDirectory: "Profiles/other" },
+        {
+          sourceId: "firefox",
+          sourceProfileDirectory: join("Profiles", "other"),
+        },
         session,
       ),
     ).resolves.toEqual({ ok: false, reason: "unknownSourceProfile" });
@@ -689,7 +696,7 @@ describe("browser cookie readers", () => {
       ),
     ).resolves.toEqual({ ok: false, reason: "notInstalled" });
     const outcome = await service.importCookies(
-      { sourceId: "firefox", sourceProfileDirectory: "Profiles/p1" },
+      { sourceId: "firefox", sourceProfileDirectory: join("Profiles", "p1") },
       session,
     );
     expect(outcome).toEqual({

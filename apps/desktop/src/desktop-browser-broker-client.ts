@@ -1,6 +1,8 @@
 import { constants } from "node:fs";
+import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import { join } from "node:path";
+import { domainToUnicode } from "node:url";
 import { WebSocket } from "ws";
 import {
   DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE,
@@ -9,12 +11,16 @@ import {
   desktopBrowserResultSchemas,
 } from "@bb/host-daemon-contract";
 import type { DesktopBrowserBroker } from "./desktop-browser-broker.js";
+import { readWindowsBrokerDescriptor } from "./windows-broker-descriptor.js";
 
-async function readBrokerDescriptor(dataDir: string) {
-  const file = await open(
-    join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE),
-    constants.O_RDONLY | constants.O_NOFOLLOW,
-  );
+export async function readBrokerDescriptor(dataDir: string) {
+  const path = join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE);
+  if (process.platform === "win32") {
+    return desktopBrowserBrokerDescriptorSchema.parse(
+      JSON.parse(await readWindowsBrokerDescriptor(path)),
+    );
+  }
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const stat = await file.stat();
     if (
@@ -32,6 +38,40 @@ async function readBrokerDescriptor(dataDir: string) {
   }
 }
 
+function expandWindowsPowerShell5Ipv6(origin: URL): string | null {
+  const host = origin.hostname;
+  if (!host.startsWith("[") || !host.endsWith("]")) return null;
+  const address = host.slice(1, -1);
+  const halves = address.split("::");
+  if (halves.length > 2) return null;
+  const before = halves[0] ? halves[0].split(":") : [];
+  const after = halves[1] ? halves[1].split(":") : [];
+  const omitted = halves.length === 2 ? 8 - before.length - after.length : 0;
+  if (omitted < 0 || before.length + after.length + omitted !== 8) return null;
+  const expanded = [...before, ...Array<string>(omitted).fill("0"), ...after]
+    .map((group) => group.toUpperCase().padStart(4, "0"))
+    .join(":");
+  return `${origin.protocol}//[${expanded}]${origin.port ? `:${origin.port}` : ""}`;
+}
+
+export function windowsInstallerOriginHashes(serverOrigin: string): string[] {
+  const url = new URL(serverOrigin);
+  const candidates = new Set([url.origin]);
+  if (!url.hostname.startsWith("[")) {
+    const unicodeHost = domainToUnicode(url.hostname);
+    if (unicodeHost && unicodeHost !== url.hostname) {
+      candidates.add(
+        `${url.protocol}//${unicodeHost}${url.port ? `:${url.port}` : ""}`,
+      );
+    }
+  }
+  const powershell5Ipv6 = expandWindowsPowerShell5Ipv6(url);
+  if (powershell5Ipv6 !== null) candidates.add(powershell5Ipv6);
+  return [...candidates].map((candidate) =>
+    createHash("sha256").update(candidate, "utf8").digest("hex"),
+  );
+}
+
 async function readServerBrokerDescriptor(args: {
   dataDir: string;
   homeDir: string;
@@ -41,9 +81,15 @@ async function readServerBrokerDescriptor(args: {
     /[^a-zA-Z0-9.-]/gu,
     "-",
   );
+  const machinesDir = join(args.homeDir, ".bb-machines");
   const dataDirs = new Set([
     args.dataDir,
-    join(args.homeDir, ".bb-machines", serverHost),
+    ...(process.platform === "win32"
+      ? windowsInstallerOriginHashes(args.serverOrigin).map((hash) =>
+          join(machinesDir, hash),
+        )
+      : []),
+    join(machinesDir, serverHost),
   ]);
   for (const dataDir of dataDirs) {
     try {

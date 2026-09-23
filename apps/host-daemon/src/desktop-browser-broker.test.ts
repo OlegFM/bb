@@ -1,9 +1,16 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import { resolveWindowsSystemToolPath } from "@bb/process-utils";
+import {
+  assertSecretFileAclIsPrivate,
+  readSecretFileAcl,
+  resolveCurrentWindowsUser,
+} from "@bb/secret-storage";
 import {
   DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE,
   desktopBrowserBrokerRequestSchema,
@@ -89,7 +96,15 @@ describe("desktop browser broker", () => {
   it("writes a private bound descriptor and removes it at shutdown", async () => {
     const { broker, dataDir } = await setup();
     const path = join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE);
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    if (process.platform === "win32") {
+      const user = await resolveCurrentWindowsUser();
+      const aces = await readSecretFileAcl(path);
+      expect(() =>
+        assertSecretFileAclIsPrivate(path, aces, user),
+      ).not.toThrow();
+    } else {
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+    }
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual(broker.descriptor);
     expect(broker.descriptor.url).toMatch(
       /^ws:\/\/127\.0\.0\.1:\d+\/desktop-browser$/u,
@@ -97,6 +112,94 @@ describe("desktop browser broker", () => {
     await broker.close();
     await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it.runIf(process.platform === "win32")(
+    "retries private publication after a native reader releases the previous descriptor",
+    async () => {
+      const { broker: first, dataDir } = await setup();
+      const path = join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE);
+      const holdScript = String.raw`
+$ErrorActionPreference = 'Stop'
+$stream = [System.IO.File]::Open($env:BB_BROKER_PATH, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]5)
+try {
+  [Console]::Out.WriteLine('READY')
+  [Console]::ReadLine() | Out-Null
+  $reader = New-Object System.IO.StreamReader($stream)
+  [Console]::Out.WriteLine($reader.ReadToEnd())
+} finally {
+  $stream.Dispose()
+}
+`;
+      const child = spawn(
+        resolveWindowsSystemToolPath("WindowsPowerShell\\v1.0\\powershell.exe"),
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-EncodedCommand",
+          Buffer.from(holdScript, "utf16le").toString("base64"),
+        ],
+        { env: { ...process.env, BB_BROKER_PATH: path }, windowsHide: true },
+      );
+      const chunks: string[] = [];
+      child.stdout.on("data", (chunk) => chunks.push(String(chunk)));
+      const closed = new Promise<number | null>((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", resolve);
+      });
+      try {
+        await vi.waitFor(() => expect(chunks.join("")).toContain("READY"), {
+          timeout: 5_000,
+        });
+        const publication = startDesktopBrowserBroker({
+          dataDir,
+          hostId: "host-2",
+          serverUrl: "https://bb.example",
+          onChanged: vi.fn(),
+        }).then(
+          (broker) => ({ broker }),
+          (error: unknown) => ({ error }),
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 700));
+        child.stdin.end("\n");
+        const outcome = await publication;
+        if ("error" in outcome) throw outcome.error;
+        brokers.push(outcome.broker);
+        expect(await closed).toBe(0);
+        expect(chunks.join("")).toContain(first.descriptor.token);
+        expect(JSON.parse(await readFile(path, "utf8"))).toEqual(
+          outcome.broker.descriptor,
+        );
+      } finally {
+        if (child.exitCode === null) {
+          if (!child.stdin.writableEnded) child.stdin.end("\n");
+          child.kill();
+          await closed.catch(() => undefined);
+        }
+      }
+    },
+  );
+
+  it.runIf(process.platform === "win32")(
+    "cleans private staging after a permanent descriptor publication failure",
+    async () => {
+      const dataDir = await mkdtemp(
+        join(tmpdir(), "bb-browser-broker-blocked-"),
+      );
+      directories.push(dataDir);
+      await mkdir(join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE));
+      await expect(
+        startDesktopBrowserBroker({
+          dataDir,
+          hostId: "host-1",
+          serverUrl: "https://bb.example",
+          onChanged: vi.fn(),
+        }),
+      ).rejects.toThrow();
+      expect(await readdir(dataDir)).toEqual([
+        DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE,
+      ]);
+    },
+  );
 
   it("rejects unauthenticated, renderer-origin, wrong-server, and offline clients", async () => {
     const { broker } = await setup();

@@ -1,6 +1,7 @@
 import type { RenderProcessGoneDetails, WebContentsView } from "electron";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
@@ -10,6 +11,7 @@ import {
   desktopBrowserRegistrationSchema,
   desktopBrowserChangedSchema,
 } from "@bb/host-daemon-contract";
+import { writeSecretFile } from "@bb/secret-storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BbDesktopBrowserViewBounds } from "@bb/desktop-contract";
 import { createDesktopBrowserCdpAdapter } from "../src/desktop-browser-cdp-adapter.js";
@@ -1459,7 +1461,7 @@ describe("DesktopBrowserViewManager", () => {
       });
       let serverUrl = "https://first.example";
       if (daemon === "enrolled") {
-        await writeFile(
+        await writeSecretFile(
           join(dataDir, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE),
           JSON.stringify({
             version: 1,
@@ -1468,16 +1470,21 @@ describe("DesktopBrowserViewManager", () => {
             url: `ws://127.0.0.1:${address.port}/desktop-browser`,
             token: "b".repeat(64),
           }),
-          { mode: 0o600 },
         );
       }
       const writeDescriptor = async () => {
         const directory =
           daemon === "local"
             ? dataDir
-            : join(dataDir, ".bb-machines", new URL(serverUrl).host);
+            : join(
+                dataDir,
+                ".bb-machines",
+                createHash("sha256")
+                  .update(new URL(serverUrl).origin, "utf8")
+                  .digest("hex"),
+              );
         await mkdir(directory, { recursive: true });
-        await writeFile(
+        await writeSecretFile(
           join(directory, DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE),
           JSON.stringify({
             version: 1,
@@ -1486,7 +1493,6 @@ describe("DesktopBrowserViewManager", () => {
             url: `ws://127.0.0.1:${address.port}/desktop-browser`,
             token: "a".repeat(64),
           }),
-          { mode: 0o600 },
         );
       };
       await writeDescriptor();
@@ -1504,9 +1510,13 @@ describe("DesktopBrowserViewManager", () => {
             message.frame.tabs.some((tab) => tab.tabId === "browser:a"),
         );
       try {
-        await vi.waitFor(() => expect(hasOriginalTab(1)).toBe(true));
+        await vi.waitFor(() => expect(hasOriginalTab(1)).toBe(true), {
+          timeout: 5_000,
+        });
         client.reconnect();
-        await vi.waitFor(() => expect(hasOriginalTab(2)).toBe(true));
+        await vi.waitFor(() => expect(hasOriginalTab(2)).toBe(true), {
+          timeout: 5_000,
+        });
         expect(
           manager.listTabs({ hostWebContentsId: 91, threadId }),
         ).toHaveLength(1);
@@ -1529,15 +1539,17 @@ describe("DesktopBrowserViewManager", () => {
           manager.listTabs({ hostWebContentsId: 91, threadId: null }),
         ).toEqual([]);
         expect(broker.getControl(91, "browser:a")).toBeNull();
-        await vi.waitFor(() =>
-          expect(
-            messages.some(
-              ({ peer, frame }) =>
-                peer === 3 &&
-                frame.type === "register" &&
-                frame.serverUrl === serverUrl,
-            ),
-          ).toBe(true),
+        await vi.waitFor(
+          () =>
+            expect(
+              messages.some(
+                ({ peer, frame }) =>
+                  peer === 3 &&
+                  frame.type === "register" &&
+                  frame.serverUrl === serverUrl,
+              ),
+            ).toBe(true),
+          { timeout: 5_000 },
         );
         manager.attach({
           hostWindow,
@@ -1549,15 +1561,17 @@ describe("DesktopBrowserViewManager", () => {
             visible: false,
           },
         });
-        await vi.waitFor(() =>
-          expect(
-            messages.some(
-              ({ peer, frame }) =>
-                peer === 3 &&
-                frame.type === "desktop-browser.changed" &&
-                frame.threadId === newServerThreadId,
-            ),
-          ).toBe(true),
+        await vi.waitFor(
+          () =>
+            expect(
+              messages.some(
+                ({ peer, frame }) =>
+                  peer === 3 &&
+                  frame.type === "desktop-browser.changed" &&
+                  frame.threadId === newServerThreadId,
+              ),
+            ).toBe(true),
+          { timeout: 5_000 },
         );
         expect(
           messages

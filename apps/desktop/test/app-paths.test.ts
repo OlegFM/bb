@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   resolveDesktopBridgePath,
@@ -8,33 +9,72 @@ import {
 describe("desktop app paths", () => {
   it("resolves the packaged bb-app bridge beside the active asar", () => {
     const paths: DesktopPathContext = {
-      appPath: "/Applications/bb.app/Contents/Resources/app.asar",
+      appPath: join(
+        "/Applications",
+        "bb.app",
+        "Contents",
+        "Resources",
+        "app.asar",
+      ),
       isPackaged: true,
-      resourcesPath: "/Applications/bb.app/Contents/Resources",
+      resourcesPath: join("/Applications", "bb.app", "Contents", "Resources"),
     };
 
     expect(resolveDesktopBridgePath({ paths })).toBe(
-      "/Applications/bb.app/Contents/Resources/app.asar.unpacked/dist/bb-app-bridge.mjs",
+      join(
+        "/Applications",
+        "bb.app",
+        "Contents",
+        "Resources",
+        "app.asar.unpacked",
+        "dist",
+        "bb-app-bridge.mjs",
+      ),
     );
   });
 
   it("resolves the universal packaged bb-app bridge beside the selected arch asar", () => {
     const paths: DesktopPathContext = {
-      appPath: "/Applications/bb.app/Contents/Resources/app-arm64.asar",
+      appPath: join(
+        "/Applications",
+        "bb.app",
+        "Contents",
+        "Resources",
+        "app-arm64.asar",
+      ),
       isPackaged: true,
-      resourcesPath: "/Applications/bb.app/Contents/Resources",
+      resourcesPath: join("/Applications", "bb.app", "Contents", "Resources"),
     };
 
     expect(resolveDesktopBridgePath({ paths })).toBe(
-      "/Applications/bb.app/Contents/Resources/app-arm64.asar.unpacked/dist/bb-app-bridge.mjs",
+      join(
+        "/Applications",
+        "bb.app",
+        "Contents",
+        "Resources",
+        "app-arm64.asar.unpacked",
+        "dist",
+        "bb-app-bridge.mjs",
+      ),
     );
   });
 
   it("uses the release-specific icon inside packaged apps", () => {
     const paths: DesktopPathContext = {
-      appPath: "/Applications/bb Nightly.app/Contents/Resources/app.asar",
+      appPath: join(
+        "/Applications",
+        "bb Nightly.app",
+        "Contents",
+        "Resources",
+        "app.asar",
+      ),
       isPackaged: true,
-      resourcesPath: "/Applications/bb Nightly.app/Contents/Resources",
+      resourcesPath: join(
+        "/Applications",
+        "bb Nightly.app",
+        "Contents",
+        "Resources",
+      ),
     };
 
     expect(
@@ -43,15 +83,23 @@ describe("desktop app paths", () => {
         paths,
       }),
     ).toBe(
-      "/Applications/bb Nightly.app/Contents/Resources/app.asar/assets/icon-nightly.png",
+      join(
+        "/Applications",
+        "bb Nightly.app",
+        "Contents",
+        "Resources",
+        "app.asar",
+        "assets",
+        "icon-nightly.png",
+      ),
     );
   });
 
   it("keeps the development icon independent of the release channel", () => {
     const paths: DesktopPathContext = {
-      appPath: "/checkout/apps/desktop",
+      appPath: join("/checkout", "apps", "desktop"),
       isPackaged: false,
-      resourcesPath: "/checkout/apps/desktop",
+      resourcesPath: join("/checkout", "apps", "desktop"),
     };
 
     expect(
@@ -59,6 +107,6 @@ describe("desktop app paths", () => {
         packagedIconFileName: "icon-nightly.png",
         paths,
       }),
-    ).toBe("/checkout/apps/desktop/assets/icon-dev.png");
+    ).toBe(join("/checkout", "apps", "desktop", "assets", "icon-dev.png"));
   });
 });

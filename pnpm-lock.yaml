@@ -634,6 +634,9 @@ importers:
       '@bb/server-contract':
         specifier: workspace:*
         version: link:../../packages/server-contract
+      '@bb/secret-storage':
+        specifier: workspace:*
+        version: link:../../packages/secret-storage
       '@bb/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
@@ -715,6 +718,9 @@ importers:
       '@bb/process-utils':
         specifier: workspace:*
         version: link:../../packages/process-utils
+      '@bb/secret-storage':
+        specifier: workspace:*
+        version: link:../../packages/secret-storage
       '@bb/provider-bridge-protocol':
         specifier: workspace:*
         version: link:../../packages/provider-bridge-protocol

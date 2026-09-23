@@ -51,6 +51,7 @@
     "@bb/desktop-contract": "workspace:*",
     "@bb/domain": "workspace:*",
     "@bb/server-contract": "workspace:*",
+    "@bb/secret-storage": "workspace:*",
     "@bb/tsconfig": "workspace:*",
     "@types/node": "^24.9.0",
     "@types/semver": "^7.7.0",

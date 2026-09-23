@@ -182,7 +182,7 @@ describe("stopForeignRuntime", () => {
     expect(processOps.kill).not.toHaveBeenCalled();
   });
 
-  it("escalates to SIGKILL when the process outlives SIGTERM", async () => {
+  it("uses the platform's verified kill behavior when the process survives the first wait", async () => {
     const dataDir = await createDataDir();
     await writeRuntimeFile({ dataDir });
     const waitForExit = vi
@@ -191,16 +191,22 @@ describe("stopForeignRuntime", () => {
       .mockResolvedValueOnce(true);
     const processOps = createProcessOps({ waitForExit });
 
-    await expect(
-      stopForeignRuntime({
-        details: detailsFor(dataDir),
-        killTimeoutMs: 100,
-        processOps,
-        timeoutMs: 1_000,
-      }),
-    ).resolves.toEqual({ kind: "stopped" });
+    const result = await stopForeignRuntime({
+      details: detailsFor(dataDir),
+      killTimeoutMs: 100,
+      processOps,
+      timeoutMs: 1_000,
+    });
     expect(processOps.kill).toHaveBeenNthCalledWith(1, 4_242, "SIGTERM");
-    expect(processOps.kill).toHaveBeenNthCalledWith(2, 4_242, "SIGKILL");
+    if (process.platform === "win32") {
+      expect(result).toEqual({ kind: "still-running", pid: 4_242 });
+      expect(processOps.kill).toHaveBeenCalledTimes(1);
+      await expect(readBbAppRuntimeFile(dataDir)).resolves.not.toBeNull();
+    } else {
+      expect(result).toEqual({ kind: "stopped" });
+      expect(processOps.kill).toHaveBeenNthCalledWith(2, 4_242, "SIGKILL");
+      await expect(readBbAppRuntimeFile(dataDir)).resolves.toBeNull();
+    }
   });
 
   it("reports a process that survives SIGKILL and keeps its record", async () => {

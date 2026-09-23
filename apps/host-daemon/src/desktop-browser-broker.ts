@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
+import { writeSecretFile } from "@bb/secret-storage";
 import {
   DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE,
   desktopBrowserBrokerDescriptorSchema,
@@ -36,6 +37,36 @@ export interface DesktopBrowserBroker {
     command: C,
   ): Promise<DesktopBrowserResult<C["type"]>>;
   close(): Promise<void>;
+}
+
+async function publishDesktopBrowserBrokerDescriptor(
+  path: string,
+  value: string,
+): Promise<void> {
+  const started = Date.now();
+  let firstError: Error | undefined;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await writeSecretFile(path, value);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      const code = "code" in error ? error.code : null;
+      const syscall = "syscall" in error ? error.syscall : null;
+      const destination = "dest" in error ? error.dest : undefined;
+      if (
+        process.platform !== "win32" ||
+        (code !== "EPERM" && code !== "EBUSY") ||
+        syscall !== "rename" ||
+        (destination !== undefined && destination !== path)
+      ) {
+        throw error;
+      }
+      firstError ??= error;
+      if (attempt >= 9 || Date.now() - started >= 2_500) throw firstError;
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+  }
 }
 
 export async function startDesktopBrowserBroker(options: {
@@ -252,16 +283,13 @@ export async function startDesktopBrowserBroker(options: {
     options.dataDir,
     DESKTOP_BROWSER_BROKER_DESCRIPTOR_FILE,
   );
-  const temporaryPath = `${descriptorPath}.${randomUUID()}.tmp`;
   try {
     await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
-    await writeFile(temporaryPath, JSON.stringify(descriptor), {
-      mode: 0o600,
-      flag: "wx",
-    });
-    await rename(temporaryPath, descriptorPath);
+    await publishDesktopBrowserBrokerDescriptor(
+      descriptorPath,
+      JSON.stringify(descriptor),
+    );
   } catch (error) {
-    await rm(temporaryPath, { force: true });
     websocketServer.close();
     server.close();
     throw error;
