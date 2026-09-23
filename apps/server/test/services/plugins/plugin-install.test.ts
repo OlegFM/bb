@@ -21,6 +21,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveExecutable, resolveSpawnPlanOrThrow } from "@bb/process-utils";
 import {
   createConnection,
   getInstalledPlugin,
@@ -92,9 +93,39 @@ async function hasBinary(command: string): Promise<boolean> {
   }
 }
 
+async function resolveTestNpm(args: string[]): Promise<{
+  command: string;
+  args: string[];
+} | null> {
+  const launcher = await resolveExecutable({ command: "npm" });
+  if (launcher === null) return null;
+  if (process.platform !== "win32") return { command: "npm", args };
+  const expectedShim = join(dirname(process.execPath), "npm.cmd");
+  if (launcher.toLowerCase() !== expectedShim.toLowerCase()) {
+    throw new Error(`Unexpected npm launcher: ${launcher}`);
+  }
+  const plan = await resolveSpawnPlanOrThrow({ command: "npm", args });
+  const expectedScript = join(
+    dirname(process.execPath),
+    "node_modules",
+    "npm",
+    "bin",
+    "npm-cli.js",
+  );
+  if (
+    plan.command !== process.execPath ||
+    plan.args[0]?.toLowerCase() !== expectedScript.toLowerCase()
+  ) {
+    throw new Error(`Unexpected npm Node entry: ${plan.args[0] ?? "missing"}`);
+  }
+  return plan;
+}
+
 const [hasGit, hasNpm] = await Promise.all([
   hasBinary("git"),
-  hasBinary("npm"),
+  process.platform === "win32"
+    ? resolveTestNpm(["--version"]).then((plan) => plan !== null)
+    : hasBinary("npm"),
 ]);
 
 async function writePluginFixture(
@@ -470,6 +501,21 @@ describe("plugin install flows", () => {
     migrate(db);
     workDir = await mkdtemp(join(tmpdir(), "bb-plugin-install-"));
     dataDir = join(workDir, "data");
+    await writeFile(join(workDir, "npmrc"), "registry=http://127.0.0.1:1/\n");
+    await writeFile(join(workDir, "global-npmrc"), "");
+    vi.stubEnv("NPM_CONFIG_USERCONFIG", join(workDir, "npmrc"));
+    vi.stubEnv("NPM_CONFIG_GLOBALCONFIG", join(workDir, "global-npmrc"));
+    vi.stubEnv("npm_config_cache", join(workDir, "npm-cache"));
+    vi.stubEnv("npm_config_registry", "http://127.0.0.1:1/");
+    for (const key of Object.keys(process.env)) {
+      if (
+        /^(?:npm_config_.*(?:auth|token|password|username|otp)|npm_token|node_auth_token)$/iu.test(
+          key,
+        )
+      ) {
+        vi.stubEnv(key, "");
+      }
+    }
     afterArtifactPromoted = undefined;
     materializationCount = 0;
     service = createPluginService({
@@ -495,6 +541,7 @@ describe("plugin install flows", () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
     await service.stop();
+    vi.unstubAllEnvs();
     await rm(workDir, { recursive: true, force: true });
   });
 
@@ -1715,8 +1762,19 @@ describe("plugin install flows", () => {
         await writePluginFixture(fixtureDir, { name, version });
         const packDir = join(workDir, "npm-pack");
         await mkdir(packDir, { recursive: true });
-        await run("npm", ["pack", "--pack-destination", packDir], {
+        const npm = await resolveTestNpm([
+          "pack",
+          "--pack-destination",
+          packDir,
+        ]);
+        if (npm === null) throw new Error("npm executable missing");
+        await run(npm.command, npm.args, {
           cwd: fixtureDir,
+          env: {
+            ...process.env,
+            npm_config_cache: join(workDir, "npm-pack-cache"),
+          },
+          windowsHide: process.platform === "win32",
         });
         const [tarballName] = await readdir(packDir);
         if (tarballName === undefined)
@@ -1771,9 +1829,10 @@ describe("plugin install flows", () => {
         const userConfig = join(workDir, "npmrc");
         await writeFile(
           userConfig,
-          `@acme:registry=http://127.0.0.1:${port}\nregistry=https://registry.npmjs.org\n`,
+          `@acme:registry=http://127.0.0.1:${port}\nregistry=http://127.0.0.1:${port}\n`,
         );
         process.env.NPM_CONFIG_USERCONFIG = userConfig;
+        process.env.npm_config_registry = `http://127.0.0.1:${port}`;
         process.env.npm_config_cache = join(workDir, "npm-cache");
         process.env.npm_config_package_lock = "false";
         try {

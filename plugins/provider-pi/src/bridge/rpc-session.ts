@@ -429,15 +429,19 @@ export class PiRpcSession {
   }
 
   async closeGracefully(timeoutMs: number): Promise<string | undefined> {
+    const deadline = Date.now() + timeoutMs;
     const child = this.child;
     this.rejectPendingInputConsumptions(
       "Pi session closed before input was consumed",
     );
     this.closed = true;
-    if (!child || child.exited) {
+    if (!child) {
       return this.lastKnownLeafId ?? undefined;
     }
-    const deadline = Date.now() + timeoutMs;
+    if (child.exited) {
+      await child.waitForClose(Math.max(0, deadline - Date.now()));
+      return this.lastKnownLeafId ?? undefined;
+    }
     await child
       .request({ type: "abort" }, Math.max(1, Math.floor(timeoutMs / 2)))
       .catch(() => undefined);
@@ -445,6 +449,7 @@ export class PiRpcSession {
       () => undefined,
     );
     child.closeGracefully();
+    await child.waitForClose(Math.max(0, deadline - Date.now()));
     this.isProcessing = false;
     this.isCompacting = false;
     return this.lastKnownLeafId ?? undefined;

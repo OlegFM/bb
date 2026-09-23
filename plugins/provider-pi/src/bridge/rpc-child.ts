@@ -23,6 +23,7 @@ export const NO_REQUEST_TIMEOUT = 0;
 const STDERR_TAIL_BYTES = 4_096;
 const SIGTERM_GRACE_MS = 4_000;
 const SIGKILL_ESCALATION_MS = 4_000;
+const CLOSE_RELEASE_GRACE_MS = 1_000;
 
 export interface PiRpcChildExitInfo {
   code: number | null;
@@ -146,6 +147,7 @@ export class PiRpcChild {
   private sawResponse = false;
   private exitInfo: PiRpcChildExitInfo | null = null;
   private readonly settledExit: Promise<PiRpcChildExitInfo>;
+  private readonly settledClose: Promise<void>;
   private readonly channelWriter: Writable | null;
   private readonly channelRecorder: ChannelRecorder | null;
   private killEscalation: ReturnType<typeof setTimeout> | null = null;
@@ -157,6 +159,10 @@ export class PiRpcChild {
       undefined;
     this.settledExit = new Promise((resolve) => {
       resolveSettledExit = resolve;
+    });
+    let resolveSettledClose: () => void = () => undefined;
+    this.settledClose = new Promise((resolve) => {
+      resolveSettledClose = resolve;
     });
     const launch = args.launch;
     const platform = args.platform ?? process.platform;
@@ -236,7 +242,10 @@ export class PiRpcChild {
       this.stderrTail = `${this.stderrTail}${error.message}`;
     });
     this.child.on("exit", settleExit);
-    this.child.on("close", (code, signal) => settleExit(code, signal));
+    this.child.on("close", (code, signal) => {
+      settleExit(code, signal);
+      resolveSettledClose();
+    });
   }
 
   get exited(): boolean {
@@ -249,6 +258,25 @@ export class PiRpcChild {
 
   waitForExit(): Promise<PiRpcChildExitInfo> {
     return this.settledExit;
+  }
+
+  async waitForClose(timeoutMs?: number): Promise<void> {
+    if (timeoutMs === undefined) {
+      return this.settledClose;
+    }
+    if (await settlesWithin(this.settledClose, timeoutMs)) {
+      return;
+    }
+    if (!this.exited) {
+      this.endWriters();
+      this.child.kill("SIGKILL");
+    }
+    for (const stream of this.child.stdio) {
+      stream?.destroy();
+    }
+    if (!(await settlesWithin(this.settledClose, CLOSE_RELEASE_GRACE_MS))) {
+      throw new Error("pi child stdio did not close after release");
+    }
   }
 
   request(
@@ -430,6 +458,23 @@ export class PiRpcChild {
         this.args.onChannelMessage(parsed as Record<string, unknown>);
       }
     } catch {}
+  }
+}
+
+async function settlesWithin(
+  promise: Promise<void>,
+  timeoutMs: number,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.then(() => true),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), Math.max(0, timeoutMs));
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

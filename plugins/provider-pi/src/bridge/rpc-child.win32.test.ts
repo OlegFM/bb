@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { spawnPiRpcChild, type PiRpcSpawn } from "./rpc-child.js";
+import { PiRpcChild, spawnPiRpcChild, type PiRpcSpawn } from "./rpc-child.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -57,6 +57,48 @@ function childCallbacks() {
 }
 
 describe("spawnPiRpcChild", () => {
+  it("settles close after a failed spawn", async () => {
+    const missingCommand = join(makeBinDirectory(), "missing-pi.exe");
+    const child = new PiRpcChild({
+      cwd: process.cwd(),
+      env: {},
+      args: [],
+      launch: { command: missingCommand, args: [] },
+      ...childCallbacks(),
+    });
+
+    let closeObserved = false;
+    child.child.once("close", () => {
+      closeObserved = true;
+    });
+    await expect(child.waitForClose()).resolves.toBeUndefined();
+    expect(closeObserved).toBe(true);
+    await child.waitForExit();
+  });
+
+  it("bounds close for a live child at the requested deadline", async () => {
+    const child = new PiRpcChild({
+      cwd: process.cwd(),
+      env: process.env,
+      args: [],
+      launch: {
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => process.exit(0), 2000)"],
+      },
+      ...childCallbacks(),
+    });
+
+    const started = Date.now();
+    try {
+      await child.waitForClose(50);
+      expect(Date.now() - started).toBeLessThan(1500);
+      expect(child.exited).toBe(true);
+    } finally {
+      child.kill();
+      await child.waitForClose();
+    }
+  }, 10_000);
+
   it("spawns the win32-resolved launcher with a hidden console", async () => {
     const binDirectory = makeBinDirectory();
     const exePath = writeExecutable(binDirectory, "pi.exe");

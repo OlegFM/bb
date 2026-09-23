@@ -31,6 +31,21 @@ afterEach(async () => {
   await harness.teardown();
 });
 
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasStopped(pid: number, exited: readonly number[]): boolean {
+  return (
+    !isAlive(pid) && (process.platform === "win32" || exited.includes(pid))
+  );
+}
+
 function turnStart(
   threadId: string,
   text: string,
@@ -314,13 +329,13 @@ it("recovers from one transient model mismatch by respawning", async () => {
   const deadline = Date.now() + 10_000;
   while (
     Date.now() < deadline &&
-    !log.spawned
-      .slice(0, 1)
-      .every((pid) => harness.readProcessLog().exited.includes(pid))
+    !hasStopped(log.spawned[0]!, harness.readProcessLog().exited)
   ) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  expect(harness.readProcessLog().exited).toContain(log.spawned[0]);
+  expect(hasStopped(log.spawned[0]!, harness.readProcessLog().exited)).toBe(
+    true,
+  );
   expect(harness.messages.some((m) => m.method === "error")).toBe(false);
   expect(harness.messages.some((m) => m.method === "session/ended")).toBe(
     false,
@@ -339,13 +354,13 @@ it("a child whose extension never reports ready is a construction error, not a h
     const log = harness.readProcessLog();
     if (
       log.spawned.length > 0 &&
-      log.spawned.every((pid) => log.exited.includes(pid))
+      log.spawned.every((pid) => hasStopped(pid, log.exited))
     )
       break;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   const log = harness.readProcessLog();
-  expect(log.spawned.every((pid) => log.exited.includes(pid))).toBe(true);
+  expect(log.spawned.every((pid) => hasStopped(pid, log.exited))).toBe(true);
 }, 60_000);
 
 it("evicts an idle catalog child", async () => {
@@ -360,11 +375,11 @@ it("evicts an idle catalog child", async () => {
   const deadline = Date.now() + 10_000;
   while (
     Date.now() < deadline &&
-    !harness.readProcessLog().exited.includes(spawned[0]!)
+    !hasStopped(spawned[0]!, harness.readProcessLog().exited)
   ) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  expect(harness.readProcessLog().exited).toContain(spawned[0]);
+  expect(hasStopped(spawned[0]!, harness.readProcessLog().exited)).toBe(true);
   await harness.request((nextId += 1), "model/list", {
     cwd: harness.workspaceDir,
   });

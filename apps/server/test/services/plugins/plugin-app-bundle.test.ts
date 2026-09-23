@@ -3,10 +3,11 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveExecutable, resolveSpawnPlanOrThrow } from "@bb/process-utils";
 import { upsertInstalledPlugin } from "@bb/db";
 import { PLUGIN_SDK_MAJOR, PLUGIN_SDK_VERSION } from "@bb/domain";
 import {
@@ -18,6 +19,34 @@ const BASE = "http://127.0.0.1:3334";
 
 const run = promisify(execFile);
 
+async function resolveTestNpm(args: string[]): Promise<{
+  command: string;
+  args: string[];
+} | null> {
+  const launcher = await resolveExecutable({ command: "npm" });
+  if (launcher === null) return null;
+  if (process.platform !== "win32") return { command: "npm", args };
+  const expectedShim = join(dirname(process.execPath), "npm.cmd");
+  if (launcher.toLowerCase() !== expectedShim.toLowerCase()) {
+    throw new Error(`Unexpected npm launcher: ${launcher}`);
+  }
+  const plan = await resolveSpawnPlanOrThrow({ command: "npm", args });
+  const expectedScript = join(
+    dirname(process.execPath),
+    "node_modules",
+    "npm",
+    "bin",
+    "npm-cli.js",
+  );
+  if (
+    plan.command !== process.execPath ||
+    plan.args[0]?.toLowerCase() !== expectedScript.toLowerCase()
+  ) {
+    throw new Error(`Unexpected npm Node entry: ${plan.args[0] ?? "missing"}`);
+  }
+  return plan;
+}
+
 async function hasBinary(command: string): Promise<boolean> {
   try {
     await run(command, ["--version"]);
@@ -27,7 +56,10 @@ async function hasBinary(command: string): Promise<boolean> {
   }
 }
 
-const hasNpm = await hasBinary("npm");
+const hasNpm =
+  process.platform === "win32"
+    ? (await resolveTestNpm(["--version"])) !== null
+    : await hasBinary("npm");
 
 function npmPersistence(packageName: string, version: string) {
   return {
@@ -103,6 +135,7 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
   afterEach(async () => {
     await harness.pluginService.stop();
     await harness.cleanup();
+    vi.unstubAllEnvs();
   });
 
   it("builds path installs at install time and serves hash-cached assets", async () => {
@@ -580,6 +613,23 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
       { timeout: 180_000 },
       async () => {
         const workDir = join(harness.config.dataDir, "npm-work");
+        const npmrc = join(workDir, "npmrc");
+        await mkdir(workDir, { recursive: true });
+        await writeFile(npmrc, "registry=http://127.0.0.1:1/\n");
+        await writeFile(join(workDir, "global-npmrc"), "");
+        vi.stubEnv("NPM_CONFIG_USERCONFIG", npmrc);
+        vi.stubEnv("NPM_CONFIG_GLOBALCONFIG", join(workDir, "global-npmrc"));
+        vi.stubEnv("npm_config_cache", join(workDir, "npm-cache"));
+        vi.stubEnv("npm_config_registry", "http://127.0.0.1:1/");
+        for (const key of Object.keys(process.env)) {
+          if (
+            /^(?:npm_config_.*(?:auth|token|password|username|otp)|npm_token|node_auth_token)$/iu.test(
+              key,
+            )
+          ) {
+            vi.stubEnv(key, "");
+          }
+        }
 
         const noDistDir = join(workDir, "no-dist");
         await writeAppPluginFixture(noDistDir, { name: "bb-plugin-nodist" });
@@ -634,8 +684,19 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
           ["bb-plugin-prebuilt", prebuiltDir],
           ["bb-plugin-partial", partialDir],
         ] as const) {
-          await run("npm", ["pack", "--pack-destination", packDir], {
+          const npm = await resolveTestNpm([
+            "pack",
+            "--pack-destination",
+            packDir,
+          ]);
+          if (npm === null) throw new Error("npm executable missing");
+          await run(npm.command, npm.args, {
             cwd: dir,
+            env: {
+              ...process.env,
+              npm_config_cache: join(workDir, "npm-pack-cache"),
+            },
+            windowsHide: process.platform === "win32",
           });
           tarballs.set(
             name,

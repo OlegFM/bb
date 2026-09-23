@@ -243,7 +243,7 @@ async function spawnCatalog(
       const activeChild = generation?.child;
       if (activeChild === undefined) return;
       activeChild.kill();
-      await activeChild.waitForExit();
+      await activeChild.waitForClose(8_000);
     },
   };
 }

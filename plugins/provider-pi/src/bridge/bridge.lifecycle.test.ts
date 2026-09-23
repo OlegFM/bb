@@ -43,13 +43,19 @@ function isAlive(pid: number): boolean {
   }
 }
 
+function hasStopped(pid: number, exited: readonly number[]): boolean {
+  return (
+    !isAlive(pid) && (process.platform === "win32" || exited.includes(pid))
+  );
+}
+
 async function expectEveryChildGone(expectedSpawns: number): Promise<void> {
   const deadline = Date.now() + 30_000;
   for (;;) {
     const log = harness.readProcessLog();
     const allExited =
       log.spawned.length >= expectedSpawns &&
-      log.spawned.every((pid) => log.exited.includes(pid) && !isAlive(pid));
+      log.spawned.every((pid) => hasStopped(pid, log.exited));
     if (allExited) {
       expect(log.spawned.length).toBe(expectedSpawns);
       return;
@@ -313,8 +319,7 @@ it("closing the catalog waits for its child to exit", async () => {
   await experimental_closeAllForTests();
   const log = harness.readProcessLog();
   expect(log.spawned).toHaveLength(1);
-  expect(log.exited).toContain(log.spawned[0]);
-  expect(log.spawned.some(isAlive)).toBe(false);
+  expect(hasStopped(log.spawned[0]!, log.exited)).toBe(true);
 }, 90_000);
 
 it("a child that ignores EOF and SIGTERM is SIGKILLed", async () => {
@@ -329,10 +334,6 @@ it("a child that ignores EOF and SIGTERM is SIGKILLed", async () => {
     activeTurnId: null,
   });
   expect(stop.result).toMatchObject({ ok: true });
-  expect(isAlive(pid)).toBe(true);
-  const deadline = Date.now() + 15_000;
-  while (isAlive(pid) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
   expect(isAlive(pid)).toBe(false);
+  expect(harness.readProcessLog().exited).not.toContain(pid);
 }, 90_000);

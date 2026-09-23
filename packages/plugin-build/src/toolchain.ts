@@ -6,7 +6,10 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { omitNpmScriptPolicyEnv } from "@bb/process-utils";
+import {
+  omitNpmScriptPolicyEnv,
+  resolveSpawnPlanOrThrow,
+} from "@bb/process-utils";
 
 const run = promisify(execFile);
 
@@ -159,25 +162,28 @@ export async function resolvePluginBuildToolchain(
       join(staging, "package.json"),
       `${JSON.stringify({ name: "bb-plugin-toolchain", private: true, version: "0.0.0" }, null, 2)}\n`,
     );
-    await run(
-      "npm",
-      [
-        "install",
-        "--prefix",
-        staging,
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-        "--no-package-lock",
-        ...Object.entries(PLUGIN_TOOLCHAIN_PINS).map(
-          ([name, version]) => `${name}@${version}`,
-        ),
-      ],
-      {
-        maxBuffer: 1024 * 1024 * 16,
-        env: omitNpmScriptPolicyEnv(process.env),
-      },
-    );
+    const npmArgs = [
+      "install",
+      "--prefix",
+      staging,
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--no-package-lock",
+      ...Object.entries(PLUGIN_TOOLCHAIN_PINS).map(
+        ([name, version]) => `${name}@${version}`,
+      ),
+    ];
+    const env = omitNpmScriptPolicyEnv(process.env);
+    const launch =
+      process.platform === "win32"
+        ? await resolveSpawnPlanOrThrow({ command: "npm", args: npmArgs, env })
+        : { command: "npm", args: npmArgs };
+    await run(launch.command, launch.args, {
+      maxBuffer: 1024 * 1024 * 16,
+      env,
+      ...(process.platform === "win32" ? { windowsHide: true } : {}),
+    });
     const staged = toolchainFrom(createRequire(join(staging, "noop.js")));
     if (staged === null) {
       throw new Error(
