@@ -1,6 +1,10 @@
 import { execFile, type ExecFileException } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  resolveSpawnPlanOrThrow,
+  SpawnPlanUnavailableError,
+} from "@bb/process-utils";
+import {
   type GitHostPullRequest,
   type GitHostPullRequestCheck,
   type GitHostPullRequestCheckConclusion,
@@ -315,6 +319,37 @@ function getExecFileException(error: unknown): ExecFileException | undefined {
   return error instanceof Error ? (error as ExecFileException) : undefined;
 }
 
+async function runGh(
+  args: string[],
+  options: {
+    cwd: string;
+    shellPath?: string;
+    timeout: number;
+    maxBuffer: number;
+  },
+): Promise<{ stdout: string; stderr: string }> {
+  const env = sanitizeInheritedChildProcessEnv({
+    env: process.env,
+    ...(options.shellPath !== undefined
+      ? { shellPath: options.shellPath }
+      : {}),
+  });
+  const plan = await resolveSpawnPlanOrThrow({
+    command: "gh",
+    args,
+    cwd: options.cwd,
+    env,
+  });
+  return execFileAsync(plan.command, plan.args, {
+    cwd: options.cwd,
+    encoding: "utf8",
+    env,
+    timeout: options.timeout,
+    maxBuffer: options.maxBuffer,
+    windowsHide: true,
+  });
+}
+
 function trimGhOutput(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -324,7 +359,10 @@ function createGitHostCommandFailedError(
   error: unknown,
 ): WorkspaceError {
   const execError = getExecFileException(error);
-  if (execError?.code === "ENOENT") {
+  if (
+    execError?.code === "ENOENT" ||
+    (error instanceof SpawnPlanUnavailableError && error.reason === "not_found")
+  ) {
     return new WorkspaceError(
       "git_host_cli_unavailable",
       "GitHub CLI is not available",
@@ -382,7 +420,10 @@ function ghCommandUnavailable(
   error: unknown,
 ): Extract<GitHostPullRequestLookup, { outcome: "unavailable" }> {
   const execError = getExecFileException(error);
-  if (execError?.code === "ENOENT") {
+  if (
+    execError?.code === "ENOENT" ||
+    (error instanceof SpawnPlanUnavailableError && error.reason === "not_found")
+  ) {
     return { outcome: "unavailable", message: "GitHub CLI is not available" };
   }
   if (execError?.killed) {
@@ -589,13 +630,9 @@ export async function getPullRequestForCurrentBranch(
   ];
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync("gh", ghArgs, {
+    ({ stdout } = await runGh(ghArgs, {
       cwd: args.cwd,
-      encoding: "utf8",
-      env: sanitizeInheritedChildProcessEnv({
-        env: process.env,
-        ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
-      }),
+      ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
       timeout: GH_PR_VIEW_TIMEOUT_MS,
       maxBuffer: GH_PR_VIEW_MAX_BUFFER_BYTES,
     }));
@@ -624,13 +661,9 @@ export async function runPullRequestActionForCurrentBranch(
     target.outcome === "upstream-branch" ? target.selector : null,
   );
   try {
-    await execFileAsync("gh", ghArgs, {
+    await runGh(ghArgs, {
       cwd: args.cwd,
-      encoding: "utf8",
-      env: sanitizeInheritedChildProcessEnv({
-        env: process.env,
-        ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
-      }),
+      ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
       timeout: GH_PR_ACTION_TIMEOUT_MS,
       maxBuffer: GH_PR_ACTION_MAX_BUFFER_BYTES,
     });

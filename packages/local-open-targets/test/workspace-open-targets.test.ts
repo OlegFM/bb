@@ -2048,7 +2048,7 @@ describe("workspace open targets", () => {
       expect(osascriptCall).toBeDefined();
       const script = osascriptCall?.args.join("\n") ?? "";
       expect(script).toContain('tell application "Terminal" to do script');
-      expect(script).toContain(`cd '${workspacePath}'`);
+      expect(script).toContain(JSON.stringify(`cd '${workspacePath}'`));
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
     }
@@ -2083,7 +2083,7 @@ describe("workspace open targets", () => {
       expect(script).toContain(
         'tell application "iTerm" to tell current session of current window to write text',
       );
-      expect(script).toContain(`cd '${workspacePath}'`);
+      expect(script).toContain(JSON.stringify(`cd '${workspacePath}'`));
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
     }
@@ -2118,7 +2118,9 @@ describe("workspace open targets", () => {
       const script = osascriptCall?.args.join("\n") ?? "";
       expect(script).toContain('tell application "Terminal" to do script');
       expect(script).toContain(
-        `cd '${path.dirname(filePath)}' && 'vim' '+call cursor(22,4)' '${filePath}'`,
+        JSON.stringify(
+          `cd '${path.dirname(filePath)}' && 'vim' '+call cursor(22,4)' '${filePath}'`,
+        ),
       );
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
@@ -2158,7 +2160,9 @@ describe("workspace open targets", () => {
       expect(script).toContain(
         'tell application "iTerm" to tell current session of current window to write text',
       );
-      expect(script).toContain(`cd '${workspacePath}' && 'vim' '${filePath}'`);
+      expect(script).toContain(
+        JSON.stringify(`cd '${workspacePath}' && 'vim' '${filePath}'`),
+      );
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
     }
@@ -2194,7 +2198,9 @@ describe("workspace open targets", () => {
       expect(osascriptCall).toBeDefined();
       const script = osascriptCall?.args.join("\n") ?? "";
       expect(script).toContain(
-        `cd '${path.dirname(filePath)}' && 'vim' '--clean' '+call cursor(22,4)' '--' '${filePath}'`,
+        JSON.stringify(
+          `cd '${path.dirname(filePath)}' && 'vim' '--clean' '+call cursor(22,4)' '--' '${filePath}'`,
+        ),
       );
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
@@ -2225,7 +2231,7 @@ describe("workspace open targets", () => {
       expect(osascriptCall).toBeDefined();
       const script = osascriptCall?.args.join("\n") ?? "";
       expect(script).toContain('tell application "Terminal" to do script');
-      expect(script).toContain(`cd '${workspacePath}'`);
+      expect(script).toContain(JSON.stringify(`cd '${workspacePath}'`));
     } finally {
       await rm(workspacePath, { force: true, recursive: true });
     }

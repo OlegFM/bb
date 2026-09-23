@@ -1,13 +1,11 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolveExecutable, resolveSpawnPlanOrThrow } from "@bb/process-utils";
 import { runGit } from "../src/git.js";
 import { Workspace } from "../src/workspace.js";
 
-const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
 
 const localBranch = "bb/review-github-issue-1235-thr_test";
@@ -101,45 +99,98 @@ async function installFakeGh(mode: "found" | "none" | "auth"): Promise<{
 }> {
   const binPath = await makeTempDir("bb-pr-upstream-bin-");
   const logPath = path.join(binPath, "gh.log");
-  const ghPath = path.join(binPath, "gh");
-  await fs.writeFile(
-    ghPath,
-    [
-      "#!/bin/sh",
-      "first=1",
-      'for argument in "$@"; do',
-      '  if [ "$first" -eq 0 ]; then printf "\\t" >> "$TEST_GH_LOG"; fi',
-      '  printf "%s" "$argument" >> "$TEST_GH_LOG"',
-      "  first=0",
-      "done",
-      'printf "\\n" >> "$TEST_GH_LOG"',
-      'if [ "$TEST_GH_MODE" = "auth" ]; then',
-      '  printf "%s\\n" "gh: To get started with GitHub CLI, please run: gh auth login" >&2',
-      "  exit 4",
-      "fi",
-      'if [ "$1" = "pr" ] && [ "$2" = "view" ]; then',
-      '  if [ "$TEST_GH_MODE" = "none" ]; then',
-      '    printf "no pull requests found for branch \\"%s\\"\\n" "$3" >&2',
-      "    exit 1",
-      "  fi",
-      '  printf "%s\\n" "$TEST_GH_PR_JSON"',
-      "  exit 0",
-      "fi",
-      'if [ "$1" = "pr" ] && { [ "$2" = "ready" ] || [ "$2" = "merge" ]; }; then',
-      "  exit 0",
-      "fi",
-      'printf "unexpected gh arguments: %s\\n" "$*" >&2',
-      "exit 2",
-      "",
-    ].join("\n"),
-    "utf8",
+  const ghPath = path.join(
+    binPath,
+    process.platform === "win32" ? "gh.cmd" : "gh",
   );
-  await fs.chmod(ghPath, 0o755);
+  if (process.platform === "win32") {
+    await fs.writeFile(
+      path.join(binPath, "gh-fixture.js"),
+      [
+        'const fs = require("node:fs");',
+        "const args = process.argv.slice(2);",
+        'fs.appendFileSync(process.env.TEST_GH_LOG, `${args.join("\\t")}\\n`);',
+        'if (process.env.TEST_GH_MODE === "auth") {',
+        '  process.stderr.write("gh: To get started with GitHub CLI, please run: gh auth login\\n");',
+        "  process.exit(4);",
+        "}",
+        'if (args[0] === "pr" && args[1] === "view") {',
+        '  if (process.env.TEST_GH_MODE === "none") {',
+        '    process.stderr.write(`no pull requests found for branch "${args[2]}"\\n`);',
+        "    process.exit(1);",
+        "  }",
+        "  process.stdout.write(`${process.env.TEST_GH_PR_JSON}\\n`);",
+        "  process.exit(0);",
+        "}",
+        'if (args[0] === "pr" && ["ready", "merge"].includes(args[1])) process.exit(0);',
+        'process.stderr.write(`unexpected gh arguments: ${args.join(" ")}\\n`);',
+        "process.exit(2);",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(
+      ghPath,
+      '@echo off\r\n@node "%~dp0\\gh-fixture.js" %*\r\n',
+    );
+  } else {
+    await fs.writeFile(
+      ghPath,
+      [
+        "#!/bin/sh",
+        "first=1",
+        'for argument in "$@"; do',
+        '  if [ "$first" -eq 0 ]; then printf "\\t" >> "$TEST_GH_LOG"; fi',
+        '  printf "%s" "$argument" >> "$TEST_GH_LOG"',
+        "  first=0",
+        "done",
+        'printf "\\n" >> "$TEST_GH_LOG"',
+        'if [ "$TEST_GH_MODE" = "auth" ]; then',
+        '  printf "%s\\n" "gh: To get started with GitHub CLI, please run: gh auth login" >&2',
+        "  exit 4",
+        "fi",
+        'if [ "$1" = "pr" ] && [ "$2" = "view" ]; then',
+        '  if [ "$TEST_GH_MODE" = "none" ]; then',
+        '    printf "no pull requests found for branch \\"%s\\"\\n" "$3" >&2',
+        "    exit 1",
+        "  fi",
+        '  printf "%s\\n" "$TEST_GH_PR_JSON"',
+        "  exit 0",
+        "fi",
+        'if [ "$1" = "pr" ] && { [ "$2" = "ready" ] || [ "$2" = "merge" ]; }; then',
+        "  exit 0",
+        "fi",
+        'printf "unexpected gh arguments: %s\\n" "$*" >&2',
+        "exit 2",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.chmod(ghPath, 0o755);
+  }
 
   vi.stubEnv("TEST_GH_LOG", logPath);
   vi.stubEnv("TEST_GH_MODE", mode);
   vi.stubEnv("TEST_GH_PR_JSON", pullRequestJson());
+  vi.stubEnv("GH_CONFIG_DIR", binPath);
+  vi.stubEnv("GH_TOKEN", undefined);
+  vi.stubEnv("GITHUB_TOKEN", undefined);
   vi.stubEnv("PATH", `${binPath}${path.delimiter}${process.env.PATH ?? ""}`);
+  expect(await resolveExecutable({ command: "gh", env: process.env })).toBe(
+    ghPath,
+  );
+  const plan = await resolveSpawnPlanOrThrow({
+    command: "gh",
+    args: ["pr", "view"],
+    env: process.env,
+  });
+  expect(plan.command).toBe(
+    process.platform === "win32" ? process.execPath : "gh",
+  );
+  expect(plan.args).toEqual(
+    process.platform === "win32"
+      ? [path.join(binPath, "gh-fixture.js"), "pr", "view"]
+      : ["pr", "view"],
+  );
   return { logPath };
 }
 
@@ -307,11 +358,21 @@ describe("pull request lookup for differently named upstream branches", () => {
   it("returns unavailable when gh is not installed", async () => {
     const workspacePath = await createTrackedForkWorkspace();
     const binPath = await makeTempDir("bb-pr-upstream-no-gh-");
-    const { stdout } = await execFileAsync("which", ["git"], {
-      encoding: "utf8",
+    const gitPath = await resolveExecutable({
+      command: "git",
+      env: process.env,
     });
-    await fs.symlink(stdout.trim(), path.join(binPath, "git"));
-    vi.stubEnv("PATH", binPath);
+    expect(gitPath).not.toBeNull();
+    vi.stubEnv("GH_CONFIG_DIR", binPath);
+    vi.stubEnv("GH_TOKEN", undefined);
+    vi.stubEnv("GITHUB_TOKEN", undefined);
+    vi.stubEnv(
+      "PATH",
+      `${binPath}${path.delimiter}${path.dirname(gitPath ?? "")}`,
+    );
+    expect(
+      await resolveExecutable({ command: "gh", env: process.env }),
+    ).toBeNull();
 
     await expect(
       new Workspace(workspacePath).getPullRequest(),

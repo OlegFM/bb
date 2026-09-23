@@ -10,9 +10,12 @@ import type {
 } from "@bb/domain";
 import {
   killProcessGroup,
+  resolveSpawnPlanOrThrow,
   sanitizeInheritedChildProcessEnv,
+  spawnPortableProcess,
   spawnPortablePipedProcess,
   supportsProcessGroups,
+  terminateProcessTree,
   type PortableChildProcess,
 } from "@bb/process-utils";
 
@@ -276,16 +279,24 @@ export async function runGit(
     throw createGitCommandCancelledError(args, options.signal.reason);
   }
   try {
-    const command = execFileAsync("git", args, {
+    const env = resolveGitProcessEnv({
+      env: options.env,
+      shellPath: options.shellPath,
+    });
+    const plan = await resolveSpawnPlanOrThrow({
+      command: "git",
+      args,
+      cwd: options.cwd,
+      env,
+    });
+    const command = execFileAsync(plan.command, plan.args, {
       cwd: options.cwd,
       encoding: "utf8",
-      env: resolveGitProcessEnv({
-        env: options.env,
-        shellPath: options.shellPath,
-      }),
+      env,
       maxBuffer: options.maxBufferBytes ?? DEFAULT_BUFFER_BYTES,
       signal: options.signal,
       timeout: options.timeoutMs,
+      windowsHide: true,
     });
     if (options.input !== undefined) command.child.stdin?.end(options.input);
     const result = await command;
@@ -349,14 +360,25 @@ export async function runGitWithNullRecordLimit(
     throw createGitCommandCancelledError(args, options.signal.reason);
   }
 
+  const env = resolveGitProcessEnv({
+    env: options.env,
+    shellPath: options.shellPath,
+  });
+  const plan = await resolveSpawnPlanOrThrow({
+    command: "git",
+    args,
+    cwd: options.cwd,
+    env,
+  }).catch((error: unknown) => {
+    throw createGitCommandFailedError(args, "", error);
+  });
+
   return new Promise((resolve, reject) => {
-    const child = spawn("git", args, {
+    const child = spawn(plan.command, plan.args, {
       cwd: options.cwd,
-      env: resolveGitProcessEnv({
-        env: options.env,
-        shellPath: options.shellPath,
-      }),
+      env,
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
     });
     const stdoutRecords: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
@@ -636,15 +658,39 @@ export async function runGitOutputPipeline(
     env: undefined,
     shellPath: options.shellPath,
   });
+  const [producerPlan, consumerPlan] = await Promise.all([
+    resolveSpawnPlanOrThrow({
+      command: "git",
+      args: producerArgs,
+      cwd: options.cwd,
+      env,
+    }),
+    resolveSpawnPlanOrThrow({
+      command: "git",
+      args: consumerArgs,
+      cwd: options.cwd,
+      env,
+    }),
+  ]).catch((error: unknown) => {
+    if (options.signal?.aborted) {
+      throw createShellPipelineCancelledError(options.signal.reason);
+    }
+    throw new WorkspaceError("shell_pipeline_failed", "shell pipeline failed", {
+      cause: error,
+    });
+  });
+  if (options.signal?.aborted) {
+    throw createShellPipelineCancelledError(options.signal.reason);
+  }
   const producer = spawnPortablePipedProcess({
-    command: "git",
-    args: producerArgs,
+    command: producerPlan.command,
+    args: producerPlan.args,
     cwd: options.cwd,
     env,
   });
   const consumer = spawnPortablePipedProcess({
-    command: "git",
-    args: consumerArgs,
+    command: consumerPlan.command,
+    args: consumerPlan.args,
     cwd: options.cwd,
     env,
   });
@@ -1489,36 +1535,54 @@ async function fetchRemoteBranchesNonInteractively(
   cwd: string,
   options: GitTimeoutOptions,
 ): Promise<FetchRemoteBranchesResult> {
+  const env = resolveGitProcessEnv({
+    shellPath: options.shellPath,
+    env: {
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: "false",
+      SSH_ASKPASS: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+      GCM_INTERACTIVE: "never",
+    },
+  });
+  const args = ["fetch", "--all", "--prune", "--quiet"];
+  let plan;
+  try {
+    plan = await resolveSpawnPlanOrThrow({ command: "git", args, cwd, env });
+  } catch {
+    return { status: "failed" };
+  }
   return new Promise((resolve) => {
-    const child = spawn("git", ["fetch", "--all", "--prune", "--quiet"], {
+    const child = spawnPortableProcess({
+      command: plan.command,
+      args: plan.args,
       cwd,
       detached: supportsProcessGroups(),
       windowsHide: true,
       stdio: "ignore",
-      env: resolveGitProcessEnv({
-        shellPath: options.shellPath,
-        env: {
-          GIT_TERMINAL_PROMPT: "0",
-          GIT_ASKPASS: "false",
-          SSH_ASKPASS: "false",
-          SSH_ASKPASS_REQUIRE: "never",
-          GCM_INTERACTIVE: "never",
-        },
-      }),
+      env,
     });
+    let stopTree: Promise<unknown> | undefined;
     const timeout =
       options.timeoutMs === undefined
         ? undefined
         : setTimeout(() => {
-            killProcessGroup({ child, signal: "SIGKILL" });
+            if (process.platform === "win32") {
+              stopTree = terminateProcessTree({ child, graceMs: 1000 });
+            } else {
+              killProcessGroup({ child, signal: "SIGKILL" });
+            }
           }, options.timeoutMs);
-    child.once("error", () => {
+    const finish = async (status: "fetched" | "failed"): Promise<void> => {
       clearTimeout(timeout);
-      resolve({ status: "failed" });
+      await stopTree?.catch(() => undefined);
+      resolve({ status });
+    };
+    child.once("error", () => {
+      void finish("failed");
     });
     child.once("close", (code) => {
-      clearTimeout(timeout);
-      resolve({ status: code === 0 ? "fetched" : "failed" });
+      void finish(code === 0 ? "fetched" : "failed");
     });
   });
 }

@@ -71,6 +71,26 @@ describe("git ref mutation lock", () => {
     },
   );
 
+  it.runIf(process.platform === "win32")(
+    "serializes junction aliases of one Git common directory",
+    async () => {
+      const parentDir = await makeTempDir("git-ref-lock-junction");
+      const commonDir = path.join(parentDir, "common");
+      const aliasDir = path.join(parentDir, "alias");
+      await fs.mkdir(commonDir);
+      await fs.symlink(commonDir, aliasDir, "junction");
+
+      const [commonStats, aliasStats] = await Promise.all([
+        fs.stat(commonDir, { bigint: true }),
+        fs.stat(aliasDir, { bigint: true }),
+      ]);
+      expect(aliasStats.dev).toBe(commonStats.dev);
+      expect(aliasStats.ino).toBe(commonStats.ino);
+
+      await expectPathsShareLock(commonDir, aliasDir);
+    },
+  );
+
   it.runIf(process.platform === "darwin")(
     "serializes macOS data-volume aliases of one common directory",
     async () => {

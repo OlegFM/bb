@@ -34,6 +34,20 @@ vi.mock("node:child_process", async () => {
   };
 });
 
+vi.mock("@bb/process-utils", async () => {
+  const actual =
+    await vi.importActual<typeof import("@bb/process-utils")>(
+      "@bb/process-utils",
+    );
+  return {
+    ...actual,
+    resolveSpawnPlanOrThrow: async (args: {
+      command: string;
+      args: readonly string[];
+    }) => ({ command: args.command, args: [...args.args] }),
+  };
+});
+
 beforeEach(() => {
   execFileMock.mockReset();
 });
@@ -235,20 +249,16 @@ describe("runPullRequestActionForCurrentBranch", () => {
         action,
       });
 
-      expect(execFileMock).toHaveBeenCalledWith(
-        "gh",
-        expectedArgs,
-        expect.objectContaining({
-          cwd: "/tmp/workspace",
-          encoding: "utf8",
-          env: expect.objectContaining({
-            PATH: "/Users/test/.local/bin:/usr/bin",
-          }),
-          maxBuffer: 16 * 1024 * 1024,
-          timeout: 60_000,
-        }),
-        expect.any(Function),
-      );
+      const ghCall = execFileMock.mock.calls.find(([file]) => file === "gh");
+      expect(ghCall).toBeDefined();
+      expect(ghCall?.[1]).toEqual(expectedArgs);
+      expect(ghCall?.[2]?.cwd).toBe("/tmp/workspace");
+      expect(ghCall?.[2]?.encoding).toBe("utf8");
+      expect(
+        ghCall?.[2]?.env?.[process.platform === "win32" ? "Path" : "PATH"],
+      ).toBe("/Users/test/.local/bin:/usr/bin");
+      expect(ghCall?.[2]?.maxBuffer).toBe(16 * 1024 * 1024);
+      expect(ghCall?.[2]?.timeout).toBe(60_000);
     },
   );
 
@@ -340,17 +350,13 @@ describe("getPullRequestForCurrentBranch", () => {
       outcome: "found",
       pullRequest: { number: 42, state: "OPEN" },
     });
-    expect(execFileMock).toHaveBeenCalledWith(
-      "gh",
-      ["pr", "view", "--json", expect.any(String)],
-      expect.objectContaining({
-        cwd: "/tmp/workspace",
-        env: expect.objectContaining({
-          PATH: "/Users/test/.local/bin:/usr/bin",
-        }),
-      }),
-      expect.any(Function),
-    );
+    const ghCall = execFileMock.mock.calls.find(([file]) => file === "gh");
+    expect(ghCall).toBeDefined();
+    expect(ghCall?.[1]).toEqual(["pr", "view", "--json", expect.any(String)]);
+    expect(ghCall?.[2]?.cwd).toBe("/tmp/workspace");
+    expect(
+      ghCall?.[2]?.env?.[process.platform === "win32" ? "Path" : "PATH"],
+    ).toBe("/Users/test/.local/bin:/usr/bin");
   });
 
   it("returns none when gh reports the branch has no PR", async () => {
