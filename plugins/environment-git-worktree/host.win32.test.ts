@@ -62,8 +62,6 @@ describe.runIf(process.platform === "win32")(
       try {
         await removeWorktree({
           path: workspacePath,
-          timeoutMs: 30_000,
-          force: true,
         });
       } finally {
         stderrWriteSpy.mockRestore();

@@ -29,11 +29,17 @@ measured on native Windows and what is known not to work.
 
 ## Persistent execution machine (beta)
 
+The upstream `bb server install-machine-service` command adopts an existing
+data directory after moving a server and currently supports macOS/Linux only.
+On Windows it fails before stopping the runtime. New Windows execution machines
+use the PowerShell enrollment flow below; automatic service adoption after a
+server move remains unsupported.
+
 Settings → Machines → Add machine has an explicit **Windows PowerShell**
 choice; **macOS / Linux** remains the default regardless of the browser or
 server OS. The Windows choice downloads `/install.ps1` into a unique temporary
 `.ps1`, invokes `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy
-Bypass -File` with single-quoted named arguments, checks the child exit, and
+Bypass -File`, checks the child exit, and
 removes only the downloaded file in `finally`. Download errors terminate the
 command. This does not change the user's persistent execution policy or PATH.
 
@@ -47,22 +53,20 @@ The installer accepts:
 
 | Flag                     | Behavior                                                                                                                          |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `-JoinCode <code>`       | Required server-issued enrollment code.                                                                                           |
-| `-HostId <id>`           | Required host identity returned with the join code.                                                                               |
-| `-Server <origin>`       | Required HTTP(S) origin; credentials, paths, queries, and fragments are rejected.                                                 |
-| `-MachineCode <code>`    | Optional one-time Connect machine code for the account-gated server URL.                                                          |
+| `-BootstrapEnv <name>`   | Environment variable containing the private enrollment bundle; supplied by the generated command.                                 |
 | `-HostDaemonPort <port>` | Optional loopback API port, `1`–`65535` except Desktop's `38887`; fail if an unrelated listener owns an explicitly selected port. |
 | `-Help` / `-h`           | Print usage without enrolling.                                                                                                    |
 
-`bb machine join-code --json` and `sdk.hosts.createJoinCode()` supply
-`{joinCode, hostId, expiresAt}`. For Connect, the server must already be paired;
-`bb connect machine-code --json` currently also requires the **Mobile app**
-experiment (`bb settings experiment mobileApp true`). Use the returned `code`
-and `serverUrl` for `-MachineCode` and `-Server`. The equivalent existing SDK
-operation is the Connect `createMachineCode` RPC through `sdk.plugins.callRpc`;
-the Add machine UI calls it directly. See
-[multiple-devices.md](multiple-devices.md#pair-through-cli-or-sdk) for inputs and
-code expiry. Direct reachable origins omit `-MachineCode`.
+`bb machine create --provider manual --shell powershell` prints the same
+Windows command as the Add machine UI. It retrieves `/install.ps1` with the
+private `X-BB-Enrollment` header. The returned script supplies the bootstrap
+bundle to `bb machine enroll --bootstrap-env`; the bundle includes host and
+server identity, expiry, and any access headers. Configure bb Connect or a
+reachable direct server URL before creation. The SDK's
+`hosts.experimental_getEnrollmentCommand` returns `windowsCommand`, `command`,
+and `expiresAt`. See
+[multiple-devices.md](multiple-devices.md#pair-through-cli-or-sdk) for the full
+CLI and SDK flow. Keep the generated command private and run it before expiry.
 
 The installer only installs the exact host-only `/install/bb-app.tgz` served by
 this server and requires its SHA-256 header before npm runs. It never reuses a
@@ -88,7 +92,7 @@ registers a limited per-user Scheduled Task at logon named
 `bb-host-daemon-<origin-hash>`. If registration is denied, the same name is used
 under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run`. Reruns keep one
 startup registration. A hidden supervisor uses absolute executable paths and
-the enrollment's environment; no join or machine code is saved in the launcher.
+the enrollment's environment; no bootstrap credential is saved in the launcher.
 Logs append to `<data>\logs\host-daemon.log` and
 `<data>\logs\supervisor.log`.
 
@@ -1177,3 +1181,7 @@ native Windows from beta to supported.
 [Phase 5 local hardening](../qa/windows/phase-5/05-local-hardening.md) records
 the 2026-09-23 regression baseline and subsequent fixes, with test selections,
 exit status and the acceptance checks that remain open.
+
+[Upstream integration](../qa/windows/phase-5/06-upstream-integration.md) records
+the merge of upstream `71bd54e9e`, migration compatibility, Windows enrollment,
+Unicode path fixes and the renewed local verification on the merged tree.

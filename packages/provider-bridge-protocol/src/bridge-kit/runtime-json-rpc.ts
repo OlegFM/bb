@@ -21,14 +21,6 @@ export interface ProviderInboundRequest {
 
 export type ProviderRuntimeEvent = JsonRpcObject;
 
-export type JsonValue =
-  | boolean
-  | number
-  | string
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue | undefined };
-
 export const JSON_RPC_INVALID_PARAMS_CODE = -32602;
 
 export class ProviderRequestDecodeError extends Error {
@@ -128,12 +120,6 @@ interface SendJsonRpcErrorArgs {
   message: string;
 }
 
-interface SendProviderRequestDecodeErrorArgs {
-  child: ChildProcess;
-  error: unknown;
-  id: string | number;
-}
-
 interface SendProviderResponseEncodeErrorArgs {
   child: ChildProcess;
   error: unknown;
@@ -146,7 +132,11 @@ interface SettleJsonRpcResponseArgs {
   response: JsonRpcObject;
 }
 
-const closedJsonRpcStdinErrorCodes = new Set(["EPIPE", "ERR_STREAM_DESTROYED"]);
+const closedJsonRpcStdinErrorCodes = new Set([
+  "EPIPE",
+  "EOF",
+  "ERR_STREAM_DESTROYED",
+]);
 const jsonRpcStdinErrorHandledStreams = new WeakSet<Writable>();
 
 function isJsonRpcObject(value: unknown): value is JsonRpcObject {
@@ -375,22 +365,6 @@ export function sendJsonRpcError(args: SendJsonRpcErrorArgs): void {
       },
     }),
   );
-}
-
-export function sendProviderRequestDecodeErrorIfKnown(
-  args: SendProviderRequestDecodeErrorArgs,
-): boolean {
-  if (!(args.error instanceof ProviderRequestDecodeError)) {
-    return false;
-  }
-
-  sendJsonRpcError({
-    child: args.child,
-    id: args.id,
-    message: args.error.message,
-    code: args.error.code,
-  });
-  return true;
 }
 
 export function sendProviderResponseEncodeErrorIfKnown(

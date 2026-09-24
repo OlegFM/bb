@@ -21,10 +21,10 @@ import { readSkillTreeManifest } from "../../src/services/skills/injected-skills
 import type { PluginAgentToolContribution } from "../../src/services/plugins/plugin-service.js";
 import {
   resolvePermissionEscalation,
-  resolveExecutionOptions,
   resolveThreadRuntimeCommandConfig,
 } from "../../src/services/threads/thread-runtime-config.js";
 import {
+  buildExecutionOptions,
   buildThreadStartCommand,
   prepareTurnSubmitCommandPayload,
 } from "../../src/services/threads/thread-commands.js";
@@ -291,25 +291,9 @@ describe("thread runtime config", () => {
         command: "grok",
         args: ["agent", "stdio"],
         env: {},
-        modelCli: {
-          listArgs: ["models"],
-          selectFlag: "--model",
-          primaryModels: ["grok-4.5", "grok-composer-2.5-fast"],
-        },
         permissionCli: {
           full: ["--always-approve"],
           insertAfterArgs: 1,
-        },
-        reasoningCli: {
-          flag: "--reasoning-effort",
-          supportedLevels: ["low", "medium", "high"],
-          levelValues: {
-            none: "low",
-            xhigh: "high",
-            ultracode: "high",
-            max: "high",
-          },
-          defaultLevel: "high",
         },
       },
       providerId: "acp-grok",
@@ -472,13 +456,11 @@ describe("thread runtime config", () => {
           providerId: childProviderId,
         });
 
-        const execution = await resolveExecutionOptions(harness.deps, {
-          threadId: thread.id,
-          requestedExecution: {
-            model: requestedModel,
-            source: "client/turn/requested",
-          },
-        });
+        const execution = await buildExecutionOptions(
+          harness.deps,
+          { model: requestedModel },
+          { threadId: thread.id },
+        );
 
         expect(execution.permissionMode).toBe(expectedPermissionMode);
       });
@@ -508,20 +490,20 @@ describe("thread runtime config", () => {
         providerId: "codex",
       });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: childThread.id,
-        projectDefaults: {
-          providerId: "codex",
-          model: "gpt-5",
-          reasoningLevel: "medium",
-          permissionMode: "accept-edits",
-          serviceTier: "default",
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        { model: "gpt-5" },
+        {
+          threadId: childThread.id,
+          projectDefaults: {
+            providerId: "codex",
+            model: "gpt-5",
+            reasoningLevel: "medium",
+            permissionMode: "accept-edits",
+            serviceTier: "default",
+          },
         },
-        requestedExecution: {
-          model: "gpt-5",
-          source: "client/turn/requested",
-        },
-      });
+      );
 
       expect(execution.permissionMode).toBe("accept-edits");
     });
@@ -556,24 +538,83 @@ describe("thread runtime config", () => {
         providerId: "codex",
       });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: childThread.id,
-        projectDefaults: {
-          providerId: "codex",
-          model: "gpt-5",
-          reasoningLevel: "medium",
-          permissionMode: "accept-edits",
-          serviceTier: "default",
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        { model: "gpt-5" },
+        {
+          threadId: childThread.id,
+          projectDefaults: {
+            providerId: "codex",
+            model: "gpt-5",
+            reasoningLevel: "medium",
+            permissionMode: "accept-edits",
+            serviceTier: "default",
+          },
         },
-        requestedExecution: {
-          model: "gpt-5",
-          source: "client/turn/requested",
-        },
-      });
+      );
 
       expect(execution.permissionMode).toBe("accept-edits");
     });
   });
+
+  it.each([
+    { providerId: "pi", model: "openai/codex-mini", modeSource: "default" },
+    { providerId: "pi", model: "openai/codex-mini", modeSource: "requested" },
+    { providerId: "pi", model: "openai/codex-mini", modeSource: "recorded" },
+    { providerId: "codex", model: "gpt-5", modeSource: "requested" },
+    { providerId: "codex", model: "gpt-5", modeSource: "recorded" },
+  ])(
+    "allows $providerId full mode from $modeSource under an auto parent",
+    async ({ providerId, model, modeSource }) => {
+      await withTestHarness(async (harness) => {
+        const { host } = seedHostSession(harness.deps, {
+          id: "host-runtime-child-full-mode",
+        });
+        const { project } = seedProjectWithSource(harness.deps, {
+          hostId: host.id,
+        });
+        const environment = seedEnvironment(harness.deps, {
+          hostId: host.id,
+          projectId: project.id,
+        });
+        const parentThread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+        });
+        seedThreadRuntimeState(harness.deps, {
+          threadId: parentThread.id,
+          environmentId: environment.id,
+          providerThreadId: "provider-parent-auto",
+          permissionMode: "auto",
+        });
+        const childThread = seedThread(harness.deps, {
+          projectId: project.id,
+          environmentId: environment.id,
+          parentThreadId: parentThread.id,
+          providerId,
+        });
+        if (modeSource === "recorded") {
+          seedThreadRuntimeState(harness.deps, {
+            threadId: childThread.id,
+            environmentId: environment.id,
+            providerThreadId: "provider-child-full",
+            permissionMode: "full",
+          });
+        }
+
+        const execution = await buildExecutionOptions(
+          harness.deps,
+          {
+            model,
+            ...(modeSource === "requested" ? { permissionMode: "full" } : {}),
+          },
+          { threadId: childThread.id },
+        );
+
+        expect(execution.permissionMode).toBe("full");
+      });
+    },
+  );
 
   it("treats ghost parent references as root-thread execution defaults", async () => {
     await withTestHarness(async (harness) => {
@@ -601,20 +642,20 @@ describe("thread runtime config", () => {
         providerId: "codex",
       });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: childThread.id,
-        projectDefaults: {
-          providerId: "codex",
-          model: "gpt-5",
-          reasoningLevel: "medium",
-          permissionMode: "accept-edits",
-          serviceTier: "default",
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        { model: "gpt-5" },
+        {
+          threadId: childThread.id,
+          projectDefaults: {
+            providerId: "codex",
+            model: "gpt-5",
+            reasoningLevel: "medium",
+            permissionMode: "accept-edits",
+            serviceTier: "default",
+          },
         },
-        requestedExecution: {
-          model: "gpt-5",
-          source: "client/turn/requested",
-        },
-      });
+      );
 
       expect(execution.permissionMode).toBe("accept-edits");
     });
@@ -637,14 +678,11 @@ describe("thread runtime config", () => {
         environmentId: environment.id,
       });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: thread.id,
-        requestedExecution: {
-          model: "gpt-5",
-          permissionMode: "accept-edits",
-          source: "client/turn/requested",
-        },
-      });
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        { model: "gpt-5", permissionMode: "accept-edits" },
+        { threadId: thread.id },
+      );
 
       expect(execution.permissionMode).toBe("accept-edits");
     });
@@ -669,14 +707,11 @@ describe("thread runtime config", () => {
       });
 
       await expect(
-        resolveExecutionOptions(harness.deps, {
-          threadId: thread.id,
-          requestedExecution: {
-            model: "openai/codex-mini",
-            permissionMode: "accept-edits",
-            source: "client/turn/requested",
-          },
-        }),
+        buildExecutionOptions(
+          harness.deps,
+          { model: "openai/codex-mini", permissionMode: "accept-edits" },
+          { threadId: thread.id },
+        ),
       ).rejects.toThrow("Provider pi only supports full permission mode.");
     });
   });
@@ -701,15 +736,15 @@ describe("thread runtime config", () => {
           providerId: "pi",
         });
 
-        const execution = await resolveExecutionOptions(harness.deps, {
-          threadId: thread.id,
-          requestedExecution: {
+        const execution = await buildExecutionOptions(
+          harness.deps,
+          {
             model: "openai-codex/gpt-5.6-luna",
             permissionMode: "full",
             reasoningLevel,
-            source: "client/turn/requested",
           },
-        });
+          { threadId: thread.id },
+        );
 
         expect(execution.reasoningLevel).toBe(reasoningLevel);
       });
@@ -735,14 +770,11 @@ describe("thread runtime config", () => {
       });
 
       await expect(
-        resolveExecutionOptions(harness.deps, {
-          threadId: thread.id,
-          requestedExecution: {
-            model: "gpt-5.4",
-            reasoningLevel: "ultracode",
-            source: "client/turn/requested",
-          },
-        }),
+        buildExecutionOptions(
+          harness.deps,
+          { model: "gpt-5.4", reasoningLevel: "ultracode" },
+          { threadId: thread.id },
+        ),
       ).rejects.toThrow(
         "Provider codex does not support ultracode reasoning level. Supported reasoning levels: low, medium, high, xhigh, max, ultra.",
       );
@@ -783,13 +815,11 @@ describe("thread runtime config", () => {
         environmentId: environment.id,
         providerId: "codex",
       });
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: thread.id,
-        requestedExecution: {
-          model: "gpt-5",
-          source: "client/turn/requested",
-        },
-      });
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        { model: "gpt-5" },
+        { threadId: thread.id },
+      );
 
       const command = await buildThreadStartCommand(harness.deps, {
         environment,
@@ -844,18 +874,18 @@ describe("thread runtime config", () => {
           environmentId: environment.id,
           providerId,
         });
-        const execution = await resolveExecutionOptions(harness.deps, {
-          threadId: thread.id,
-          requestedExecution: {
+        const execution = await buildExecutionOptions(
+          harness.deps,
+          {
             model:
               providerId === "codex"
                 ? "gpt-5"
                 : providerId === "pi"
                   ? "pi-model"
                   : "claude-sonnet-4-6",
-            source: "client/turn/requested",
           },
-        });
+          { threadId: thread.id },
+        );
         return buildThreadStartCommand(harness.deps, {
           environment,
           execution,
@@ -1099,21 +1129,19 @@ describe("thread runtime config", () => {
         reasoningLevelOverride: "high",
       });
 
-      const execution = await resolveExecutionOptions(harness.deps, {
-        threadId: thread.id,
-        requestedExecution: { source: "client/turn/requested" },
-      });
+      const execution = await buildExecutionOptions(
+        harness.deps,
+        {},
+        { threadId: thread.id },
+      );
       expect(execution.model).toBe("claude-opus-4-8");
       expect(execution.reasoningLevel).toBe("high");
 
-      const oneOff = await resolveExecutionOptions(harness.deps, {
-        threadId: thread.id,
-        requestedExecution: {
-          model: "claude-sonnet-4-6",
-          reasoningLevel: "low",
-          source: "client/turn/requested",
-        },
-      });
+      const oneOff = await buildExecutionOptions(
+        harness.deps,
+        { model: "claude-sonnet-4-6", reasoningLevel: "low" },
+        { threadId: thread.id },
+      );
       expect(oneOff.model).toBe("claude-sonnet-4-6");
       expect(oneOff.reasoningLevel).toBe("low");
     });
@@ -1143,7 +1171,9 @@ describe("thread runtime config", () => {
         environmentId: environment.id,
       });
 
-      const pluginContexts: PluginAgentConfigurationContext[] = [];
+      const pluginContexts: Array<
+        Omit<PluginAgentConfigurationContext, "pluginMetadata">
+      > = [];
       setPluginAgentContributions({
         listSkillRootContributions: () => [],
         listAgentTools: () => [],

@@ -1,15 +1,6 @@
 import type { IconName } from "@bb/shared-ui/icon";
 import { hostPathSegments } from "@/lib/host-path";
 
-interface RightPanelFileVisual {
-  iconName: IconName;
-  label: string;
-}
-
-interface ResolveRightPanelFileVisualArgs {
-  path: string;
-}
-
 interface GetFileNameFromPathArgs {
   path: string;
 }
@@ -40,23 +31,20 @@ function hasPathDirectorySegment({
   return hostPathSegments(path.toLowerCase()).slice(0, -1).includes(segment);
 }
 
-export function resolveRightPanelFileVisual({
-  path,
-}: ResolveRightPanelFileVisualArgs): RightPanelFileVisual {
+export function resolveRightPanelFileIconName(path: string): IconName {
   const extension = getFileExtension({ path });
   const inReports = hasPathDirectorySegment({ path, segment: "reports" });
-  const inPlans = hasPathDirectorySegment({ path, segment: "plans" });
   const isMarkdown = extension === "md" || extension === "markdown";
   const isHtml = extension === "html" || extension === "htm";
 
   if (inReports && (isMarkdown || isHtml)) {
-    return { iconName: "ChartColumn", label: "Report" };
+    return "ChartColumn";
   }
   if (isMarkdown) {
-    return { iconName: "File", label: inPlans ? "Plan" : "Doc" };
+    return "File";
   }
   if (isHtml) {
-    return { iconName: "AppWindow", label: inPlans ? "Mockup" : "Preview" };
+    return "AppWindow";
   }
-  return { iconName: "Code", label: "Source" };
+  return "Code";
 }

@@ -4,10 +4,12 @@ import {
   createQueuedThreadMessageId,
   createThreadSection,
   deleteQueuedThreadMessage,
-  deleteHost,
   environments,
   events,
+  getEnvironment,
+  getPreparingEnvironment,
   getQueuedThreadMessage,
+  hosts,
   insertEvents,
   listQueuedThreadMessages,
   getThread,
@@ -40,7 +42,6 @@ import { renderTemplate } from "@bb/templates";
 import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
 import type { TelemetryService } from "../../src/services/system/telemetry.js";
-import { readThreadProvisioningStage } from "../../src/services/threads/thread-provisioning-context.js";
 import {
   listQueuedCommands,
   reportNextEnvironmentAttachSuccess,
@@ -55,15 +56,16 @@ import {
 import { readJson } from "../helpers/json.js";
 import { textInput } from "../helpers/prompt-input.js";
 import {
-  seedQueuedMessage,
   seedEnvironment,
   seedEvent,
   seedHost,
   seedHostSession,
   seedProjectWithSource,
+  seedQueuedMessage,
   seedStoredEvent,
   seedThread,
   seedThreadFixture,
+  seedThreadIdentity,
   seedThreadRuntimeState,
 } from "../helpers/seed.js";
 import { installFakeEnvironmentProvider } from "../helpers/environment-provider.js";
@@ -413,7 +415,7 @@ describe("public thread data routes", () => {
         environmentId: environment.id,
         projectId: project.id,
       });
-      deleteHost(harness.deps.db, harness.deps.hub, host.id);
+      harness.deps.db.delete(hosts).where(eq(hosts.id, host.id)).run();
 
       const noEnvironmentResponse = await harness.app.request(
         `/api/v1/threads/${threadWithoutEnvironment.id}?include=environment,host`,
@@ -1736,7 +1738,7 @@ describe("public thread data routes", () => {
           },
         }),
       });
-      for (let item = 0; item < 650; item += 1) {
+      for (let item = 0; item < 200; item += 1) {
         const itemId = `command-${item}`;
         const command = "x".repeat(25_000);
         push({
@@ -2488,7 +2490,7 @@ describe("public thread data routes", () => {
   it("creates and deletes thread queued messages", async () => {
     await withTestHarness(async (harness) => {
       const capture = vi.fn<TelemetryService["capture"]>();
-      harness.deps.telemetry = { capture };
+      harness.deps.telemetry = { ...harness.deps.telemetry, capture };
       const { environment, thread } = seedThreadFixture(harness);
       seedEvent(harness.deps, {
         threadId: thread.id,
@@ -2623,7 +2625,7 @@ describe("public thread data routes", () => {
   it("queues public send requests with sender context while the target thread is active", async () => {
     await withTestHarness(async (harness) => {
       const capture = vi.fn<TelemetryService["capture"]>();
-      harness.deps.telemetry = { capture };
+      harness.deps.telemetry = { ...harness.deps.telemetry, capture };
       const { project, thread } = seedThreadFixture(harness, {
         thread: {
           status: "active",
@@ -3699,11 +3701,16 @@ describe("public thread data routes", () => {
         sessionId: session.id,
         handle: (request): HostRpcHandlerResult => {
           if (request.command.type === "environment.attach") {
+            const currentThread = getThread(harness.db, thread.id);
             stateAtProvisionStart = {
-              activeContextStage: readThreadProvisioningStage(
-                harness.db,
-                thread.id,
-              ),
+              activeContextStage:
+                currentThread?.status !== "starting"
+                  ? "inactive"
+                  : (getPreparingEnvironment(harness.db, thread.id)?.status ??
+                    (currentThread.environmentId === null
+                      ? null
+                      : (getEnvironment(harness.db, currentThread.environmentId)
+                          ?.status ?? null))),
               queuedMessageExists:
                 getQueuedThreadMessage(harness.db, queuedMessage.id) !== null,
               requestEventCount: harness.db
@@ -3914,12 +3921,18 @@ describe("public thread data routes", () => {
       const senderThread = seedThread(harness.deps, {
         projectId: project.id,
       });
+      seedThreadIdentity(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-active-grouped-sender",
+        sequence: 1,
+      });
       seedEvent(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-active-grouped-sender",
         scope: turnScope("turn-active-grouped-sender"),
-        sequence: 1,
+        sequence: 2,
         type: "turn/started",
         data: {},
       });

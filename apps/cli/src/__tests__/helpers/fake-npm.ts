@@ -69,6 +69,13 @@ export async function installFakeNpm(workDir: string): Promise<string> {
   const binDir = join(workDir, "bin");
   await mkdir(binDir, { recursive: true });
   await writeFile(join(binDir, "npm"), FAKE_NPM, { mode: 0o755 });
+  if (process.platform === "win32") {
+    await writeFile(join(binDir, "fake-npm.cjs"), FAKE_NPM);
+    await writeFile(
+      join(binDir, "npm.cmd"),
+      '@node "%~dp0\\fake-npm.cjs" %*\r\n',
+    );
+  }
   vi.stubEnv("PATH", `${binDir}${delimiter}${process.env.PATH ?? ""}`);
   return binDir;
 }

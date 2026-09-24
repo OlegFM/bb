@@ -16,11 +16,16 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { HOST_DAEMON_PROTOCOL_VERSION } from "@bb/host-daemon-contract";
-import { resolveSpawnPlanOrThrow } from "@bb/process-utils";
+import { resolveBundledNpmCli } from "@bb/plugin-build";
+import {
+  omitNpmScriptPolicyEnv,
+  resolveSpawnPlanOrThrow,
+} from "@bb/process-utils";
 
 const execFileAsync = promisify(execFile);
 const HOST_DEPENDENCIES = [
   "@parcel/watcher",
+  "fs-native-extensions",
   "node-pty",
   "pino",
   "pino-pretty",
@@ -54,7 +59,7 @@ interface CreateBbAppArtifactServiceOptions {
   platform?: NodeJS.Platform;
   commandRunner?: BbAppArtifactCommandRunner;
   protocolVersion?: number;
-  serverEntryUrl?: string;
+  serverEntryUrl: string;
 }
 
 interface BbAppPackageJson {
@@ -65,18 +70,22 @@ interface BbAppPackageJson {
   version: string;
 }
 
-async function defaultCommandRunner(
+export async function defaultCommandRunner(
   command: string,
   args: readonly string[],
   cwd: string,
-  platform: NodeJS.Platform,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<string> {
+  const npmCliPath = command === "npm" ? resolveBundledNpmCli() : null;
   const launch =
-    platform === "win32"
-      ? await resolveSpawnPlanOrThrow({ command, args, cwd, platform })
-      : { command, args: [...args] };
+    npmCliPath === null
+      ? platform === "win32"
+        ? await resolveSpawnPlanOrThrow({ command, args, cwd, platform })
+        : { command, args: [...args] }
+      : { command: process.execPath, args: [npmCliPath, ...args] };
   const result = await execFileAsync(launch.command, launch.args, {
     cwd,
+    env: omitNpmScriptPolicyEnv(process.env),
     maxBuffer: 10 * 1024 * 1024,
     ...(platform === "win32" ? { windowsHide: true } : {}),
   });
@@ -247,7 +256,6 @@ export function createBbAppArtifactService({
     options.commandRunner ??
     ((command, args, cwd) =>
       defaultCommandRunner(command, args, cwd, platform));
-  const serverEntryUrl = options.serverEntryUrl ?? import.meta.url;
   const cacheDir = join(options.dataDir, "install-cache");
   const protocolVersion =
     options.protocolVersion ?? HOST_DAEMON_PROTOCOL_VERSION;
@@ -255,7 +263,7 @@ export function createBbAppArtifactService({
   let artifactPromise: Promise<BbAppArtifact> | undefined;
 
   function getResolvedPackage(): Promise<ResolvedBbAppPackage> {
-    resolvedPackagePromise ??= resolveBbAppPackage(serverEntryUrl);
+    resolvedPackagePromise ??= resolveBbAppPackage(options.serverEntryUrl);
     return resolvedPackagePromise;
   }
 

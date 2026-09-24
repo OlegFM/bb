@@ -82,6 +82,10 @@ describe("Pi bridge under the Bun runtime", () => {
         ],
       });
       expect(started.error, JSON.stringify(started)).toBeUndefined();
+      const providerThreadId = String(
+        (started.result as { providerThreadId?: unknown }).providerThreadId,
+      );
+      expect(providerThreadId).toMatch(/^pi_[0-9a-f-]{36}$/u);
 
       handleLine(
         JSON.stringify({
@@ -90,7 +94,7 @@ describe("Pi bridge under the Bun runtime", () => {
           method: "turn/start",
           params: {
             threadId,
-            providerThreadId: threadId,
+            providerThreadId,
             clientRequestId: "creq_bu23456789",
             input: [
               {

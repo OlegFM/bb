@@ -21,7 +21,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveExecutable, resolveSpawnPlanOrThrow } from "@bb/process-utils";
+import { resolveBundledNpmCli } from "@bb/plugin-build";
 import {
   createConnection,
   getInstalledPlugin,
@@ -97,28 +97,10 @@ async function resolveTestNpm(args: string[]): Promise<{
   command: string;
   args: string[];
 } | null> {
-  const launcher = await resolveExecutable({ command: "npm" });
-  if (launcher === null) return null;
   if (process.platform !== "win32") return { command: "npm", args };
-  const expectedShim = join(dirname(process.execPath), "npm.cmd");
-  if (launcher.toLowerCase() !== expectedShim.toLowerCase()) {
-    throw new Error(`Unexpected npm launcher: ${launcher}`);
-  }
-  const plan = await resolveSpawnPlanOrThrow({ command: "npm", args });
-  const expectedScript = join(
-    dirname(process.execPath),
-    "node_modules",
-    "npm",
-    "bin",
-    "npm-cli.js",
-  );
-  if (
-    plan.command !== process.execPath ||
-    plan.args[0]?.toLowerCase() !== expectedScript.toLowerCase()
-  ) {
-    throw new Error(`Unexpected npm Node entry: ${plan.args[0] ?? "missing"}`);
-  }
-  return plan;
+  const npmCli = resolveBundledNpmCli();
+  if (!existsSync(npmCli)) return null;
+  return { command: process.execPath, args: [npmCli, ...args] };
 }
 
 const [hasGit, hasNpm] = await Promise.all([

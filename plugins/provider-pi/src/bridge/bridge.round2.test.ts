@@ -46,6 +46,22 @@ function hasStopped(pid: number, exited: readonly number[]): boolean {
   );
 }
 
+function providerThreadIdFor(threadId: string): string {
+  const identity = [...harness.messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.method === "thread/identity" &&
+        (message.params as { threadId?: unknown }).threadId === threadId,
+    );
+  const providerThreadId = (identity?.params as { providerThreadId?: unknown })
+    .providerThreadId;
+  expect(typeof providerThreadId).toBe("string");
+  if (typeof providerThreadId !== "string")
+    throw new Error("missing provider thread identity");
+  return providerThreadId;
+}
+
 function turnStart(
   threadId: string,
   text: string,
@@ -58,7 +74,7 @@ function turnStart(
       method: "turn/start",
       params: {
         threadId,
-        providerThreadId: threadId,
+        providerThreadId: providerThreadIdFor(threadId),
         clientRequestId,
         input: [{ type: "text", text, mentions: [] }],
         options: FULL_PERMISSION_OPTIONS,
@@ -70,7 +86,7 @@ function turnStart(
 it("a child that dies mid-run does not take the bridge down: the next write is answered, not thrown", async () => {
   const threadId = "thr_r2_epipe";
   expect((await harness.startThread(threadId)).result).toMatchObject({
-    providerThreadId: threadId,
+    providerThreadId: expect.stringMatching(/^pi_/u),
   });
   turnStart(threadId, "/die", "creq_ab23456789");
   await harness.waitForDelta(
@@ -79,7 +95,7 @@ it("a child that dies mid-run does not take the bridge down: the next write is a
   );
   const steer = await harness.request((nextId += 1), "turn/steer", {
     threadId,
-    providerThreadId: threadId,
+    providerThreadId: providerThreadIdFor(threadId),
     expectedTurnId: "turn-1",
     clientRequestId: "creq_cd23456789",
     input: [{ type: "text", text: "still there?", mentions: [] }],
@@ -88,9 +104,10 @@ it("a child that dies mid-run does not take the bridge down: the next write is a
   expect(steer.error).toMatchObject({
     message: expect.stringMatching(/No active Pi session|pi exited/u),
   });
-  expect((await harness.startThread("thr_r2_epipe_next")).result).toMatchObject(
-    { providerThreadId: "thr_r2_epipe_next" },
-  );
+  const nextStarted = await harness.startThread("thr_r2_epipe_next");
+  expect(nextStarted.result).toMatchObject({
+    providerThreadId: expect.stringMatching(/^pi_[0-9a-f-]{36}$/u),
+  });
 }, 90_000);
 
 const MISSING_PI_MESSAGE =
@@ -117,7 +134,7 @@ it("refuses a manual compaction while pi reports a run still streaming", async (
   await harness.waitForDelta(threadId, (d) => d.kind === "turn.open");
   await harness.request((nextId += 1), "turn/steer", {
     threadId,
-    providerThreadId: threadId,
+    providerThreadId: providerThreadIdFor(threadId),
     expectedTurnId: "turn-1",
     clientRequestId: "creq_cd23456789",
     input: [{ type: "text", text: "go", mentions: [] }],
@@ -132,7 +149,7 @@ it("refuses a manual compaction while pi reports a run still streaming", async (
       method: "turn/start",
       params: {
         threadId,
-        providerThreadId: threadId,
+        providerThreadId: providerThreadIdFor(threadId),
         clientRequestId: "creq_ef23456789",
         input: [
           {
@@ -192,7 +209,7 @@ it("a steer consumed by the run is reported accepted and named in the reply", as
   await harness.waitForDelta(threadId, (d) => d.kind === "turn.open");
   const steer = await harness.request((nextId += 1), "turn/steer", {
     threadId,
-    providerThreadId: threadId,
+    providerThreadId: providerThreadIdFor(threadId),
     expectedTurnId: "turn-1",
     clientRequestId: "creq_cd23456789",
     input: [
@@ -234,7 +251,7 @@ it("a steer's ack precedes the event pi wrote in the same chunk as the prompt re
   await harness.waitForDelta(threadId, (d) => d.kind === "turn.open");
   const steer = await harness.request((nextId += 1), "turn/steer", {
     threadId,
-    providerThreadId: threadId,
+    providerThreadId: providerThreadIdFor(threadId),
     expectedTurnId: "turn-1",
     clientRequestId: "creq_cd23456789",
     input: [{ type: "text", text: "take the left path", mentions: [] }],
@@ -282,7 +299,7 @@ it("a steer still queued when the run ends is reported dropped through the deliv
       method: "turn/steer",
       params: {
         threadId,
-        providerThreadId: threadId,
+        providerThreadId: providerThreadIdFor(threadId),
         expectedTurnId: "turn-1",
         clientRequestId: "creq_cd23456789",
         input: [{ type: "text", text: "never consumed", mentions: [] }],
@@ -323,7 +340,9 @@ it("recovers from one transient model mismatch by respawning", async () => {
   const response = await harness.startThread(threadId, {
     options: { ...FULL_PERMISSION_OPTIONS, model: "fake-provider/fake-mini" },
   });
-  expect(response.result).toMatchObject({ providerThreadId: threadId });
+  expect(response.result).toMatchObject({
+    providerThreadId: expect.stringMatching(/^pi_/u),
+  });
   const log = harness.readProcessLog();
   expect(log.spawned).toHaveLength(2);
   const deadline = Date.now() + 10_000;

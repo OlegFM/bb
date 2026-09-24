@@ -5,30 +5,42 @@ import {
 } from "@bb/db";
 import { isBbManagedWorkspacePath } from "./workspace-paths.js";
 
-interface ForeignProviderOwnedPathCheckArgs {
-  dataDir: string | null;
+interface ForeignProjectPathCheckArgs {
   hostId: string;
   path: string;
   pathKey: string;
   projectId: string;
 }
 
-export function foreignProviderOwnedPathRefusal(
-  db: DbConnection,
-  args: ForeignProviderOwnedPathCheckArgs,
-): string | null {
-  const refusal =
-    "Workspace path is a bb-managed workspace owned by another project";
+interface SuppliedWorkspacePathCheckArgs extends ForeignProjectPathCheckArgs {
+  dataDir: string | null;
+}
 
-  if (
-    findForeignManagedEnvironmentAtHostPathKey(db, {
-      hostId: args.hostId,
-      pathKey: args.pathKey,
-      projectId: args.projectId,
-    })
-  ) {
-    return refusal;
-  }
+const FOREIGN_PROJECT_REFUSAL =
+  "Workspace path is a bb-managed workspace owned by another project";
+
+const UNRECORDED_MANAGED_REFUSAL =
+  "Workspace path is inside bb-managed storage but is not a workspace of this project";
+
+export function foreignProjectOwnedPathRefusal(
+  db: DbConnection,
+  args: ForeignProjectPathCheckArgs,
+): string | null {
+  return findForeignManagedEnvironmentAtHostPathKey(db, {
+    hostId: args.hostId,
+    pathKey: args.pathKey,
+    projectId: args.projectId,
+  })
+    ? FOREIGN_PROJECT_REFUSAL
+    : null;
+}
+
+export function suppliedWorkspacePathRefusal(
+  db: DbConnection,
+  args: SuppliedWorkspacePathCheckArgs,
+): string | null {
+  const foreign = foreignProjectOwnedPathRefusal(db, args);
+  if (foreign !== null) return foreign;
 
   if (
     args.dataDir !== null &&
@@ -40,7 +52,7 @@ export function foreignProviderOwnedPathRefusal(
       args.pathKey,
     ) === null
   ) {
-    return refusal;
+    return UNRECORDED_MANAGED_REFUSAL;
   }
 
   return null;

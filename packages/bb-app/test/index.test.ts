@@ -18,7 +18,13 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import {
+  assertSecretFileAclIsPrivate,
+  readSecretFileAcl,
+  resolveCurrentWindowsUser,
+} from "@bb/secret-storage";
 import { z } from "zod";
+import { waitForProcessExit } from "@bb/config/child-process-exit";
 import { resolvePortFromEnv } from "@bb/config/runtime";
 import {
   assertBbAppArtifacts,
@@ -44,7 +50,6 @@ import {
   superviseFullStackProcesses,
   terminateManagedFullStackProcesses,
   waitForHostDaemonStatus,
-  waitForProcessExit,
 } from "../src/launcher.js";
 import type {
   BbAppStartContext,
@@ -56,6 +61,7 @@ import type {
   ManagedProcessRun,
   NamedProcessExitResult,
   ProcessExitResult,
+  ReadServerMovedFileFn,
 } from "../src/launcher.js";
 
 interface DelayArgs {
@@ -248,6 +254,12 @@ function delay(args: DelayArgs): Promise<DelayResult> {
 const immediateDelay: DelayMillisecondsFn = () => {
   return Promise.resolve();
 };
+
+const noServerMovedFile: ReadServerMovedFileFn = async () => null;
+
+async function unexpectedServerMove(): Promise<FullStackSupervisionResult> {
+  throw new Error("Unexpected server move");
+}
 
 function createTestStartContext(): BbAppStartContext {
   return {
@@ -493,6 +505,16 @@ async function captureStdout(run: () => Promise<void>): Promise<string> {
   return chunks.join("");
 }
 
+async function expectPrivateManagedFile(path: string): Promise<void> {
+  if (process.platform === "win32") {
+    const user = await resolveCurrentWindowsUser();
+    const aces = await readSecretFileAcl(path);
+    expect(() => assertSecretFileAclIsPrivate(path, aces, user)).not.toThrow();
+  } else {
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+  }
+}
+
 describe("bb-app launcher", () => {
   it("waits for the expected host daemon identity and connection", async () => {
     let statusRequests = 0;
@@ -576,41 +598,49 @@ describe("bb-app launcher", () => {
   });
 
   it("resolves production defaults for npx startup", () => {
+    const packageRoot = join(tmpdir(), "bb-app-prod", "packages", "bb-app");
+    const homeDir = join(tmpdir(), "bb-app-prod-home");
     const context = resolveBbAppStartContext({
-      entrypointUrl: pathToFileURL("/repo/packages/bb-app/dist/bb-app.js").href,
+      entrypointUrl: pathToFileURL(join(packageRoot, "dist", "bb-app.js")).href,
       env: {},
-      homeDir: "/home/tester",
+      homeDir,
     });
 
-    expect(context.dataDir).toBe("/home/tester/.bb");
-    expect(context.configFile).toBe("/home/tester/.bb/config.json");
-    expect(context.envFile).toBe("/home/tester/.bb/env.json");
+    expect(context.dataDir).toBe(join(homeDir, ".bb"));
+    expect(context.configFile).toBe(join(homeDir, ".bb", "config.json"));
+    expect(context.envFile).toBe(join(homeDir, ".bb", "env.json"));
     expect(context.serverPort).toBe(38886);
     expect(context.daemonPort).toBe(38887);
     expect(context.serverUrl).toBe("http://127.0.0.1:38886");
     expect(context.serverEntry).toBe(
-      "/repo/packages/bb-app/server/dist/index.js",
+      join(packageRoot, "server", "dist", "index.js"),
     );
     expect(context.daemonEntry).toBe(
-      "/repo/packages/bb-app/host-daemon/dist/daemon-bundle.mjs",
+      join(packageRoot, "host-daemon", "dist", "daemon-bundle.mjs"),
     );
     expect(context.appVersion).toBe("0.0.0-dev");
   });
 
   it("uses workspace build outputs when run from a source checkout", () => {
+    const packageRoot = join(tmpdir(), "bb-app-source", "packages", "bb-app");
+    const workspaceRoot = resolve(packageRoot, "..", "..");
     const context = resolveBbAppStartContext({
-      entrypointUrl: pathToFileURL("/repo/packages/bb-app/src/launcher.ts")
+      entrypointUrl: pathToFileURL(join(packageRoot, "src", "launcher.ts"))
         .href,
       env: {},
-      homeDir: "/home/tester",
+      homeDir: join(tmpdir(), "bb-app-source-home"),
     });
 
-    expect(context.packageRoot).toBe("/repo/packages/bb-app");
-    expect(context.appDistDir).toBe("/repo/apps/app/dist");
-    expect(context.serverEntry).toBe("/repo/apps/server/dist/index.js");
-    expect(context.daemonBundleDir).toBe("/repo/apps/host-daemon/dist");
+    expect(context.packageRoot).toBe(packageRoot);
+    expect(context.appDistDir).toBe(join(workspaceRoot, "apps", "app", "dist"));
+    expect(context.serverEntry).toBe(
+      join(workspaceRoot, "apps", "server", "dist", "index.js"),
+    );
+    expect(context.daemonBundleDir).toBe(
+      join(workspaceRoot, "apps", "host-daemon", "dist"),
+    );
     expect(context.daemonEntry).toBe(
-      "/repo/apps/host-daemon/dist/daemon-bundle.mjs",
+      join(workspaceRoot, "apps", "host-daemon", "dist", "daemon-bundle.mjs"),
     );
   });
 
@@ -631,15 +661,14 @@ describe("bb-app launcher", () => {
   });
 
   it("honors explicit production ports and data directory", () => {
+    const homeDir = join(tmpdir(), "bb-app-custom-home");
     const env = {
       BB_DATA_DIR: "~/custom-bb",
       BB_HOST_DAEMON_PORT: "48887",
       BB_SERVER_PORT: "48886",
     };
 
-    expect(resolveDataDir({ env, homeDir: "/home/tester" })).toBe(
-      "/home/tester/custom-bb",
-    );
+    expect(resolveDataDir({ env, homeDir })).toBe(join(homeDir, "custom-bb"));
     expect(
       resolvePortFromEnv({ defaultPort: 1, env, name: "BB_SERVER_PORT" }),
     ).toBe(48886);
@@ -749,8 +778,6 @@ describe("bb-app launcher", () => {
         "host_remote",
         "--host-daemon-port",
         "48887",
-        "--host-type",
-        "persistent",
         "--auto-update",
       ]),
     ).toEqual({
@@ -760,7 +787,6 @@ describe("bb-app launcher", () => {
         help: false,
         hostDaemonPort: "48887",
         hostId: "host_remote",
-        hostType: "persistent",
         joinCode: "bbde_supplied",
         json: false,
         serverUrl: "https://bb.example.test",
@@ -812,7 +838,11 @@ describe("bb-app launcher", () => {
     expect(runtime.serverEnv.BB_THREAD_STORAGE).toBeUndefined();
     expect(runtime.serverEnv.BB_PROJECT_ID).toBe("proj_parent");
 
-    const daemonEnv = createDaemonEnv(runtime.context, runtime.env);
+    const daemonEnv = createDaemonEnv({
+      context: runtime.context,
+      env: runtime.env,
+      serverUrl: runtime.context.serverUrl,
+    });
     expect(daemonEnv.BB_ENVIRONMENT_ID).toBeUndefined();
     expect(daemonEnv.BB_THREAD_ID).toBeUndefined();
     expect(daemonEnv.BB_THREAD_STORAGE).toBeUndefined();
@@ -846,6 +876,36 @@ describe("bb-app launcher", () => {
       runBbApp(["--data-dir", dataDir, "--server-bind-host", "localhost"]),
     ).rejects.toThrow('BB_SERVER_BIND_HOST must be "127.0.0.1" or "0.0.0.0"');
   });
+
+  it.each(["linux", "win32"] as const)(
+    "sets the bundled CLI machine installer for %s",
+    async (platform) => {
+      const dataDir = mkdtempSync(join(tmpdir(), "bb-app-cli-installer-"));
+      const outputPath = join(dataDir, "installer-path.txt");
+      const context = { ...createTestStartContext(), dataDir };
+
+      const exitCode = await runBundledCliCommand({
+        args: [
+          "-e",
+          "require('node:fs').writeFileSync(process.argv[1], process.env.BB_MACHINE_INSTALLER ?? 'missing')",
+          outputPath,
+        ],
+        context,
+        env: {
+          BB_CLI: process.execPath,
+          BB_MACHINE_INSTALLER: "stale-installer",
+        },
+        platform,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(readFileSync(outputPath, "utf8")).toBe(
+        platform === "win32"
+          ? "missing"
+          : join(dirname(context.serverEntry), "assets", "install-machine.sh"),
+      );
+    },
+  );
 
   it("uses a supplied join code without requesting a loopback enroll key", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "bb-app-remote-join-"));
@@ -1139,8 +1199,8 @@ describe("bb-app launcher", () => {
         },
       },
     );
-    expect(statSync(join(dataDir, "config.json")).mode & 0o777).toBe(0o600);
-    expect(statSync(join(dataDir, "env.json")).mode & 0o777).toBe(0o600);
+    await expectPrivateManagedFile(join(dataDir, "config.json"));
+    await expectPrivateManagedFile(join(dataDir, "env.json"));
   });
 
   it("stores client SSH targets from the client command", async () => {
@@ -1178,7 +1238,7 @@ describe("bb-app launcher", () => {
           },
         },
       });
-      expect(statSync(join(dataDir, "client.json")).mode & 0o777).toBe(0o600);
+      await expectPrivateManagedFile(join(dataDir, "client.json"));
 
       await runBbApp([
         "--data-dir",
@@ -1450,7 +1510,7 @@ describe("bb-app launcher", () => {
         },
       },
     );
-    expect(statSync(join(dataDir, "env.json")).mode & 0o777).toBe(0o600);
+    await expectPrivateManagedFile(join(dataDir, "env.json"));
   });
 
   it("rejects invalid server bind hosts before writing managed env", async () => {
@@ -1972,7 +2032,9 @@ describe("bb-app launcher", () => {
       delayMilliseconds: immediateDelay,
       isHealthyServerAnswering: async () => false,
       isShutdownRequested: supervisor.shutdownRequested,
+      onServerMoved: unexpectedServerMove,
       processes: supervisor.processes,
+      readServerMovedFile: noServerMovedFile,
       startDaemon: supervisor.daemonStart,
       startServer: supervisor.serverStart,
     });
@@ -2005,7 +2067,9 @@ describe("bb-app launcher", () => {
       delayMilliseconds: immediateDelay,
       isHealthyServerAnswering: async () => false,
       isShutdownRequested: supervisor.shutdownRequested,
+      onServerMoved: unexpectedServerMove,
       processes: supervisor.processes,
+      readServerMovedFile: noServerMovedFile,
       startDaemon: supervisor.daemonStart,
       startServer: supervisor.serverStart,
     });
@@ -2038,7 +2102,9 @@ describe("bb-app launcher", () => {
       delayMilliseconds: immediateDelay,
       isHealthyServerAnswering: async () => false,
       isShutdownRequested: supervisor.shutdownRequested,
+      onServerMoved: unexpectedServerMove,
       processes: supervisor.processes,
+      readServerMovedFile: noServerMovedFile,
       startDaemon: supervisor.daemonStart,
       startServer: supervisor.serverStart,
     });
@@ -2066,7 +2132,9 @@ describe("bb-app launcher", () => {
       delayMilliseconds: immediateDelay,
       isHealthyServerAnswering: async () => false,
       isShutdownRequested: supervisor.shutdownRequested,
+      onServerMoved: unexpectedServerMove,
       processes: supervisor.processes,
+      readServerMovedFile: noServerMovedFile,
       startDaemon: supervisor.daemonStart,
       startServer: supervisor.serverStart,
     });
@@ -2102,7 +2170,9 @@ describe("bb-app launcher", () => {
       delayMilliseconds: (args) => restartThrottle.delayMilliseconds(args),
       isHealthyServerAnswering: async () => false,
       isShutdownRequested: supervisor.shutdownRequested,
+      onServerMoved: unexpectedServerMove,
       processes: supervisor.processes,
+      readServerMovedFile: noServerMovedFile,
       startDaemon: supervisor.daemonStart,
       startServer: supervisor.serverStart,
     });
@@ -2180,7 +2250,7 @@ describe("bb-app launcher", () => {
       }
 
       const missingChunks =
-        /^Missing bundled bb CLI chunks at .*\/host-daemon\/dist\/bb-chunks\. Rebuild bb-app/;
+        /^Missing bundled bb CLI chunks at .*[/\\]host-daemon[/\\]dist[/\\]bb-chunks\. Rebuild bb-app/;
       expect(() => assertBbAppArtifacts(context, "linux")).toThrow(
         missingChunks,
       );
@@ -2328,4 +2398,34 @@ describe("bb-app launcher", () => {
       rmSync(packageRoot, { recursive: true, force: true });
     }
   });
+});
+
+it("preserves machine identity and access headers through real config set and unset", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "bb-app-config-machine-"));
+  const identity = {
+    serverUrl: "https://machine.example",
+    serverHeaders: { "x-bb-connect-machine": "private-machine-access" },
+    machineCredential: "legacy-private",
+    connectMachineId: "cloud-device",
+  };
+  try {
+    writeFileSync(join(dataDir, "config.json"), JSON.stringify(identity));
+    await runBbApp([
+      "--data-dir",
+      dataDir,
+      "config",
+      "set",
+      "BB_APP_URL",
+      "https://other.example",
+    ]);
+    expect(
+      JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")),
+    ).toMatchObject(identity);
+    await runBbApp(["--data-dir", dataDir, "config", "unset", "BB_APP_URL"]);
+    expect(
+      JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")),
+    ).toEqual(identity);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
 });

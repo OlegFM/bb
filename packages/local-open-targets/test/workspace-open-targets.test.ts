@@ -14,7 +14,6 @@ import {
 } from "@bb/process-utils";
 import {
   createWorkspaceOpenTargetRuntime,
-  listWorkspaceOpenTargets,
   listWorkspaceOpenTargetsWithRuntime,
   openPathInTargetWithRuntime,
   type WorkspaceOpenTargetRuntime,
@@ -3874,7 +3873,9 @@ describe("workspace open targets", () => {
     it.runIf(process.platform === "win32")(
       "lists the real open targets of this desktop",
       async () => {
-        const targets = await listWorkspaceOpenTargets();
+        const targets = await listWorkspaceOpenTargetsWithRuntime(
+          createWorkspaceOpenTargetRuntime(),
+        );
         const targetIds = targets.map((target) => target.id);
 
         expect(targetIds).toContain("file-manager");

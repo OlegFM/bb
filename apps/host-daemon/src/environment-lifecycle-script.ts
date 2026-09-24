@@ -1,3 +1,10 @@
+import { StringDecoder } from "node:string_decoder";
+import {
+  DEFAULT_ENV_SETUP_SCRIPT_NAME,
+  DEFAULT_ENV_TEARDOWN_SCRIPT_NAME,
+} from "@bb/domain";
+import { operationEnvironment } from "./operation-environment.js";
+import type { HostDaemonContributedEnvEntry } from "@bb/host-daemon-contract";
 import {
   WINDOWS_ENV_SETUP_SCRIPT_NAME,
   WINDOWS_ENV_TEARDOWN_SCRIPT_NAME,
@@ -26,14 +33,13 @@ import {
   type ProgressCallback,
 } from "bb-environment-provider-host/transcript";
 
-export const DEFAULT_ENV_SETUP_SCRIPT_NAME = ".bb-env-setup.sh";
-export const DEFAULT_ENV_TEARDOWN_SCRIPT_NAME = ".bb-env-teardown.sh";
-
 export interface RunSetupScriptArgs {
   workspacePath: string;
   timeoutMs: number;
   platform?: NodeJS.Platform;
   shellPath?: string;
+  env?: NodeJS.ProcessEnv;
+  contributedEnv?: readonly HostDaemonContributedEnvEntry[];
   onProgress?: ProgressCallback;
   signal?: AbortSignal;
 }
@@ -47,7 +53,9 @@ interface LifecycleScriptCommand {
 }
 
 interface BuildLifecycleScriptCommandArgs {
-  env: NodeJS.ProcessEnv;
+  env?: NodeJS.ProcessEnv;
+  kind: "setup" | "teardown";
+  scriptName: string;
   platform: NodeJS.Platform;
   scriptPath: string;
 }
@@ -81,7 +89,7 @@ function windowsPosixScriptMessage(kind: "setup" | "teardown"): string {
 function buildPowerShellScriptCommand(
   args: BuildLifecycleScriptCommandArgs,
 ): LifecycleScriptCommand {
-  const executablePath = resolvePowerShellExecutable(args.env);
+  const executablePath = resolvePowerShellExecutable(args.env ?? process.env);
   const executableName = path.win32
     .basename(executablePath)
     .replace(/\.exe$/iu, "");
@@ -92,14 +100,14 @@ function buildPowerShellScriptCommand(
   };
 }
 
-export function buildSetupScriptCommand(
+export function buildLifecycleScriptCommand(
   args: BuildLifecycleScriptCommandArgs,
 ): LifecycleScriptCommand {
   if (args.platform === "win32") {
     if (!args.scriptPath.toLowerCase().endsWith(".ps1")) {
       throw new WorkspaceError(
         "setup_script_failed",
-        windowsPosixScriptMessage("setup"),
+        windowsPosixScriptMessage(args.kind),
       );
     }
     return buildPowerShellScriptCommand(args);
@@ -108,28 +116,34 @@ export function buildSetupScriptCommand(
   return {
     command: "env",
     args: ["bash", args.scriptPath],
-    text: `env bash ${DEFAULT_ENV_SETUP_SCRIPT_NAME}`,
+    text: `env bash ${args.scriptName}`,
   };
 }
 
-export function buildTeardownScriptCommand(
-  args: BuildLifecycleScriptCommandArgs,
+export function buildSetupScriptCommand(
+  args: Pick<
+    BuildLifecycleScriptCommandArgs,
+    "env" | "platform" | "scriptPath"
+  >,
 ): LifecycleScriptCommand {
-  if (args.platform === "win32") {
-    if (!args.scriptPath.toLowerCase().endsWith(".ps1")) {
-      throw new WorkspaceError(
-        "setup_script_failed",
-        windowsPosixScriptMessage("teardown"),
-      );
-    }
-    return buildPowerShellScriptCommand(args);
-  }
+  return buildLifecycleScriptCommand({
+    ...args,
+    kind: "setup",
+    scriptName: DEFAULT_ENV_SETUP_SCRIPT_NAME,
+  });
+}
 
-  return {
-    command: "env",
-    args: ["bash", args.scriptPath],
-    text: `env bash ${DEFAULT_ENV_TEARDOWN_SCRIPT_NAME}`,
-  };
+export function buildTeardownScriptCommand(
+  args: Pick<
+    BuildLifecycleScriptCommandArgs,
+    "env" | "platform" | "scriptPath"
+  >,
+): LifecycleScriptCommand {
+  return buildLifecycleScriptCommand({
+    ...args,
+    kind: "teardown",
+    scriptName: DEFAULT_ENV_TEARDOWN_SCRIPT_NAME,
+  });
 }
 
 async function resolveLifecycleScriptPath(
@@ -189,7 +203,7 @@ export async function resolveLifecycleScript(args: {
 
 async function runLifecycleScript(
   args: RunLifecycleScriptArgs,
-): Promise<{ ran: boolean; exitCode?: number; output?: string }> {
+): Promise<{ ran: boolean }> {
   throwIfProvisionAborted(args.signal);
   const platform = args.platform ?? process.platform;
   const resolved = await resolveLifecycleScript({
@@ -218,16 +232,13 @@ async function runLifecycleScript(
       windowsPosixScriptMessage(args.kind),
     );
   }
-
-  const env = sanitizeInheritedChildProcessEnv({
-    env: process.env,
+  const command = buildLifecycleScriptCommand({
+    kind: args.kind,
+    scriptName,
     platform,
-    ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
+    scriptPath,
+    env: args.env ?? process.env,
   });
-  const command =
-    args.kind === "setup"
-      ? buildSetupScriptCommand({ env, platform, scriptPath })
-      : buildTeardownScriptCommand({ env, platform, scriptPath });
   emitStep({
     onProgress: args.onProgress,
     key: `${args.kind}-started`,
@@ -237,6 +248,15 @@ async function runLifecycleScript(
   });
 
   const { timeoutMs } = args;
+  const env = sanitizeInheritedChildProcessEnv({
+    env: operationEnvironment(
+      args.contributedEnv ?? [],
+      args.env ?? process.env,
+      true,
+    ),
+    platform,
+    ...(args.shellPath !== undefined ? { shellPath: args.shellPath } : {}),
+  });
   const child = spawnPortableOutputProcess({
     command: command.command,
     args: command.args,
@@ -246,7 +266,6 @@ async function runLifecycleScript(
     platform,
   });
 
-  const outputChunks: string[] = [];
   const outputLineReader = createTerminalOutputLineReader();
   let outputIndex = 0;
   let abortRequested = false;
@@ -259,14 +278,14 @@ async function runLifecycleScript(
     }
   };
 
-  const handleChunk = (chunk: Buffer) => {
-    const text = chunk.toString("utf8");
-    outputChunks.push(text);
-    emitScriptOutputLines(outputLineReader.push(text));
-  };
-
-  child.stdout.on("data", handleChunk);
-  child.stderr.on("data", handleChunk);
+  const readers = [child.stdout, child.stderr].map((stream) => {
+    const decoder = new StringDecoder("utf8");
+    const emit = (text: string) => {
+      emitScriptOutputLines(outputLineReader.push(text));
+    };
+    stream.on("data", (chunk: Buffer) => emit(decoder.write(chunk)));
+    return () => emit(decoder.end());
+  });
 
   let terminationPromise: Promise<TerminateProcessTreeResult> | null = null;
 
@@ -354,7 +373,7 @@ async function runLifecycleScript(
       while (isProcessGroupAlive(child, platform)) await delay(25);
     }
 
-    const output = outputChunks.join("");
+    for (const flush of readers) flush();
     emitScriptOutputLines(outputLineReader.flush());
     const durationMs = Date.now() - startedAt;
     if (abortRequested || args.signal?.aborted) {
@@ -369,7 +388,7 @@ async function runLifecycleScript(
       throw createProvisionCancelledError(args.signal?.reason);
     }
 
-    if (timedOut) {
+    const failScript = (detail: string): never => {
       emitStep({
         onProgress: args.onProgress,
         key: `${args.kind}-failed`,
@@ -380,38 +399,20 @@ async function runLifecycleScript(
       });
       throw new WorkspaceError(
         "setup_script_failed",
-        `${args.kind === "setup" ? "Setup" : "Teardown"} script timed out after ${timeoutMs}ms: ${scriptPath}`,
+        `${args.kind === "setup" ? "Setup" : "Teardown"} script ${detail}: ${scriptPath}`,
       );
+    };
+
+    if (timedOut) {
+      failScript(`timed out after ${timeoutMs}ms`);
     }
 
     if (result.signal) {
-      emitStep({
-        onProgress: args.onProgress,
-        key: `${args.kind}-failed`,
-        text: `${scriptName} failed`,
-        status: "failed",
-        startedAt,
-        metadata: { durationMs },
-      });
-      throw new WorkspaceError(
-        "setup_script_failed",
-        `${args.kind === "setup" ? "Setup" : "Teardown"} script exited via signal ${result.signal}: ${scriptPath}`,
-      );
+      failScript(`exited via signal ${result.signal}`);
     }
 
     if ((result.exitCode ?? 0) !== 0) {
-      emitStep({
-        onProgress: args.onProgress,
-        key: `${args.kind}-failed`,
-        text: `${scriptName} failed`,
-        status: "failed",
-        startedAt,
-        metadata: { durationMs },
-      });
-      throw new WorkspaceError(
-        "setup_script_failed",
-        `${args.kind === "setup" ? "Setup" : "Teardown"} script failed with exit code ${result.exitCode}: ${scriptPath}`,
-      );
+      failScript(`failed with exit code ${result.exitCode}`);
     }
 
     emitStep({
@@ -422,7 +423,7 @@ async function runLifecycleScript(
       startedAt,
       metadata: { durationMs },
     });
-    return { ran: true, exitCode: result.exitCode ?? 0, output };
+    return { ran: true };
   } finally {
     clearTimeout(timeout);
     args.signal?.removeEventListener("abort", abortLifecycleScript);
@@ -431,13 +432,13 @@ async function runLifecycleScript(
 
 export function runSetupScript(
   args: RunSetupScriptArgs,
-): Promise<{ ran: boolean; exitCode?: number; output?: string }> {
+): Promise<{ ran: boolean }> {
   return runLifecycleScript({ ...args, kind: "setup" });
 }
 
 export async function runTeardownScript(
   args: RunTeardownScriptArgs,
-): Promise<{ ran: boolean; exitCode?: number; output?: string }> {
+): Promise<{ ran: boolean }> {
   const startedAt = Date.now();
   const teardownScriptName =
     (args.platform ?? process.platform) === "win32"

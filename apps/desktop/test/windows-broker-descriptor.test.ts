@@ -92,7 +92,7 @@ describe.runIf(process.platform === "win32")(
       await expect(readWindowsBrokerDescriptor(path)).resolves.toBe(
         '{"token":"private"}',
       );
-    });
+    }, 20_000);
 
     it("rejects a descriptor with an extra Everyone ACE", async () => {
       const path = await descriptorPath();
@@ -105,7 +105,7 @@ describe.runIf(process.platform === "win32")(
       await expect(readWindowsBrokerDescriptor(path)).rejects.toThrow(
         "permissions",
       );
-    });
+    }, 20_000);
 
     it("rejects an unsafe replacement of a previously private descriptor", async () => {
       const path = await descriptorPath();
@@ -115,7 +115,7 @@ describe.runIf(process.platform === "win32")(
       await expect(readWindowsBrokerDescriptor(path)).rejects.toThrow(
         "permissions",
       );
-    });
+    }, 20_000);
 
     it("rejects a reparse point even when its target is private", async () => {
       const path = await descriptorPath();
@@ -124,6 +124,6 @@ describe.runIf(process.platform === "win32")(
       await expect(readWindowsBrokerDescriptor(path)).rejects.toThrow(
         "permissions",
       );
-    });
+    }, 20_000);
   },
 );

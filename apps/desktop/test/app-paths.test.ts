@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveDesktopBridgePath,
   resolveDesktopIconPath,
+  resolveDesktopMachineInstallerPath,
   type DesktopPathContext,
 } from "../src/app-paths.js";
 
@@ -55,6 +56,33 @@ describe("desktop app paths", () => {
         "app-arm64.asar.unpacked",
         "dist",
         "bb-app-bridge.mjs",
+      ),
+    );
+  });
+
+  it("resolves the machine installer inside the bb-app package beside the bridge", () => {
+    const bridgePath = join(
+      "/Applications",
+      "bb.app",
+      "Contents",
+      "Resources",
+      "app.asar.unpacked",
+      "dist",
+      "bb-app-bridge.mjs",
+    );
+    expect(resolveDesktopMachineInstallerPath(bridgePath)).toBe(
+      join(
+        "/Applications",
+        "bb.app",
+        "Contents",
+        "Resources",
+        "app.asar.unpacked",
+        "node_modules",
+        "bb-app",
+        "server",
+        "dist",
+        "assets",
+        "install-machine.sh",
       ),
     );
   });

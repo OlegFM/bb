@@ -20,7 +20,7 @@ semantics: real better-sqlite3 temporary storage (never mock the db), the kv
 256KB cap, schema-RPC validation/error/strict-JSON behavior, additive events,
 keyed registration failures, atomic reload, conditional agent configuration,
 request input, typed host-call validation/signal delivery, and `threads.spawn`
-plugin attribution.
+and `threads.fork` plugin attribution.
 
 Backend (`server.ts`) — `createFakePluginHost()`:
 
@@ -105,7 +105,17 @@ declarations through the harness.
 `createFakeSdk` is available separately. Pass a nested `overrides` object.
 Inspect all calls or calls to one dot-separated method path. Use `stub` to add
 or replace a method after creation. An unstubbed call throws and names the
-missing path. The fake adds plugin attribution defaults to `threads.spawn`.
+missing path. The fake applies the host's plugin attribution to
+`threads.spawn` and `threads.fork`: a `pluginMetadata` seed forces
+`origin: "plugin"` and the plugin's id. The fake defaults `pluginId` for
+`threads.getPluginMetadata` and `threads.updatePluginMetadata`. Since SDK
+0.4.86, recorded `threads.fork` calls also carry the `origin: "plugin"` and
+`originPluginId` defaults that `threads.spawn` calls already had, so
+exact-argument fork assertions must include those fields. Invalid
+metadata returns a rejected promise and the call is not recorded.
+`harness.behavior.resolveAgentConfiguration` passes configure a copy of the
+context with a validated, deep-frozen `pluginMetadata` clone and rejects
+invalid fixture metadata.
 
 Run `experimental_scanPublicSdkOnly(packageRoot, { allow })` in a package
 test. Assert that `violations` and `privateDependencies` are empty. The scanner
@@ -144,9 +154,8 @@ import {
   renderSlot,
 } from "@get-bb/plugin-sdk/testing/app";
 
-// The thunk matters: app.tsx binds the plugin runtime at module load, so
-// loadPluginApp installs the test runtime BEFORE importing it. (For static
-// imports, call installTestPluginRuntime() in a vitest setup file instead.)
+// loadPluginApp and renderSlot install the test runtime. The SDK looks it up
+// when a hook runs, so a static `import app from "./app"` works as well.
 const app = await loadPluginApp(() => import("./app"));
 const contentScripts = await mountPluginContentScripts(app, {
   pluginId: "my-plugin",
@@ -276,6 +285,8 @@ Remaining reference examples in `examples/plugins/`:
   with host token classes, no custom `@theme` colors, no hand-set oklch.
 - `onDispose` hooks run LIFO; stale `bb` handles from before a reload throw
   on use.
+- `harness.lifecycle.install()` runs `bb.onInstall`
+  handlers as a fresh install does; a throwing handler is logged at warn.
 - Backend API imports normally remain type-only. The root runtime exports
   `defineRpcContract`, `experimental_defineHostEntry`, and
   `PLUGIN_CLI_OUTPUT_MAX_BYTES`; validator imports are plugin dependencies. The

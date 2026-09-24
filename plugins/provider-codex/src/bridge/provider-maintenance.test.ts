@@ -56,13 +56,20 @@ describe("Codex provider maintenance", () => {
       status: "ok",
       accountEmail: "codex@example.com",
       planLabel: "Plus",
+      plan: { id: "plus", multiplier: null },
       windows: [
         {
           label: "Current session",
+          kind: "five-hour",
           usedPercent: 42,
           resetsAt: "2025-06-15T15:06:40.000Z",
         },
-        { label: "Weekly limit", usedPercent: 100, resetsAt: null },
+        {
+          label: "Weekly limit",
+          kind: "weekly",
+          usedPercent: 100,
+          resetsAt: null,
+        },
       ],
     });
   });
@@ -136,12 +143,24 @@ describe("Codex credential health and usage", () => {
     tempDirs.push(homeDir);
     const binDir = path.join(homeDir, "bin");
     await fs.mkdir(binDir);
-    await fs.writeFile(
-      path.join(binDir, "codex"),
-      '#!/bin/sh\necho "codex-cli 0.150.0"\n',
-      { mode: 0o755 },
-    );
+    if (process.platform === "win32") {
+      await fs.writeFile(
+        path.join(binDir, "codex-version.mjs"),
+        'process.stdout.write("codex-cli 0.150.0\\n");\n',
+      );
+      await fs.writeFile(
+        path.join(binDir, "codex.cmd"),
+        '@node "%~dp0\\codex-version.mjs" %*\r\n',
+      );
+    } else {
+      await fs.writeFile(
+        path.join(binDir, "codex"),
+        '#!/bin/sh\necho "codex-cli 0.150.0"\n',
+        { mode: 0o755 },
+      );
+    }
     vi.stubEnv("HOME", homeDir);
+    vi.stubEnv("USERPROFILE", homeDir);
     vi.stubEnv("CODEX_HOME", "");
     vi.stubEnv("PATH", `${binDir}${path.delimiter}${process.env.PATH ?? ""}`);
   });
@@ -272,11 +291,14 @@ describe("Codex credential health and usage", () => {
       supported: true,
       usage: {
         status: "ok",
+        accountKey: "openai:chatgpt:account-123",
         accountEmail: "codex@example.com",
         planLabel: "Plus",
+        plan: { id: "plus", multiplier: null },
         windows: [
           {
             label: "Current session",
+            kind: "five-hour",
             usedPercent: 10,
             resetsAt: "2025-06-15T15:06:40.000Z",
           },

@@ -35,12 +35,10 @@ const skillFrontmatterSchema = z
 
 export interface ResolveInjectedSkillSourcesArgs {
   additionalSkillsRootPaths?: readonly string[];
-  builtinSkillsRootPath: string | null;
   dataDir: string;
   pluginSkillRoots?: readonly PluginSkillRoot[];
   pluginSkillSelections?: ReadonlyMap<string, ReadonlySet<string>>;
   projectSkillSources?: readonly ProjectInjectedSkillSource[];
-  projectSkillsRootPath?: string;
   sharedSkillSources?: readonly SharedInjectedSkillSource[];
   skillTreeRegistry: SkillTreeRegistry;
 }
@@ -135,13 +133,20 @@ interface SkillCandidateSource {
   >;
 }
 
-interface SkillRootScanArgs extends SkillCandidateSource {
+interface SkillTreeCandidateSource {
+  sourceType: Extract<
+    HostDaemonInjectedSkillSource["sourceType"],
+    "builtin" | "data-dir"
+  >;
+}
+
+interface SkillRootScanArgs extends SkillTreeCandidateSource {
   logger: ServerLogger;
   skillTreeRegistry: SkillTreeRegistry;
   skillsRootPath: string;
 }
 
-interface SkillCandidateArgs extends SkillCandidateSource {
+interface SkillCandidateArgs extends SkillTreeCandidateSource {
   candidatePath: string;
   directoryName: string;
   logger: ServerLogger;
@@ -353,16 +358,6 @@ function readSkillCandidate(
     return null;
   }
 
-  if (args.sourceType === "project") {
-    return {
-      kind: "workspace-path",
-      sourceType: "project",
-      name: frontmatter.data.name,
-      description: frontmatter.data.description,
-      sourceRootPath: args.candidatePath,
-      skillFilePath,
-    };
-  }
   let manifest: SkillTreeManifest;
   try {
     manifest = readSkillTreeManifest(args.candidatePath);
@@ -551,36 +546,9 @@ export function resolveServerOwnedSkillCatalogEntries(
   return [...builtin, ...user];
 }
 
-interface ExcludeOverriddenBuiltinsArgs {
-  builtinSources: readonly HostDaemonInjectedSkillSource[];
-  userSources: readonly HostDaemonInjectedSkillSource[];
-}
-
 interface ExcludeOverriddenLowerPriorityUserSourcesArgs {
   higherPrioritySources: readonly HostDaemonInjectedSkillSource[];
   lowerPrioritySources: readonly HostDaemonInjectedSkillSource[];
-}
-
-function excludeOverriddenBuiltins(
-  logger: ServerLogger,
-  args: ExcludeOverriddenBuiltinsArgs,
-): HostDaemonInjectedSkillSource[] {
-  const userClaimedNames = new Set(
-    args.userSources.map((source) => source.name),
-  );
-  return args.builtinSources.filter((source) => {
-    if (!userClaimedNames.has(source.name)) {
-      return true;
-    }
-    logger.debug(
-      {
-        name: source.name,
-        sourceRootPath: sourceRootPath(source),
-      },
-      "Built-in injected skill overridden by user skill",
-    );
-    return false;
-  });
 }
 
 function excludeOverriddenLowerPriorityUserSources(
@@ -642,39 +610,13 @@ export function resolveSkillCatalogEntries(
   args: ResolveInjectedSkillSourcesArgs,
 ): ResolvedSkillCatalogEntry[] {
   const { skillTreeRegistry } = args;
-  if (
-    args.projectSkillSources !== undefined &&
-    args.projectSkillsRootPath !== undefined
-  ) {
-    throw new Error(
-      "Specify projectSkillSources or projectSkillsRootPath, not both",
-    );
-  }
-  const projectSources = args.projectSkillSources
-    ? [...args.projectSkillSources]
-    : args.projectSkillsRootPath !== undefined
-      ? readSkillsRoot({
-          logger,
-          skillTreeRegistry,
-          skillsRootPath: args.projectSkillsRootPath,
-          sourceType: "project",
-        })
-      : [];
+  const projectSources = [...(args.projectSkillSources ?? [])];
   const sharedProjectSources = (args.sharedSkillSources ?? []).filter(
     (source) => source.sourceType === "shared-project",
   );
   const sharedUserSources = (args.sharedSkillSources ?? []).filter(
     (source) => source.sourceType === "shared-user",
   );
-  const builtinSources =
-    args.builtinSkillsRootPath === null
-      ? []
-      : readSkillsRoot({
-          logger,
-          skillTreeRegistry,
-          skillsRootPath: args.builtinSkillsRootPath,
-          sourceType: "builtin",
-        });
 
   const dataDirSources = readSkillsRoot({
     logger,
@@ -745,12 +687,7 @@ export function resolveSkillCatalogEntries(
       lowerPrioritySources: pluginSources,
     },
   );
-  const activeBuiltinSources = excludeOverriddenBuiltins(logger, {
-    builtinSources,
-    userSources: [...userSources, ...activePluginSources],
-  });
   const globalSources = excludeCollisions(logger, [
-    ...activeBuiltinSources,
     ...userSources,
     ...activePluginSources,
   ]);
@@ -781,9 +718,6 @@ export function resolveSkillCatalogEntries(
   for (const source of sharedUserSources) {
     provenanceBySource.set(source, { kind: "user" });
   }
-  for (const source of builtinSources) {
-    provenanceBySource.set(source, { kind: "builtin" });
-  }
   for (const source of [...dataDirSources, ...inheritedSourceGroups.flat()]) {
     provenanceBySource.set(source, { kind: "user" });
   }
@@ -811,13 +745,4 @@ export function resolveSkillCatalogEntries(
       }
       return { provenance, runtimeSource };
     });
-}
-
-export function resolveInjectedSkillSources(
-  logger: ServerLogger,
-  args: ResolveInjectedSkillSourcesArgs,
-): HostDaemonInjectedSkillSource[] {
-  return resolveSkillCatalogEntries(logger, args).map(
-    (entry) => entry.runtimeSource,
-  );
 }

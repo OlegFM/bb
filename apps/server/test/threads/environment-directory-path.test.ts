@@ -114,7 +114,7 @@ describe("update_environment_directory managed-root containment", () => {
           {
             type: "inputText",
             text: expect.stringContaining(
-              "bb-managed workspace owned by another project",
+              "inside bb-managed storage but is not a workspace of this project",
             ),
           },
         ],
@@ -236,7 +236,7 @@ describe("update_environment_directory managed-root containment", () => {
           {
             type: "inputText",
             text: expect.stringContaining(
-              "bb-managed workspace owned by another project",
+              "inside bb-managed storage but is not a workspace of this project",
             ),
           },
         ],

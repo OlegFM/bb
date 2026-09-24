@@ -2,13 +2,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { JsonValue } from "@get-bb/plugin-sdk";
+import type { JsonObject } from "@get-bb/plugin-sdk/provider-bridge";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   completeCodexInference,
   transcribeCodexVoice,
 } from "./chatgpt-client.js";
 import { resetChatGptCloudflareCookiesForTests } from "./chatgpt-fetch.js";
-import type { JsonObject } from "./codex-auth.js";
 
 type FetchMock = ReturnType<typeof vi.fn<typeof fetch>>;
 
@@ -36,6 +36,7 @@ async function makeTempHome(): Promise<string> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bb-codex-auth-"));
   tempDirs.push(tempDir);
   vi.stubEnv("HOME", tempDir);
+  vi.stubEnv("USERPROFILE", tempDir);
   return tempDir;
 }
 

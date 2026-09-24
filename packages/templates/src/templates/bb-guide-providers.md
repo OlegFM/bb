@@ -17,12 +17,16 @@ Providers are agent backends (e.g., codex, claude-code). Each supports different
 Use these before spawning threads if you are unsure which provider or model to use.
 `--host` is an alias for `--machine`. Machine and environment selectors are
 mutually exclusive because an environment already selects its machine. When no
-selector is supplied, both commands intentionally inspect the primary machine.
+selector is supplied, both commands intentionally inspect the server machine.
 When provider and model are omitted from bb thread spawn, the project's
 remembered defaults apply. If the project has no remembered choice, bb uses
 the explicitly requested provider or Codex, then resolves the model marked
 default by that provider on the target machine (falling back to the first
 catalog model when none is marked).
+
+Model lists answer from the machine's last stored list while a background
+refresh runs, so a list can be hours old. A provider whose refresh keeps
+failing or timing out keeps answering from its last stored list.
 
 Provider-native memory can be controlled on the separate Settings → Providers
 → Codex and Settings → Providers → Claude Code pages. Codex memory controls
@@ -106,6 +110,18 @@ appears automatically. Discover and select one with:
   bb thread spawn --provider acp-opencode --model <provider/model>
 
 bb applies the selected model to the ACP session before the first prompt.
+
+OpenCode Go quotas appear in Provider usage for the selected machine after
+signing in to Go in OpenCode on that machine. Inspect the same five-hour,
+weekly, and monthly windows with bb settings usage --machine <id-or-name> --json
+or bb.sdk.system.usageLimits({ hostId, providerId: "acp-opencode" }).
+The collector uses OPENCODE_API_KEY, the active Console account in OpenCode's
+opencode.db, or OPENCODE_AUTH_CONTENT/auth.json under XDG_DATA_HOME (default
+~/.local/share), including custom launch env overrides. Console account storage
+is read only; OpenCode owns refreshing expired sessions.
+Custom OpenCode wrappers need dialect: "opencode" and providerUsage: true.
+This reports the Go subscription, not usage for other OpenCode providers or
+Zen pay-as-you-go spending.
 
 An OpenCode model and an OpenCode agent are different selections. An OpenCode
 agent (build, plan, or a custom primary agent such as an orchestrator) is a

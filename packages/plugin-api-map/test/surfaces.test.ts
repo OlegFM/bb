@@ -26,11 +26,6 @@ function surfaceIds(groupId: string): string[] {
 }
 
 describe("product-map surfaces", () => {
-  it("describes environment selections using only existing enrolled machines", () => {
-    const surface = JSON.stringify(SURFACES_BY_ID.get("environment-providers"));
-    expect(surface).toContain("existing enrolled machine");
-    expect(surface).not.toContain("newly provider-created machine");
-  });
   it("keeps app-window annotations in column-major visual reading order", () => {
     const ordered = [
       "sidebar-navigation",
@@ -44,6 +39,7 @@ describe("product-map surfaces", () => {
       "message-actions",
       "pending-interaction",
       "code-renderers",
+      "browser-toolbar",
       "thread-panel",
       "file-opener",
       "app-overlay",
@@ -56,6 +52,20 @@ describe("product-map surfaces", () => {
   it("gives command palette actions their own numbered page", () => {
     expect(surfaceIds("command-palette")).toEqual(["command-palette-actions"]);
     expect([...COMMAND_PALETTE_MARKS]).toEqual(["command-palette-actions"]);
+  });
+
+  it("reads composer annotations from the banner through the draft and action row", () => {
+    const ordered = [
+      "composer-banners",
+      "composer-state",
+      "mention-provider",
+      "composer-rich-text",
+      "composer-plus-menu",
+      "provider-picker",
+      "composer-actions",
+    ];
+    expect(surfaceIds("composer")).toEqual(ordered);
+    expect([...COMPOSER_MARKS]).toEqual(ordered);
   });
 
   it("has globally unique surface ids", () => {
@@ -206,6 +216,31 @@ describe("surface card copy", () => {
     const eventCopy = SURFACES_BY_ID.get("thread-events")?.bullets.join(" ");
     expect(eventCopy).toContain("unarchived");
     expect(eventCopy).toContain("cancelled before dispatch");
+  });
+
+  it("maps bootstrap and checkpointed allocation to the machine surface", () => {
+    const machines = SURFACES_BY_ID.get("machine-providers");
+    expect(machines?.apiSymbols).toEqual(
+      expect.arrayContaining([
+        "MachineExecutorRequest",
+        "MachineExecutor",
+        "MachineBootstrapRequest",
+        "MachineBootstrapApi",
+        "PluginMachineProviderCreateContext",
+        "PluginMachineProviderLifecycleContext",
+        "PluginMachineProviderResource",
+        "PluginMachineProviderInputsProps",
+        "PluginMachineProviderInputsChange",
+        "PluginMachineProviderInputsRegistration",
+      ]),
+    );
+    expect(SURFACES_BY_ID.get("server-access")?.apiSymbols).toEqual(
+      expect.arrayContaining([
+        "PluginServerAccess",
+        "ServerAccessProviderDeclaration",
+        "ServerAccessGrant",
+      ]),
+    );
   });
 
   it("follows the lead-then-bullets template", () => {

@@ -1,14 +1,16 @@
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStandaloneBuiltinCompactCommandInput } from "@bb/domain";
@@ -34,6 +36,19 @@ const FAKE_AGENT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "fake-acp-agent.mjs",
 );
+
+function directFakeAgent(args: string[] = []): {
+  command: string;
+  args: string[];
+} {
+  if (process.platform !== "win32") {
+    return { command: FAKE_AGENT_PATH, args };
+  }
+  const command = join(workspaceDir, "fake-acp-agent.cmd");
+  copyFileSync(FAKE_AGENT_PATH, join(workspaceDir, "fake-acp-agent.mjs"));
+  writeFileSync(command, '@node "%~dp0\\fake-acp-agent.mjs" %*\r\n');
+  return { command, args };
+}
 
 let output: CapturedBridgeJsonRpcOutput;
 let workspaceDir: string;
@@ -79,6 +94,37 @@ async function waitForFileWithRealTimer(path: string): Promise<void> {
     await new Promise((resolveTick) => realSetTimeout(resolveTick, 20));
   }
   throw new Error(`Timed out waiting for ${path}`);
+}
+
+async function waitForAgentTermination(
+  launchLog: string,
+  signalFile: string,
+): Promise<void> {
+  if (process.platform !== "win32") {
+    await waitForFileWithRealTimer(signalFile);
+    expect(readFileSync(signalFile, "utf8")).toContain("SIGTERM");
+    return;
+  }
+  await waitFor(
+    () => (existsSync(launchLog) ? true : undefined),
+    "agent launch log",
+  );
+  const launch = readFileSync(launchLog, "utf8").trim().split("\n").at(-1);
+  const pid = Number(launch?.match(/^launch (\d+)$/u)?.[1]);
+  expect(pid).toBeGreaterThan(0);
+  await waitFor(
+    () => {
+      try {
+        process.kill(pid, 0);
+        return undefined;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ESRCH") return true;
+        throw error;
+      }
+    },
+    "agent termination",
+    5_000,
+  );
 }
 
 function findResponse(id: number): BridgeJsonRpcOutputMessage | undefined {
@@ -507,6 +553,7 @@ function callDynamicToolBridge(args: {
   token: string;
   tool: string;
   toolArguments: Record<string, unknown>;
+  signal?: AbortSignal;
 }): Promise<unknown> {
   return new Promise((resolveCall, rejectCall) => {
     const socket = createConnection({ host: args.host, port: args.port });
@@ -519,6 +566,14 @@ function callDynamicToolBridge(args: {
       settled = true;
       rejectCall(error);
     };
+    const abort = () => {
+      socket.destroy();
+      rejectOnce(new Error("Cancelled by fixture"));
+    };
+    args.signal?.addEventListener("abort", abort, { once: true });
+    socket.once("close", () =>
+      args.signal?.removeEventListener("abort", abort),
+    );
     socket.setEncoding("utf8");
     socket.on("connect", () => {
       socket.write(
@@ -572,7 +627,12 @@ afterEach(async () => {
   }
   vi.unstubAllEnvs();
   output.restore();
-  rmSync(workspaceDir, { recursive: true, force: true });
+  rmSync(workspaceDir, {
+    recursive: true,
+    force: true,
+    maxRetries: 8,
+    retryDelay: 100,
+  });
 });
 
 describe("acp bridge", () => {
@@ -1051,6 +1111,7 @@ describe("acp bridge", () => {
 
   it("times out hung ACP-native discovery, kills the child, and falls back to the synthetic model", async () => {
     const signalFile = join(workspaceDir, "discovery-agent-signal.txt");
+    const launchLog = join(workspaceDir, "discovery-agent-launch.txt");
     const readyFile = join(workspaceDir, "discovery-agent-ready.txt");
     let modelListId: number;
 
@@ -1061,6 +1122,7 @@ describe("acp bridge", () => {
           FAKE_ACP_HANG_INITIALIZE: "1",
           FAKE_ACP_READY_FILE: readyFile,
           FAKE_ACP_SIGNAL_FILE: signalFile,
+          FAKE_ACP_LAUNCH_LOG: launchLog,
         },
       });
       await waitForFileWithRealTimer(readyFile);
@@ -1073,12 +1135,8 @@ describe("acp bridge", () => {
       models: [{ id: "acp-default", isDefault: true }],
       selectedOnlyModels: [],
     });
-    await waitFor(
-      () => (existsSync(signalFile) ? true : undefined),
-      "discovery agent termination",
-      5_000,
-    );
-  });
+    await waitForAgentTermination(launchLog, signalFile);
+  }, 15_000);
 
   it("serves ACP-native discovered models from cache within the TTL and re-discovers after it", async () => {
     const launchLog = join(workspaceDir, "discovery-launches.txt");
@@ -1168,7 +1226,7 @@ describe("acp bridge", () => {
   it("keeps CLI reasoning on the resolved model variant instead of ACP config", async () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
     const cliModelLaunch = {
-      agent: { command: FAKE_AGENT_PATH, args: [] },
+      agent: directFakeAgent(),
       modelListArgs: ["--list-models"],
       selectFlag: "--model",
       envVars: {
@@ -1198,7 +1256,7 @@ describe("acp bridge", () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
 
     const { providerThreadId } = await startThread({
-      agent: { command: FAKE_AGENT_PATH, args: [] },
+      agent: directFakeAgent(),
       reasoningLevel: "xhigh",
       reasoningCli: {
         flag: "--reasoning-effort",
@@ -1223,7 +1281,7 @@ describe("acp bridge", () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
 
     const { providerThreadId } = await startThread({
-      agent: { command: FAKE_AGENT_PATH, args: ["agent", "stdio"] },
+      agent: directFakeAgent(["agent", "stdio"]),
       permissionMode: "full",
       permissionCli: {
         full: ["--always-approve"],
@@ -1246,7 +1304,7 @@ describe("acp bridge", () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
 
     const { providerThreadId } = await startThread({
-      agent: { command: FAKE_AGENT_PATH, args: [] },
+      agent: directFakeAgent(),
       permissionMode: "accept-edits",
       permissionCli: {
         full: ["--always-approve"],
@@ -1263,7 +1321,7 @@ describe("acp bridge", () => {
   it("uses modelCli only for model selection when reasoningCli owns effort", async () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
     const cliModelLaunch: AgentLaunchArgs = {
-      agent: { command: FAKE_AGENT_PATH, args: [] },
+      agent: directFakeAgent(),
       modelListArgs: ["--list-models"],
       selectFlag: "--model",
       envVars: { FAKE_ACP_MODEL_LINES: "pinme - Pin Me" },
@@ -1520,7 +1578,7 @@ describe("acp bridge", () => {
   it("warns and launches the family id when a reasoning variant is missing", async () => {
     chmodSync(FAKE_AGENT_PATH, 0o755);
     const cliModelLaunch = {
-      agent: { command: FAKE_AGENT_PATH, args: [] },
+      agent: directFakeAgent(),
       modelListArgs: ["--list-models"],
       selectFlag: "--model",
       envVars: { FAKE_ACP_MODEL_LINES: "solo-2 - Solo Two" },
@@ -1689,7 +1747,10 @@ describe("acp bridge", () => {
   });
 
   it("approves Cursor session MCP servers for the session lifetime (#2018)", async () => {
-    const cursorAgent = join(workspaceDir, "cursor-agent");
+    const cursorAgent = join(
+      workspaceDir,
+      process.platform === "win32" ? "cursor-agent.exe" : "cursor-agent",
+    );
     const cursorDataDir = join(workspaceDir, "cursor-data");
     symlinkSync(process.execPath, cursorAgent);
     const { providerThreadId } = await startThread({
@@ -1816,6 +1877,114 @@ describe("acp bridge", () => {
       ok: true,
     });
   });
+
+  it.each(["socket-close", "provider-exit", "turn-end"])(
+    "cancels the runtime tool request after %s",
+    async (kind) => {
+      const { providerThreadId } = await startThread({
+        dynamicTools: [
+          {
+            name: "update_environment_directory",
+            description: "Move this thread to another environment directory.",
+            inputSchema: {
+              type: "object",
+              properties: { path: { type: "string" } },
+              required: ["path"],
+            },
+          },
+        ],
+      });
+
+      const turnId = sendTurnRequest("turn/start", providerThreadId, {
+        input: [{ type: "text", text: "echo-mcp-server-config", mentions: [] }],
+      });
+      await waitForResponse(turnId);
+      await waitForTurnCompleted();
+
+      const configPrefix = "mcp-server-config:";
+      const configText = agentMessageTexts().find((text) =>
+        text.startsWith(configPrefix),
+      );
+      if (!configText) {
+        throw new Error("Fake ACP agent did not report MCP server config");
+      }
+      const [mcpServerConfig] = JSON.parse(
+        configText.slice(configPrefix.length),
+      ) as { env: { name: string; value: string }[]; name: string }[];
+      if (!mcpServerConfig) {
+        throw new Error("Fake ACP agent reported no MCP server config");
+      }
+      expect(mcpServerConfig?.name).toBe(ACP_BRIDGE_MCP_SERVER_NAME);
+      const env = new Map(
+        mcpServerConfig.env.map(({ name, value }) => [name, value]),
+      );
+      const host = env.get("BB_ACP_DYNAMIC_TOOL_HOST");
+      const port = Number(env.get("BB_ACP_DYNAMIC_TOOL_PORT"));
+      const threadId = env.get("BB_ACP_DYNAMIC_TOOL_THREAD_ID");
+      const token = env.get("BB_ACP_DYNAMIC_TOOL_TOKEN");
+      if (!host || !Number.isInteger(port) || !threadId || !token) {
+        throw new Error("MCP server config is missing dynamic tool bridge env");
+      }
+
+      const controller = new AbortController();
+      const bridgeCall = callDynamicToolBridge({
+        callId: "cancelled-tool-call",
+        host,
+        port,
+        threadId,
+        token,
+        tool: "update_environment_directory",
+        toolArguments: {},
+        signal: controller.signal,
+      }).catch((error) => error);
+      const forwarded = await waitFor(
+        () =>
+          output.messages.find(
+            (message) =>
+              message.method === "item/tool/call" && message.id !== undefined,
+          ),
+        "forwarded request",
+      );
+      if (kind === "socket-close") {
+        controller.abort();
+        expect(await bridgeCall).toBeInstanceOf(Error);
+      } else {
+        sendTurnRequest("turn/start", providerThreadId, {
+          input: [
+            {
+              type: "text",
+              text: kind === "provider-exit" ? "die" : "done",
+              mentions: [],
+            },
+          ],
+        });
+        await expect(bridgeCall).resolves.toMatchObject({
+          ok: false,
+          error: "ACP dynamic tool call cancelled",
+        });
+      }
+      const cancellation = await waitFor(
+        () =>
+          output.messages.find(
+            (message) => message.method === "notifications/cancelled",
+          ),
+        "runtime cancellation",
+      );
+      expect(cancellation.params).toEqual({ requestId: forwarded.id });
+      handleLine(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: forwarded.id,
+          result: { success: true, contentItems: [] },
+        }),
+      );
+      expect(
+        output.messages.filter(
+          (message) => message.method === "notifications/cancelled",
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   it("keeps the dynamic-tool TCP server alive after a client reset on initialize", async () => {
     const { bbThreadId, providerThreadId } = await startThread({
@@ -2011,7 +2180,7 @@ describe("acp bridge", () => {
     );
     expect(prompt).toContain("Available bb skills:");
     expect(prompt).toContain(
-      "- deploy: Ship the app. (SKILL.md: /staged/acp-skills/deploy/SKILL.md)",
+      `- deploy: Ship the app. (SKILL.md: ${join("/staged/acp-skills", "deploy", "SKILL.md")})`,
     );
     await waitForResponse(sendRequest("skills/configure", { roots: [] }));
   });
@@ -2119,7 +2288,7 @@ describe("acp bridge", () => {
         subject: {
           kind: "file_change",
           itemId: "write-tool-1",
-          writeScope: "/tmp/qa-1719",
+          writeScope: normalize("/tmp/qa-1719"),
         },
       },
     });
@@ -2163,8 +2332,11 @@ describe("acp bridge", () => {
     expect(agentMessageTexts()).toContain("permission:always");
   });
 
-  it("performs client fs writes inside the workspace and reports them", async () => {
+  it.each(["add", "update"])("acknowledges fs %s writes", async (kind) => {
     const targetPath = join(workspaceDir, "agent-output.txt");
+    if (kind === "update") {
+      writeFileSync(targetPath, "original content\n");
+    }
     const { providerThreadId } = await startThread({
       permissionMode: "accept-edits",
       permissionEscalation: "ask",
@@ -2183,7 +2355,7 @@ describe("acp bridge", () => {
     ).toContainEqual(
       expect.objectContaining({
         type: "fileChange",
-        changes: [expect.objectContaining({ path: targetPath, kind: "add" })],
+        changes: [expect.objectContaining({ path: targetPath, kind })],
       }),
     );
   });
@@ -2928,6 +3100,42 @@ describe("acp bridge", () => {
     expect(forkResets[0]).toBeGreaterThan(forkIdentities[0] ?? Infinity);
   });
 
+  it("surfaces Grok context window size and prompt usage from session _meta", async () => {
+    const { bbThreadId, providerThreadId } = await startThread({
+      dialectId: "grok",
+      envVars: { FAKE_ACP_GROK_CONTEXT: "1" },
+    });
+
+    expect(contextWindowDeltasFor(bbThreadId)).toEqual([
+      { used: 0, size: 500_000 },
+    ]);
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "hello", mentions: [] }],
+    });
+    await waitForTurnCompleted();
+
+    expect(contextWindowDeltasFor(bbThreadId)).toEqual([
+      { used: 0, size: 500_000 },
+      { used: 17_504, size: 500_000 },
+    ]);
+  });
+
+  it("ignores Grok-shaped session _meta on other ACP dialects", async () => {
+    const { bbThreadId, providerThreadId } = await startThread({
+      envVars: { FAKE_ACP_GROK_CONTEXT: "1" },
+    });
+
+    expect(contextWindowDeltasFor(bbThreadId)).toEqual([]);
+
+    sendTurnRequest("turn/start", providerThreadId, {
+      input: [{ type: "text", text: "hello", mentions: [] }],
+    });
+    await waitForTurnCompleted();
+
+    expect(contextWindowDeltasFor(bbThreadId)).toEqual([]);
+  });
+
   it("holds an agent update written with the session/new response until thread/identity is out", async () => {
     const { bbThreadId } = await startThread({
       envVars: { FAKE_ACP_UPDATES_WITH_SESSION_RESPONSE: "1" },
@@ -3195,6 +3403,7 @@ describe("acp bridge", () => {
   it("releases a session still under construction: the agent is reaped and the pending thread/start fails", async () => {
     const readyFile = join(workspaceDir, "agent-ready");
     const signalFile = join(workspaceDir, "agent-signal");
+    const launchLog = join(workspaceDir, "agent-launch");
     const threadId = "thread-release-during-construction";
     const options = executionOptions({
       providerOptions: {
@@ -3203,6 +3412,7 @@ describe("acp bridge", () => {
             FAKE_ACP_SESSION_NEW_DELAY_MS: "5000",
             FAKE_ACP_READY_FILE: readyFile,
             FAKE_ACP_SIGNAL_FILE: signalFile,
+            FAKE_ACP_LAUNCH_LOG: launchLog,
           },
         }),
       },
@@ -3227,8 +3437,7 @@ describe("acp bridge", () => {
     const start = await waitForResponse(startId);
     expect(start.result).toBeUndefined();
     expect(start.error?.message).toMatch(/exited|not running|released/u);
-    await waitForFileWithRealTimer(signalFile);
-    expect(readFileSync(signalFile, "utf8")).toContain("SIGTERM");
+    await waitForAgentTermination(launchLog, signalFile);
     expect(
       messagesForThread(threadId).filter(
         (message) => message.method === "thread/identity",
@@ -3251,6 +3460,7 @@ describe("acp bridge", () => {
     const threadId = "thread-retried-construction";
     const slowReadyFile = join(workspaceDir, "slow-agent-ready");
     const slowSignalFile = join(workspaceDir, "slow-agent-signal");
+    const slowLaunchLog = join(workspaceDir, "slow-agent-launch");
     const firstStartId = sendRequest("thread/start", {
       threadId,
       cwd: workspaceDir,
@@ -3262,6 +3472,7 @@ describe("acp bridge", () => {
               FAKE_ACP_SESSION_NEW_DELAY_MS: "5000",
               FAKE_ACP_READY_FILE: slowReadyFile,
               FAKE_ACP_SIGNAL_FILE: slowSignalFile,
+              FAKE_ACP_LAUNCH_LOG: slowLaunchLog,
             },
           }),
         },
@@ -3293,7 +3504,7 @@ describe("acp bridge", () => {
     const first = await waitForResponse(firstStartId);
     expect(first.result).toBeUndefined();
     expect(first.error).toBeDefined();
-    await waitForFileWithRealTimer(slowSignalFile);
+    await waitForAgentTermination(slowLaunchLog, slowSignalFile);
     expect(
       messagesForThread(threadId)
         .filter((message) => message.method === "thread/identity")

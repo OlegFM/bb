@@ -135,7 +135,7 @@ function collectFrontendModules(entry: string): Map<string, string[]> {
 describe("automations frontend bundle", () => {
   const reached = collectFrontendModules(FRONTEND_ENTRY);
   const reachedPaths = [...reached.keys()].map((file) =>
-    relative(PLUGIN_ROOT, file),
+    relative(PLUGIN_ROOT, file).replaceAll("\\", "/"),
   );
 
   it("walks the real frontend graph", () => {

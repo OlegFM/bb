@@ -107,7 +107,7 @@ export function ProviderLogo({
   provider?: ProviderInfo | undefined;
   className?: string;
 }) {
-  const info = getProviderIconInfo(providerId, provider ?? null);
+  const info = getProviderIconInfo("agent", providerId, provider ?? null);
   if (!info) {
     return null;
   }
@@ -509,6 +509,7 @@ export function SkillsOverview({
         ))}
       </ResourceListPanel>
       <ResourceInfiniteScrollSentinel
+        itemCount={libraryList.items.length}
         hasMore={libraryList.hasMore}
         onLoadMore={libraryList.loadMore}
       />

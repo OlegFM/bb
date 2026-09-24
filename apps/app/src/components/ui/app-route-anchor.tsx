@@ -18,6 +18,8 @@ import { isRoutePath, resolveRouteHref } from "@/lib/route-paths";
 import { getDesktopBrowserApi } from "@/lib/bb-desktop";
 import { openPaneContentInSplit } from "@/lib/split-layout/openPaneContentInSplit";
 import { paneContentForPathname } from "@/views/thread-detail/splitThreadNavigation";
+import { useOptionalPaneContext } from "@/views/thread-detail/PaneContext";
+import { usePublishPluginDetailOpener } from "@/components/plugin/plugin-detail-opener";
 
 interface RouteNavigationProviderProps {
   children: ReactNode;
@@ -159,10 +161,24 @@ export function PluginDetailRouteNavigationProvider({
   children: ReactNode;
   onOpenPluginDetail: (pluginId: string) => boolean;
 }) {
+  const pane = useOptionalPaneContext();
+  usePublishPluginDetailOpener(
+    ({ pluginId }) => onOpenPluginDetail(pluginId),
+    pane?.isFocused ?? true,
+  );
   return (
     <PluginDetailRouteNavigationContext.Provider value={onOpenPluginDetail}>
       {children}
     </PluginDetailRouteNavigationContext.Provider>
+  );
+}
+
+function anchorInScope(root: HTMLElement, anchor: HTMLAnchorElement): boolean {
+  if (root.contains(anchor)) return true;
+  const pluginId = root.getAttribute("data-bb-plugin");
+  const overlay = anchor.closest("[data-bb-portaled-overlay]");
+  return (
+    pluginId !== null && overlay?.getAttribute("data-bb-plugin") === pluginId
   );
 }
 
@@ -178,7 +194,9 @@ export function useRouteAnchorDelegate(): (
         event.target instanceof Element
           ? event.target.closest<HTMLAnchorElement>("a[href]")
           : null;
-      if (anchor === null || !event.currentTarget.contains(anchor)) return;
+      if (anchor === null || !anchorInScope(event.currentTarget, anchor)) {
+        return;
+      }
       const target = anchor.getAttribute("target");
       if (target !== null && target !== "" && target !== "_self") return;
       if (event.button !== 0 || event.altKey || event.shiftKey) return;

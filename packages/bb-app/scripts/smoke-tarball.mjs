@@ -17,6 +17,7 @@ import {
   resolveInstalledBinEntry,
   resolveLaunchForLabel,
 } from "./npm-launch.mjs";
+import { createManagedProcessStop } from "./managed-process.mjs";
 
 const HTTP_WAIT_TIMEOUT_MS = 60_000;
 const HTTP_WAIT_INTERVAL_MS = 250;
@@ -64,6 +65,7 @@ const tempRoot = await mkdtemp(join(tmpdir(), "bb-app-tarball-"));
 const smokeProcessEnv = {
   BB_TELEMETRY: "false",
 };
+const stopManagedProcess = createManagedProcessStop(PROCESS_STOP_TIMEOUT_MS);
 
 function formatElapsed(startedAt) {
   return `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
@@ -363,42 +365,6 @@ async function waitForHostPluginWorker({ dataDir, pluginId, processRef }) {
   throw new Error(
     `Timed out waiting for host plugin ${pluginId} on ${processRef.label}\n${formatProcessOutput(processRef.output)}\n${logPath}:\n${daemonOutput}`,
   );
-}
-
-async function stopManagedProcess(processRef) {
-  if (processRef.detached) {
-    try {
-      process.kill(-processRef.childProcess.pid, "SIGINT");
-    } catch (error) {
-      if (
-        !(error instanceof Error && "code" in error && error.code === "ESRCH")
-      ) {
-        throw error;
-      }
-    }
-  }
-
-  if (
-    processRef.childProcess.exitCode !== null ||
-    processRef.childProcess.signalCode !== null
-  ) {
-    return;
-  }
-  if (!processRef.detached) {
-    processRef.childProcess.kill("SIGINT");
-  }
-  const stopped = await Promise.race([
-    waitForProcessExit(processRef.childProcess).then(() => true),
-    delay(PROCESS_STOP_TIMEOUT_MS).then(() => false),
-  ]);
-  if (!stopped) {
-    if (processRef.detached) {
-      process.kill(-processRef.childProcess.pid, "SIGTERM");
-    } else {
-      processRef.childProcess.kill("SIGTERM");
-    }
-    await waitForProcessExit(processRef.childProcess);
-  }
 }
 
 function createInstalledBinInvocation(binDir, bin, args) {
@@ -801,24 +767,6 @@ async function smokePluginHostWorkerBundle(packageDir) {
   }
 }
 
-/**
- * The semantic deltas a `thread/delta` notification batches, or [] for
- * anything else. Bridge-protocol v2 carries no finished timeline events on
- * this wire — the runtime's assembler builds those — so the smoke asserts
- * against the delta grammar directly.
- */
-function threadDeltas(message) {
-  if (
-    !isRecord(message) ||
-    message.method !== "thread/delta" ||
-    !isRecord(message.params) ||
-    !Array.isArray(message.params.deltas)
-  ) {
-    return [];
-  }
-  return message.params.deltas.filter(isRecord);
-}
-
 async function smokeHelpCommands(binDir) {
   await runCommand({
     ...createInstalledBinInvocation(binDir, "bb-app", ["--help"]),
@@ -905,6 +853,25 @@ async function smokeSdkPackage(tarballPath) {
     command: "node",
     cwd: sdkDir,
     label: "bb-app SDK JavaScript import",
+  });
+  await runCommand({
+    command: process.execPath,
+    args: [
+      "--input-type=module",
+      "-e",
+      [
+        'import { createRequire } from "node:module";',
+        'import { dirname, join } from "node:path";',
+        'import { execFileSync } from "node:child_process";',
+        "const require = createRequire(import.meta.url);",
+        'const bbRequire = createRequire(require.resolve("bb-app"));',
+        'const npmRoot = dirname(bbRequire.resolve("npm/package.json"));',
+        'const version = execFileSync(process.execPath, [join(npmRoot, "bin/npm-cli.js"), "--version"], { encoding: "utf8", env: { ...process.env, PATH: "" } }).trim();',
+        'if (version !== bbRequire("npm/package.json").version) process.exit(1);',
+      ].join("\n"),
+    ],
+    cwd: sdkDir,
+    label: "shipped npm without Node or npm on PATH",
   });
   await writeFile(
     join(sdkDir, "sdk-smoke.ts"),

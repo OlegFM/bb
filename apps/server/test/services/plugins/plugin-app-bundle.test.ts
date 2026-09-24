@@ -1,13 +1,14 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveExecutable, resolveSpawnPlanOrThrow } from "@bb/process-utils";
+import { resolveBundledNpmCli } from "@bb/plugin-build";
 import { upsertInstalledPlugin } from "@bb/db";
 import { PLUGIN_SDK_MAJOR, PLUGIN_SDK_VERSION } from "@bb/domain";
 import {
@@ -23,28 +24,10 @@ async function resolveTestNpm(args: string[]): Promise<{
   command: string;
   args: string[];
 } | null> {
-  const launcher = await resolveExecutable({ command: "npm" });
-  if (launcher === null) return null;
   if (process.platform !== "win32") return { command: "npm", args };
-  const expectedShim = join(dirname(process.execPath), "npm.cmd");
-  if (launcher.toLowerCase() !== expectedShim.toLowerCase()) {
-    throw new Error(`Unexpected npm launcher: ${launcher}`);
-  }
-  const plan = await resolveSpawnPlanOrThrow({ command: "npm", args });
-  const expectedScript = join(
-    dirname(process.execPath),
-    "node_modules",
-    "npm",
-    "bin",
-    "npm-cli.js",
-  );
-  if (
-    plan.command !== process.execPath ||
-    plan.args[0]?.toLowerCase() !== expectedScript.toLowerCase()
-  ) {
-    throw new Error(`Unexpected npm Node entry: ${plan.args[0] ?? "missing"}`);
-  }
-  return plan;
+  const npmCli = resolveBundledNpmCli();
+  if (!existsSync(npmCli)) return null;
+  return { command: process.execPath, args: [npmCli, ...args] };
 }
 
 async function hasBinary(command: string): Promise<boolean> {
@@ -155,10 +138,10 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
     expect(bundle.sdkMajor).toBe(PLUGIN_SDK_MAJOR);
     expect(bundle.sdkVersion).toBe(PLUGIN_SDK_VERSION);
     expect(bundle.jsUrl).toBe(
-      `/api/v1/plugins/appy/assets/app.js?h=${bundle.hash}`,
+      `/api/v1/plugin-app-assets/${bundle.hash}/app.js`,
     );
     expect(bundle.cssUrl).toBe(
-      `/api/v1/plugins/appy/assets/app.css?h=${bundle.hash}`,
+      `/api/v1/plugin-app-assets/${bundle.hash}/app.css`,
     );
     const jsStat = await stat(join(rootDir, "dist", "app.js"));
     await stat(join(rootDir, "dist", "app.meta.json"));
@@ -245,6 +228,10 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
       `${BASE}/api/v1/plugins/nope/assets/app.js`,
     );
     expect(unknownPlugin.status).toBe(404);
+    const unknownHash = await harness.app.request(
+      `${BASE}/api/v1/plugin-app-assets/0000000000000000/app.js`,
+    );
+    expect(unknownHash.status).toBe(404);
     const unknownFile = await harness.app.request(
       `${BASE}/api/v1/plugins/appy/assets/evil.js`,
     );
@@ -428,7 +415,7 @@ describe("plugin app bundles (build policy, inventory, asset routes)", () => {
     expect(after).not.toBeNull();
     expect(after?.hash).not.toBe(before?.hash);
     expect(after?.jsUrl).toBe(
-      `/api/v1/plugins/devy/assets/app.js?h=${after?.hash}`,
+      `/api/v1/plugin-app-assets/${after?.hash}/app.js`,
     );
     const js = await harness.app.request(`${BASE}${after?.jsUrl ?? ""}`);
     expect(js.status).toBe(200);

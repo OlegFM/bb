@@ -14,12 +14,16 @@ describe("packed plugin SDK exports", () => {
     const packageJson = JSON.parse(
       await readFile(new URL("package.json", packageRoot), "utf8"),
     ) as {
+      dependencies: Record<string, string>;
       files: string[];
+      peerDependencies: Record<string, string>;
       private?: boolean;
       exports: Record<string, PackageExport>;
     };
 
     expect(packageJson.private).not.toBe(true);
+    expect(packageJson.dependencies.zod).toBe("^4.3.6");
+    expect(packageJson.peerDependencies.zod).toBeUndefined();
     expect(packageJson.files).toEqual(["bundled-types", "dist", "README.md"]);
     expect(Object.keys(packageJson.exports)).toEqual([
       ".",
@@ -28,6 +32,7 @@ describe("packed plugin SDK exports", () => {
       "./provider-bridge/testing",
       "./provider-bridge/acp",
       "./environment-provider",
+      "./machine-provider",
       "./app",
       "./host",
       "./internal/composer-customization-validation",

@@ -180,10 +180,6 @@ export class PiRpcSession {
     return this.lastContextUsage;
   }
 
-  getProviderCheckpointId(): string | undefined {
-    return this.lastKnownLeafId ?? undefined;
-  }
-
   async start(): Promise<void> {
     await runPiTransientAuthConstruction({
       attempt: () => this.spawnAndVerify(),
@@ -358,7 +354,7 @@ export class PiRpcSession {
     ).then(
       async (): Promise<PiPromptRunOutcome | null> => {
         if (tracked.pending.queuedText !== null) {
-          this.dropRunSettlement(settlement);
+          this.dropRunSettlement();
           return null;
         }
         this.resolvePendingInputConsumption(tracked.pending);
@@ -367,7 +363,7 @@ export class PiRpcSession {
       },
       (error: unknown): PiPromptRunOutcome | null => {
         this.isProcessing = false;
-        this.dropRunSettlement(settlement);
+        this.dropRunSettlement();
         const queued = tracked.pending.queuedText !== null;
         this.rejectPendingInputConsumption(tracked.pending, asError(error));
         this.rejectPendingInputConsumptions(
@@ -546,9 +542,7 @@ export class PiRpcSession {
         ) {
           throw error;
         }
-        await new Promise((resolve) =>
-          setTimeout(resolve, PI_TRANSIENT_AUTH_RETRY_DELAY_MS),
-        );
+        await waitForPiTransientAuthRetry();
       }
     }
   }
@@ -622,8 +616,7 @@ export class PiRpcSession {
     pending.resolve({});
   }
 
-  private dropRunSettlement(settlement: Promise<PiPromptRunOutcome>): void {
-    void settlement;
+  private dropRunSettlement(): void {
     this.pendingRunSettlements.pop();
   }
 
@@ -814,15 +807,12 @@ export class PiRpcSession {
   private trackPendingInputConsumption(
     queue: PiInputQueue,
   ): TrackedInputConsumption {
-    let resolvePromise: (() => void) | undefined;
-    let rejectPromise: ((error: Error) => void) | undefined;
+    let resolvePromise: () => void = () => undefined;
+    let rejectPromise: (error: Error) => void = () => undefined;
     const promise = new Promise<void>((resolve, reject) => {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
-    if (!resolvePromise || !rejectPromise) {
-      throw new Error("Failed to track Pi input consumption");
-    }
     const pending: PendingInputConsumption = {
       queue,
       queuedText: null,

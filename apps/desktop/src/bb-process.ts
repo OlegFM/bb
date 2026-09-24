@@ -6,6 +6,12 @@ import {
   type TerminateProcessTreeArgs,
   type TerminateProcessTreeResult,
 } from "@bb/process-utils";
+import {
+  hasProcessExited,
+  waitForProcessExit,
+  waitForProcessExitWithTimeout,
+  type ChildProcessExitResult,
+} from "@bb/config/child-process-exit";
 
 interface RuntimeLogBuffer {
   append(chunk: Buffer | string): void;
@@ -38,10 +44,7 @@ export interface BbAppProcess {
   stop(args: StopBbAppProcessArgs): Promise<void>;
 }
 
-export interface BbAppProcessExit {
-  code: number | null;
-  signal: NodeJS.Signals | null;
-}
+export type BbAppProcessExit = ChildProcessExitResult;
 
 interface StopBbAppProcessArgs {
   killSignal: NodeJS.Signals;
@@ -99,16 +102,6 @@ interface ResolveBbAppProcessRuntimeArgs {
   platform: NodeJS.Platform;
   processExecPath: string;
 }
-
-interface WaitForProcessExitWithTimeoutArgs {
-  childProcess: ChildProcess;
-  timeoutMs: number;
-}
-
-type WaitForProcessExitWithTimeoutResult = "exited" | "timed-out";
-type ResolveWaitForProcessExitWithTimeout = (
-  result: WaitForProcessExitWithTimeoutResult,
-) => void;
 
 interface RaceTerminateProcessTreeArgs {
   terminate: Promise<TerminateProcessTreeResult>;
@@ -359,61 +352,6 @@ export function createBbAppProcessLaunch(
   };
 }
 
-function hasProcessExited(childProcess: ChildProcess): boolean {
-  return childProcess.exitCode !== null || childProcess.signalCode !== null;
-}
-
-function waitForProcessExit(
-  childProcess: ChildProcess,
-): Promise<BbAppProcessExit> {
-  if (hasProcessExited(childProcess)) {
-    return Promise.resolve({
-      code: childProcess.exitCode,
-      signal: childProcess.signalCode,
-    });
-  }
-
-  return new Promise<BbAppProcessExit>((resolvePromise) => {
-    childProcess.once("exit", (code, signal) => {
-      resolvePromise({ code, signal });
-    });
-  });
-}
-
-function waitForProcessExitWithTimeout(
-  args: WaitForProcessExitWithTimeoutArgs,
-): Promise<WaitForProcessExitWithTimeoutResult> {
-  if (hasProcessExited(args.childProcess)) {
-    return Promise.resolve("exited");
-  }
-
-  return new Promise<WaitForProcessExitWithTimeoutResult>((resolvePromise) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
-    const finish: ResolveWaitForProcessExitWithTimeout = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      args.childProcess.off("exit", exitHandler);
-      resolvePromise(result);
-    };
-    const exitHandler = (): void => {
-      finish("exited");
-    };
-    timeout = setTimeout(() => {
-      finish("timed-out");
-    }, args.timeoutMs);
-    timeout.unref();
-
-    args.childProcess.once("exit", exitHandler);
-    if (hasProcessExited(args.childProcess)) {
-      finish("exited");
-    }
-  });
-}
-
 function raceTerminateProcessTree(
   args: RaceTerminateProcessTreeArgs,
 ): Promise<RaceTerminateProcessTreeResult> {
@@ -422,26 +360,17 @@ function raceTerminateProcessTree(
       let settled = false;
       let timeout: ReturnType<typeof setTimeout>;
       const finish = (result: RaceTerminateProcessTreeResult): void => {
-        if (settled) {
-          return;
-        }
+        if (settled) return;
         settled = true;
         clearTimeout(timeout);
         resolvePromise(result);
       };
-      timeout = setTimeout(() => {
-        finish("timed-out");
-      }, args.timeoutMs);
+      timeout = setTimeout(() => finish("timed-out"), args.timeoutMs);
       timeout.unref();
-
       args.terminate.then(
-        () => {
-          finish("settled");
-        },
+        () => finish("settled"),
         (error: unknown) => {
-          if (settled) {
-            return;
-          }
+          if (settled) return;
           settled = true;
           clearTimeout(timeout);
           rejectPromise(error);

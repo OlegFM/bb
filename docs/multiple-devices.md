@@ -9,6 +9,14 @@ There are two separate ways to use more than one device with bb:
 
 You can use either story independently or combine them.
 
+In both stories one computer runs the bb server. It stores your threads, the
+database, and settings, and every browser and execution machine connects to it.
+Pick a computer that stays on, such as a desktop, home server, or VM: while the
+server machine is asleep or off, nothing can reach bb and running threads may
+stop. Settings → Machines badges it `server` once several machines are
+connected, `bb machine list` shows `server` in its Role column, and the server
+machine cannot be removed.
+
 ## Open bb from another browser
 
 The simplest managed route is **bb connect**. Pair the server from Settings →
@@ -174,7 +182,9 @@ through the account gate. Without bb connect, open the server through a
 Tailscale Serve URL before generating the installer; the loopback listener is
 not directly reachable from another machine. When bb connect is not paired and
 the server URL is a loopback or unspecified address, the dialog does not show an
-installer. It links to Settings → Remote access instead.
+installer. It asks you to set up machine access first by choosing the address
+machines should use. Once access is ready, the dialog also names the server
+machine the new machine will depend on.
 
 The macOS/Linux installer installs the exact host-only `bb-app` package exposed by
 that server at `/install/bb-app.tgz`. The package contains the host daemon,
@@ -192,10 +202,8 @@ prefix, so enrollment needs neither `sudo` nor a PATH change.
 Each joined server gets its own daemon instance, data directory
 (`~/.bb-machines/<server-host>`, override with `BB_DATA_DIR` when running the
 installer), local API port, and launchd/systemd service. The installer persists
-the selected port in that data directory and atomically reserves it under
-`~/.bb-machines/host-daemon-ports/`, including when `BB_DATA_DIR` points
-elsewhere. Subsequent runs reuse the reservation; pass `--host-daemon-port
-<port>` to the installer to override the selection. One machine can therefore
+the selected port in that data directory. Subsequent runs reuse it; pass
+`--host-daemon-port <port>` to the installer to override the selection. One machine can therefore
 serve several bb servers at once, and joining never touches a full local bb
 install's `~/.bb`. Each instance keeps its own `bb-app` under that data
 directory and self-updates against its own server, so servers running different
@@ -208,8 +216,10 @@ npm installed alongside it, and an absolute drive-local NTFS data directory.
 The Windows command downloads `/install.ps1` to a temporary `.ps1`, runs it with
 `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`, and
 removes only that temporary file even on failure. It makes no persistent PATH or
-execution-policy changes. Installer flags are `-JoinCode`, `-HostId`, `-Server`
-(HTTP(S) origin), optional `-MachineCode`, and optional `-HostDaemonPort`.
+execution-policy changes. The generated command sends an `X-BB-Enrollment`
+header to retrieve the private bootstrap bundle. The installer consumes that
+bundle through `bb machine enroll --bootstrap-env`; `-HostDaemonPort` optionally
+overrides the local daemon port.
 Windows requires the exact SHA-256-verified `/install/bb-app.tgz` artifact and
 fails if it is unavailable; it never falls back to a registry or global install.
 
@@ -225,7 +235,7 @@ The installer rejects incompatible existing enrollment instead of replacing it.
 A limited per-user Scheduled Task named `bb-host-daemon-<origin-hash>` runs the
 hidden supervisor at logon; HKCU Run with the same name is the fallback when
 task registration is denied. The launcher uses absolute paths, enables daemon
-auto-update, restarts after exit, and retains no join or machine code. Logs are
+auto-update, restarts after exit, and retains no bootstrap credential. Logs are
 `<data>\logs\host-daemon.log` and `<data>\logs\supervisor.log`. The installer
 prints exact paths and removal commands. See
 [platform-windows.md](platform-windows.md#persistent-execution-machine-beta)
@@ -236,27 +246,19 @@ pending in [the checklist](../qa/windows/CHECKLIST.md).
 
 ### Pair through CLI or SDK
 
-Run `bb machine join-code --json` against the server to obtain
-`{joinCode, hostId, expiresAt}`. Pass these as `-JoinCode` and `-HostId` to the
-Windows installer (`--join-code` and `--host-id` on macOS/Linux), with a
-reachable server origin. The SDK equivalent is `sdk.hosts.createJoinCode()`.
+Run `bb machine create --provider manual --shell powershell` against the
+server, then execute the printed command on the Windows target before it
+expires. Omit `--shell` for macOS/Linux. The CLI follows creation until the
+daemon connects. An explicit shell cannot be combined with `--no-wait` or a
+different machine provider.
 
-For an account-gated Connect URL, the server must already be paired with
-Connect. The existing CLI `bb connect machine-code --json` also requires the
-**Mobile app** experiment: enable it in Settings → Experiments or with
-`bb settings experiment mobileApp true`. Its JSON includes
-`{code, serverUrl, apex, expiresAt}`; use `serverUrl` for `-Server` and `code`
-for `-MachineCode` (or `--server` and `--machine-code` on macOS/Linux).
-The same machine code is available through the existing Connect
-`createMachineCode` RPC using `sdk.plugins.callRpc` with `pluginId: "connect"`,
-`method: "createMachineCode"`, `input: null`, and an output schema validating
-`{code: string, serverUrl: string, expiresAt: number}`. The Add machine UI uses
-this RPC directly. Connect codes last 10 minutes and work once; run the
-installer before either pairing code expires. For direct reachable server
-origins, omit the machine code.
-
-Download `/install.ps1` into a temporary file and invoke its named parameters
-as shown by the UI. The CLI and SDK issue codes for the same installer.
+In the SDK, create the machine with
+`sdk.hosts.experimental_create({ machineProviderId: "manual", inputs: null, wait: false })`.
+Poll `sdk.hosts.experimental_getEnrollmentCommand({ hostId })` until it returns
+a non-null result, then use `windowsCommand` for PowerShell or `command` for sh.
+Both commands share `expiresAt`. The server includes access credentials in the
+private bootstrap bundle; configure bb Connect or a reachable direct URL before
+creation. Keep the generated command private.
 
 The installed launchd/systemd service enables `--auto-update`. If session open
 reports a newer server protocol, the daemon downloads the server artifact,

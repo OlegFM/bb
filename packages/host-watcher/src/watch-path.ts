@@ -1,27 +1,38 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createDebouncedCallbackScheduler } from "@bb/domain";
 import {
   RootSubscription,
   type ParcelWatcherEventBatch,
 } from "./root-subscription.js";
-import { createDebouncedCallbackScheduler } from "./watch-callback-scheduler.js";
 import { toWatchErrorMessage } from "./watch-error.js";
 import {
   isWatchPathWithinRoot,
   normalizeWatchEventPath,
 } from "./watch-event-path.js";
 import type {
-  PathChangeEvent,
-  PathChangeCallback,
   PathChangeWatchArgs,
   PathChangeWatchError,
-  PathChangeWatchErrorCallback,
 } from "./watch-path-types.js";
 
 const PATH_CHANGE_WATCH_DEBOUNCE_MS = 75;
 const PATH_CHANGE_WATCH_MAX_WAIT_MS = 500;
 const PATH_CHANGE_WATCH_RETRY_DELAY_MS = 250;
 const PATH_CHANGE_WATCH_MAX_RETRY_DELAY_MS = 30_000;
+const PATH_CHANGE_WATCH_HEAVY_TREE_NAMES = [
+  "node_modules",
+  ".pnpm-store",
+  ".venv",
+  "venv",
+  ".turbo",
+  ".next",
+  ".cache",
+  "__pycache__",
+];
+const PATH_CHANGE_WATCH_IGNORES = [
+  `**/{${PATH_CHANGE_WATCH_HEAVY_TREE_NAMES.join(",")}}/**`,
+  "**/.git/**",
+];
 
 interface PathChangeWatcherArgs extends PathChangeWatchArgs {
   path: string;
@@ -87,6 +98,7 @@ class PathChangeWatcher {
     });
     this.subscription = new RootSubscription({
       rootPath: this.targetPath,
+      subscribeOptions: { ignore: [...PATH_CHANGE_WATCH_IGNORES] },
       retryDelayMs: args.retryDelayMs,
       maxRetryDelayMs: args.maxRetryDelayMs,
       onEvents: (events) => {
@@ -135,14 +147,6 @@ class PathChangeWatcher {
     this.changeScheduler.schedule();
   }
 }
-
-export type {
-  PathChangeEvent,
-  PathChangeCallback,
-  PathChangeWatchArgs,
-  PathChangeWatchError,
-  PathChangeWatchErrorCallback,
-};
 
 export function watchPathChanges(
   watchedPath: string,

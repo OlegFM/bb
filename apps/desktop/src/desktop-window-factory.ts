@@ -16,12 +16,34 @@ import {
   type StatefulBrowserWindow,
 } from "./window-state.js";
 import type { DesktopContextMenuWebContents } from "./desktop-context-menu.js";
-import {
-  resolveWindowsTitleBarOverlay,
-  type DesktopTitleBarOverlay,
-} from "./desktop-window-frame.js";
 
 type DesktopWindowIcon = BrowserWindowConstructorOptions["icon"];
+
+export const WINDOWS_TITLE_BAR_OVERLAY_HEIGHT = 48;
+
+export interface DesktopTitleBarOverlay {
+  color: string;
+  height: number;
+  symbolColor: string;
+}
+
+export function resolveWindowsTitleBarOverlay({
+  darkColors,
+}: {
+  darkColors: boolean;
+}): DesktopTitleBarOverlay {
+  return darkColors
+    ? {
+        color: "#1f1f1f",
+        height: WINDOWS_TITLE_BAR_OVERLAY_HEIGHT,
+        symbolColor: "#e8e8e8",
+      }
+    : {
+        color: "#f6f6f6",
+        height: WINDOWS_TITLE_BAR_OVERLAY_HEIGHT,
+        symbolColor: "#1f1f1f",
+      };
+}
 
 const MACOS_TRAFFIC_LIGHT_DIAGONAL_INSET = 18;
 const MACOS_TRAFFIC_LIGHT_POSITION = {
@@ -48,7 +70,6 @@ export interface DesktopWindowOpenDevToolsOptions {
 export interface DesktopWindowWebContents extends DesktopContextMenuWebContents {
   id: number;
   openDevTools(options: DesktopWindowOpenDevToolsOptions): void;
-  send(channel: string, payload: unknown): void;
   setWindowOpenHandler(handler: DesktopWindowOpenHandler): void;
   setZoomFactor(factor: number): void;
 }
@@ -56,7 +77,6 @@ export interface DesktopWindowWebContents extends DesktopContextMenuWebContents 
 export interface DesktopBrowserWindow extends StatefulBrowserWindow {
   readonly id: number;
   focus(): void;
-  isFocused(): boolean;
   isMinimized(): boolean;
   loadURL(url: string): Promise<void>;
   maximize(): void;
@@ -114,9 +134,6 @@ export interface DesktopWindowFactory {
   createWindow(args: CreateDesktopWindowArgs): Promise<DesktopBrowserWindow>;
   focusFirstWindow(): boolean;
   hasOpenWindows(): boolean;
-  sendToFocusedWindow(channel: string, payload: unknown): boolean;
-  sendToFirstWindow(channel: string, payload: unknown): boolean;
-  loadUrlInFirstWindow(args: LoadDesktopWindowsUrlArgs): Promise<boolean>;
   loadUrl(args: LoadDesktopWindowsUrlArgs): Promise<void>;
   openDevTools(): void;
   persistOpenWindows(): Promise<void>;
@@ -353,46 +370,6 @@ export function createDesktopWindowFactory(
     return false;
   }
 
-  async function loadUrlInFirstWindow(
-    loadArgs: LoadDesktopWindowsUrlArgs,
-  ): Promise<boolean> {
-    for (const browserWindow of activeWindows.values()) {
-      if (browserWindow.isMinimized()) {
-        browserWindow.restore();
-      }
-      await loadUrlIntoWindow({
-        browserWindow,
-        url: loadArgs.url,
-      });
-      browserWindow.focus();
-      return true;
-    }
-    return false;
-  }
-
-  function sendToFirstWindow(channel: string, payload: unknown): boolean {
-    for (const browserWindow of activeWindows.values()) {
-      if (browserWindow.isMinimized()) {
-        browserWindow.restore();
-      }
-      browserWindow.webContents.send(channel, payload);
-      browserWindow.focus();
-      return true;
-    }
-    return false;
-  }
-
-  function sendToFocusedWindow(channel: string, payload: unknown): boolean {
-    for (const browserWindow of activeWindows.values()) {
-      if (!browserWindow.isFocused()) {
-        continue;
-      }
-      browserWindow.webContents.send(channel, payload);
-      return true;
-    }
-    return sendToFirstWindow(channel, payload);
-  }
-
   function applyTitleBarOverlay(overlay: DesktopTitleBarOverlay): void {
     for (const browserWindow of activeWindows.values()) {
       browserWindow.setTitleBarOverlay(overlay);
@@ -424,9 +401,6 @@ export function createDesktopWindowFactory(
     hasOpenWindows() {
       return activeWindows.size > 0;
     },
-    sendToFocusedWindow,
-    sendToFirstWindow,
-    loadUrlInFirstWindow,
     loadUrl,
     openDevTools,
     persistOpenWindows,

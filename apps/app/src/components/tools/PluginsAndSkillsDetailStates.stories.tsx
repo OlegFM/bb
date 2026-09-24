@@ -13,10 +13,7 @@ import {
 import { Switch } from "@bb/shared-ui/switch";
 import { AddPluginDialog } from "@/components/plugin/management/AddPluginDialog";
 import { PluginDetailReleaseControl } from "@/components/plugin/management/PluginUpdatesCard";
-import {
-  AutomationLifecycleControl,
-  AutomationRunStatusIndicator,
-} from "bb-plugin-automations/detail-view";
+import { AutomationLifecycleControl } from "bb-plugin-automations/detail-view";
 import { AUTOMATION_CREATE_TEMPLATES } from "bb-plugin-automations/overview-view";
 import type { PluginCatalogSearchEntry } from "@/hooks/queries/plugin-catalog-queries";
 import { pluginSourceQueryKey } from "@/hooks/queries/query-keys";
@@ -33,7 +30,6 @@ import {
   CatalogPluginDetailBanner,
   PluginDetail,
   PluginDetailBanners,
-  PluginProvenancePill,
 } from "@/components/tools/PluginDetail";
 import {
   ProviderLogo,
@@ -504,7 +500,19 @@ const UNINSTALLED_CATALOG_PLUGIN = {
   icon: "Github",
   iconUrl: null,
   iconTinted: false,
-  category: "Developer tools",
+  categoryId: "code-and-reviews",
+  category: "Code & Reviews",
+  overview: `Review pull requests and triage issues from the thread you are working in.
+
+## What you get
+
+- A pull request panel with checks, reviews, and the diff for the current branch.
+- Issue search that attaches an issue to the thread as context.
+- A \`bb github\` command for agents to open, update, and comment on pull requests.
+
+## How it works
+
+Sign in once with \`gh auth login\`. The plugin reuses your GitHub CLI session and never stores a token of its own.`,
   screenshots: [],
   collections: [],
   source: "builtin:github",
@@ -1169,16 +1177,6 @@ export function ResourceControlStates() {
           description="Badges appear only when provenance changes how the resource should be understood. Ordinary owned resources stay unlabelled in their detail-page stories."
         >
           <ControlRow
-            state="Plugin · BB Official catalog"
-            control={<PluginProvenancePill plugin={CATALOG_PLUGIN} />}
-            meaning="Published by bb and installed from the catalog."
-          />
-          <ControlRow
-            state="Plugin · BB Official built-in"
-            control={<PluginProvenancePill plugin={BUNDLED_PLUGIN} />}
-            meaning="Ships with bb. The same badge communicates publisher; lifecycle differences remain in metadata and actions."
-          />
-          <ControlRow
             state="Skill · BB Official"
             control={
               <ProvenancePill label="BB Official" tooltip="Ships with bb" />
@@ -1413,18 +1411,6 @@ export function ResourceControlStates() {
             }
             meaning="The scheduled time passed without a completed run."
           />
-          {(["succeeded", "failed", "running", "skipped"] as const).map(
-            (status) => (
-              <ControlRow
-                key={status}
-                state={`Run · ${status}`}
-                control={
-                  <AutomationRunStatusIndicator status={status} showLabel />
-                }
-                meaning="Persisted run status used in automation history."
-              />
-            ),
-          )}
           <ControlRow
             state="Create"
             control={

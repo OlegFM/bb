@@ -127,6 +127,10 @@ interface ExistingTableRow {
   name: string;
 }
 
+interface AppliedMigrationCountRow {
+  count: number;
+}
+
 interface PendingInteractionProviderRequestDuplicateRow {
   duplicateCount: number;
   providerId: string;
@@ -169,6 +173,72 @@ const branchLocalThreadSearchMigrationCreatedAts = [
   1781403656070, 1781403656071,
 ] as const;
 const branchLocalThreadTabsMigrationCreatedAts = [1783633750817] as const;
+const legacyWindowsPathKeyMigration = {
+  createdAt: 1789261268513,
+  hash: "f50b32e17564dde88d3de71aa3104b7cbbfddea1a1eff280810447638a66aa1a",
+} as const;
+
+function hasLegacyWindowsPathKeyMigration(db: DbConnection): boolean {
+  if (!tableExists(db, "__drizzle_migrations")) return false;
+  const migration = db.$client
+    .prepare<[number], AppliedMigrationIdentityRow>(
+      "SELECT created_at AS createdAt, hash FROM __drizzle_migrations WHERE created_at = ?",
+    )
+    .get(legacyWindowsPathKeyMigration.createdAt);
+  if (migration?.hash !== legacyWindowsPathKeyMigration.hash) return false;
+  if (
+    readLatestAppliedMigrationCreatedAt(db) !==
+    legacyWindowsPathKeyMigration.createdAt
+  ) {
+    throw new Error(
+      "Cannot repair Windows path-key migration after newer migration timestamps",
+    );
+  }
+  if (
+    !columnExists(db, "environments", "path_key") ||
+    !columnExists(db, "project_sources", "path_key")
+  ) {
+    throw new Error(
+      "Windows path-key migration ledger does not match the database schema",
+    );
+  }
+  return true;
+}
+
+function stageLegacyWindowsPathKeys(db: DbConnection): void {
+  db.$client.exec(`
+    CREATE TEMP TABLE bb_legacy_environment_path_keys AS SELECT id, path_key FROM environments;
+    CREATE TEMP TABLE bb_legacy_project_source_path_keys AS SELECT id, path_key FROM project_sources;
+    DROP INDEX environments_live_path_key_idx;
+    DROP INDEX environments_host_path_key_idx;
+    DROP INDEX project_sources_host_path_key_idx;
+    ALTER TABLE environments DROP COLUMN path_key;
+    ALTER TABLE project_sources DROP COLUMN path_key;
+  `);
+  db.$client
+    .prepare<[number, string]>(
+      "DELETE FROM __drizzle_migrations WHERE created_at = ? AND hash = ?",
+    )
+    .run(
+      legacyWindowsPathKeyMigration.createdAt,
+      legacyWindowsPathKeyMigration.hash,
+    );
+}
+
+function restoreLegacyWindowsPathKeys(db: DbConnection): void {
+  db.$client.exec(`
+    UPDATE environments SET path_key = (
+      SELECT path_key FROM temp.bb_legacy_environment_path_keys
+      WHERE bb_legacy_environment_path_keys.id = environments.id
+    ) WHERE id IN (SELECT id FROM temp.bb_legacy_environment_path_keys);
+    UPDATE project_sources SET path_key = (
+      SELECT path_key FROM temp.bb_legacy_project_source_path_keys
+      WHERE bb_legacy_project_source_path_keys.id = project_sources.id
+    ) WHERE id IN (SELECT id FROM temp.bb_legacy_project_source_path_keys);
+    DROP TABLE temp.bb_legacy_environment_path_keys;
+    DROP TABLE temp.bb_legacy_project_source_path_keys;
+  `);
+}
 const pendingInteractionColumns: ExpectedColumn[] = [
   { name: "id", type: "text", notNull: true, primaryKey: true },
   { name: "thread_id", type: "text", notNull: true, primaryKey: false },
@@ -505,6 +575,23 @@ function readAppliedMigrationCreatedAts(db: DbConnection): Set<number> {
     .all();
 
   return new Set(rows.map((row) => row.createdAt));
+}
+
+export function countAppliedMigrations(db: DbConnection): number {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return 0;
+  }
+
+  const row = db.$client
+    .prepare<[], AppliedMigrationCountRow>(
+      `
+        SELECT COUNT(*) AS count
+        FROM __drizzle_migrations
+      `,
+    )
+    .get();
+
+  return row?.count ?? 0;
 }
 
 function readLatestAppliedMigrationCreatedAt(db: DbConnection): number | null {
@@ -1295,6 +1382,8 @@ function repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
 }
 
 const STAGED_CONNECT_MACHINE_ID_COLUMN = "_bb_connect_machine_id_pending";
+const STAGED_THREAD_STORAGE_DELETED_AT_COLUMN =
+  "_bb_thread_storage_deleted_at_pending";
 
 function stageExistingConnectMachineIdColumn(
   db: DbConnection,
@@ -1335,6 +1424,46 @@ function restoreStagedConnectMachineIdColumn(db: DbConnection): void {
   db.$client.exec(
     `UPDATE hosts SET connect_machine_id = ${STAGED_CONNECT_MACHINE_ID_COLUMN};
      ALTER TABLE hosts DROP COLUMN ${STAGED_CONNECT_MACHINE_ID_COLUMN};`,
+  );
+}
+
+function stageExistingThreadStorageDeletedAtColumn(
+  db: DbConnection,
+  migrationsFolder: string,
+): boolean {
+  if (
+    !tableExists(db, "__drizzle_migrations") ||
+    !tableExists(db, "threads") ||
+    !columnExists(db, "threads", "storage_deleted_at")
+  ) {
+    return false;
+  }
+  const migration = requireExpectedAppliedMigration(
+    readExpectedAppliedMigrations(migrationsFolder),
+    "0120_perfect_clint_barton",
+  );
+  if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
+    return false;
+  }
+  db.$client.exec(
+    `ALTER TABLE threads RENAME COLUMN storage_deleted_at TO ${STAGED_THREAD_STORAGE_DELETED_AT_COLUMN}`,
+  );
+  return true;
+}
+
+function restoreStagedThreadStorageDeletedAtColumn(db: DbConnection): void {
+  if (!columnExists(db, "threads", STAGED_THREAD_STORAGE_DELETED_AT_COLUMN)) {
+    return;
+  }
+  if (!columnExists(db, "threads", "storage_deleted_at")) {
+    db.$client.exec(
+      `ALTER TABLE threads RENAME COLUMN ${STAGED_THREAD_STORAGE_DELETED_AT_COLUMN} TO storage_deleted_at`,
+    );
+    return;
+  }
+  db.$client.exec(
+    `UPDATE threads SET storage_deleted_at = ${STAGED_THREAD_STORAGE_DELETED_AT_COLUMN};
+     ALTER TABLE threads DROP COLUMN ${STAGED_THREAD_STORAGE_DELETED_AT_COLUMN};`,
   );
 }
 
@@ -1540,41 +1669,83 @@ function validateAppliedMigrationHistory(
 export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   const migrationsFolder = resolveMigrationsFolder();
   const sqlite = db.$client;
+  const repairLegacyWindowsPathKeys = hasLegacyWindowsPathKeyMigration(db);
 
+  sqlite.exec(
+    "CREATE TEMP TABLE IF NOT EXISTS bb_migration_local_host (id TEXT PRIMARY KEY)",
+  );
+  sqlite.exec("DELETE FROM bb_migration_local_host");
+  if (sqlite.name !== ":memory:") {
+    const identityPath = join(dirname(sqlite.name), "host-id");
+    if (existsSync(identityPath)) {
+      const hostId = readFileSync(identityPath, "utf8").trim();
+      if (hostId)
+        sqlite
+          .prepare("INSERT INTO bb_migration_local_host (id) VALUES (?)")
+          .run(hostId);
+    }
+  }
   sqlite.pragma("foreign_keys = OFF");
   try {
-    assertNoDuplicatePendingInteractionProviderRequests(db);
-    assertNoLiveEnvironmentPathCollisions(db);
-    if (options.deferDestructiveLegacyCleanup === true) {
-      applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
-    }
-    repairBranchLocalThreadSearchMigrations(db);
-    repairBranchLocalThreadTabsBeforePendingInteractionsMigration(
-      db,
-      migrationsFolder,
-    );
-    skipEventLargeValuesRoundTripForInlineEvents(db, migrationsFolder);
-    repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
-      db,
-      migrationsFolder,
-    );
-    const stagedConnectMachineId = stageExistingConnectMachineIdColumn(
-      db,
-      migrationsFolder,
-    );
-    try {
-      drizzleMigrate(db, { migrationsFolder });
-    } finally {
-      if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
-    }
-    applyReorderedCleanupMigrations(db, migrationsFolder);
-    applyQueuedMessageGroupingSchema(db);
-    seedKeepAwakePluginConfiguration(db);
+    const applyMigrations = () => {
+      assertNoDuplicatePendingInteractionProviderRequests(db);
+      assertNoLiveEnvironmentPathCollisions(db);
+      if (repairLegacyWindowsPathKeys) stageLegacyWindowsPathKeys(db);
+      if (options.deferDestructiveLegacyCleanup === true) {
+        applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
+      }
+      repairBranchLocalThreadSearchMigrations(db);
+      repairBranchLocalThreadTabsBeforePendingInteractionsMigration(
+        db,
+        migrationsFolder,
+      );
+      skipEventLargeValuesRoundTripForInlineEvents(db, migrationsFolder);
+      repairBranchLocalQueuedGroupingBeforeInitialThreadSections(
+        db,
+        migrationsFolder,
+      );
+      const stagedConnectMachineId = stageExistingConnectMachineIdColumn(
+        db,
+        migrationsFolder,
+      );
+      const stagedThreadStorageDeletedAt =
+        stageExistingThreadStorageDeletedAtColumn(db, migrationsFolder);
+      try {
+        if (repairLegacyWindowsPathKeys) {
+          const latest = readLatestAppliedMigrationCreatedAt(db);
+          for (const migration of readExpectedAppliedMigrations(
+            migrationsFolder,
+          )) {
+            if (latest === null || migration.createdAt > latest) {
+              applyMigrationStatements(db, migration);
+            }
+          }
+        } else {
+          drizzleMigrate(db, { migrationsFolder });
+        }
+      } finally {
+        if (stagedConnectMachineId) restoreStagedConnectMachineIdColumn(db);
+        if (stagedThreadStorageDeletedAt)
+          restoreStagedThreadStorageDeletedAtColumn(db);
+      }
+      if (repairLegacyWindowsPathKeys) restoreLegacyWindowsPathKeys(db);
+      applyReorderedCleanupMigrations(db, migrationsFolder);
+      applyQueuedMessageGroupingSchema(db);
+      seedKeepAwakePluginConfiguration(db);
+      if (repairLegacyWindowsPathKeys) {
+        validateAppliedMigrationHistory(db, migrationsFolder);
+        validatePendingInteractionsSchema(db);
+      }
+    };
+    if (repairLegacyWindowsPathKeys) sqlite.transaction(applyMigrations)();
+    else applyMigrations();
   } finally {
     sqlite.pragma("foreign_keys = ON");
   }
 
   warnAboutFutureAppliedMigrations(db, options);
-  validateAppliedMigrationHistory(db, migrationsFolder);
-  validatePendingInteractionsSchema(db);
+  if (!repairLegacyWindowsPathKeys) {
+    validateAppliedMigrationHistory(db, migrationsFolder);
+    validatePendingInteractionsSchema(db);
+  }
 }

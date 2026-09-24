@@ -59,6 +59,17 @@ function sanitizeScriptFileName(name: string): string {
   return base.length > 0 ? base : DEFAULT_SCRIPT_FILE_NAME;
 }
 
+export function interpreterForPath(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+): AutomationScriptInterpreter | undefined {
+  const interpreters =
+    platform === "win32"
+      ? WINDOWS_INTERPRETER_BY_EXTENSION
+      : INTERPRETER_BY_EXTENSION;
+  return interpreters[extname(path).toLowerCase()];
+}
+
 export function resolveDefaultInterpreter(
   scriptFile: string,
   platform: NodeJS.Platform = process.platform,

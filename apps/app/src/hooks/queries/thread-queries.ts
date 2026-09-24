@@ -3,12 +3,16 @@ import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
+  type NotifyOnChangeProps,
   type QueryClient,
 } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { COMPACT_VIEWPORT_QUERY } from "@bb/shared-ui/hooks/use-compact-viewport";
 import { getMediaQuerySnapshot } from "@bb/shared-ui/hooks/use-media-query";
-import type { PendingInteraction, ThreadListEntry } from "@bb/domain";
+import type {
+  PendingInteraction,
+  ThreadListEntry,
+} from "@bb/domain";
 import type {
   PromptHistoryResponse,
   ThreadQueuedMessageListResponse,
@@ -93,7 +97,7 @@ interface QueryOptions {
   staleTime?: number;
 }
 
-const THREAD_LIST_STALE_TIME_MS = 10_000;
+export const THREAD_LIST_STALE_TIME_MS = 10_000;
 const THREAD_SEARCH_STALE_TIME_MS = 10_000;
 const THREAD_DETAIL_STALE_TIME_MS = 5_000;
 const THREAD_MENTION_CANDIDATE_LIMIT = 200;
@@ -118,7 +122,11 @@ export function didThreadDetailBootstrapRefreshAfterMount(query: {
   );
 }
 
-type ThreadTimelineQueryOptions = QueryOptions;
+interface ThreadTimelineQueryOptions extends QueryOptions {
+  notifyOnChangeProps?: NotifyOnChangeProps;
+}
+
+type ThreadConversationOutlineQueryOptions = QueryOptions;
 
 type ThreadTimelineTurnSummaryDetailsQueryOptions = QueryOptions;
 
@@ -587,7 +595,10 @@ export function useThreadSearch({
     active && liveQueryIsSearchable && trimmedQuery !== debouncedQuery;
   const enabled = active && liveQueryIsSearchable && hasSearchableQuery;
   const threadSearchQuery = useQuery<ThreadSearchResponse>({
-    queryKey: threadSearchQueryKey({ limitPerGroup, query: debouncedQuery }),
+    queryKey: threadSearchQueryKey({
+      limitPerGroup,
+      query: debouncedQuery,
+    }),
     queryFn: ({ signal }) =>
       sdk.threads.search({
         limitPerGroup: String(limitPerGroup),
@@ -948,6 +959,9 @@ export function useThreadTimeline(
       });
     },
     enabled,
+    ...(options?.notifyOnChangeProps === undefined
+      ? {}
+      : { notifyOnChangeProps: options.notifyOnChangeProps }),
     refetchOnMount: options?.refetchOnMount ?? true,
     ...(options?.staleTime === undefined
       ? {}
@@ -965,7 +979,7 @@ export function useThreadTimeline(
 
 export function useThreadConversationOutline(
   id: string,
-  options?: ThreadTimelineQueryOptions,
+  options?: ThreadConversationOutlineQueryOptions,
 ) {
   const enabled = (options?.enabled ?? true) && Boolean(id);
   useThreadDetailRealtimeSubscription(id, { enabled });

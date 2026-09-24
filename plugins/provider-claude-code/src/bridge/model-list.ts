@@ -16,9 +16,7 @@ export function buildModelProbeOptions(
     cwd: process.cwd(),
     maxTurns: 0,
     persistSession: false,
-    allowDangerouslySkipPermissions: true,
-    permissionMode: "bypassPermissions",
-    settingSources: [],
+    settingSources: ["user", "project", "local"],
     ...(pathToClaudeCodeExecutable ? { pathToClaudeCodeExecutable } : {}),
   };
 }
@@ -42,6 +40,9 @@ export async function listClaudeCodeBridgeModels(
 
   try {
     const initialization = await session.initializationResult();
+    if (initialization.models.length === 0) {
+      throw new Error("Claude Code reported no models.");
+    }
     return buildClaudeCodeModels(initialization.models);
   } catch (error) {
     throw translateMissingClaudeCliError(error);

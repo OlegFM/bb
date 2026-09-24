@@ -11,6 +11,21 @@ export interface PluginCliContributionEntry {
   name: string;
   summary: string;
   commands: Array<{ name: string; summary: string; usage: string }>;
+  rendersHelp?: boolean;
+}
+
+export function pluginCommandLabel(
+  contribution: PluginCliContributionEntry,
+  argv: readonly string[],
+): string {
+  const declared = new Set(contribution.commands.map((entry) => entry.name));
+  for (let words = Math.min(3, argv.length); words > 0; words -= 1) {
+    const candidate = argv.slice(0, words);
+    if (declared.has(candidate.join("-"))) {
+      return [contribution.name, ...candidate].join(" ");
+    }
+  }
+  return contribution.name;
 }
 
 const CONTRIBUTIONS_TIMEOUT_MS = 2000;
@@ -221,12 +236,7 @@ export async function findDisabledPluginForCommand(
   baseUrl: string,
   name: string,
   timeoutMs: number = CONTRIBUTIONS_TIMEOUT_MS,
-): Promise<{
-  id: string;
-  enabled: boolean;
-  status: string | null;
-  statusDetail: string | null;
-} | null> {
+): Promise<string | null> {
   try {
     const response = await cliFetch(`${baseUrl}/api/v1/plugins`, {
       signal: AbortSignal.timeout(timeoutMs),
@@ -235,14 +245,7 @@ export async function findDisabledPluginForCommand(
     const parsed = (await response.json()) as { plugins?: unknown } | null;
     if (!Array.isArray(parsed?.plugins)) return null;
     const match = parsed.plugins.find(
-      (
-        entry,
-      ): entry is {
-        id: string;
-        enabled: boolean;
-        status?: unknown;
-        statusDetail?: unknown;
-      } =>
+      (entry): entry is { id: string } =>
         typeof entry === "object" &&
         entry !== null &&
         (entry as { id?: unknown }).id === name &&
@@ -250,15 +253,7 @@ export async function findDisabledPluginForCommand(
         ((entry as { enabled?: unknown }).enabled === false ||
           (entry as { status?: unknown }).status === "disabled"),
     );
-    return match === undefined
-      ? null
-      : {
-          id: match.id,
-          enabled: match.enabled,
-          status: typeof match.status === "string" ? match.status : null,
-          statusDetail:
-            typeof match.statusDetail === "string" ? match.statusDetail : null,
-        };
+    return match === undefined ? null : match.id;
   } catch {
     return null;
   }
@@ -289,7 +284,9 @@ async function materializeStdinFlag(
   argv: readonly string[],
   input: PluginCliInputStream,
 ): Promise<string[]> {
-  const matches = argv.flatMap((flag, index) => {
+  const terminator = argv.indexOf("--");
+  const scanned = terminator === -1 ? argv : argv.slice(0, terminator);
+  const matches = scanned.flatMap((flag, index) => {
     const match = PLUGIN_CLI_STDIN_FLAG.exec(flag);
     const name = match?.[1];
     return name === undefined ? [] : [{ flag, index, name }];
@@ -299,7 +296,7 @@ async function materializeStdinFlag(
   const match = matches[0];
   if (match === undefined) return [...argv];
   const valueFlag = `--${match.name}`;
-  if (argv.includes(valueFlag)) {
+  if (scanned.includes(valueFlag)) {
     throw new Error(`Choose only one of ${match.flag} and ${valueFlag}.`);
   }
   if (input.isTTY === true) {

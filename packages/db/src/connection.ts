@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { performance } from "node:perf_hooks";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { buildHostPathKey, normalizeHostPath } from "@bb/domain";
 import * as schema from "./schema.js";
 
 export interface SlowDbQueryLogFields {
@@ -157,6 +158,26 @@ export function createConnection(
   options: CreateConnectionOptions = {},
 ) {
   const sqlite = new Database(source);
+
+  const hostPathTransform = (
+    value: unknown,
+    transform: (path: string) => string,
+  ) => {
+    if (value === null) return null;
+    if (typeof value !== "string")
+      throw new TypeError("Expected SQLite host path text");
+    return transform(value);
+  };
+  sqlite.function(
+    "bb_host_path_key",
+    { deterministic: true },
+    (value: unknown) => hostPathTransform(value, buildHostPathKey),
+  );
+  sqlite.function(
+    "bb_normalize_host_path",
+    { deterministic: true },
+    (value: unknown) => hostPathTransform(value, normalizeHostPath),
+  );
 
   sqlite.pragma("auto_vacuum = INCREMENTAL");
   sqlite.pragma("journal_mode = WAL");

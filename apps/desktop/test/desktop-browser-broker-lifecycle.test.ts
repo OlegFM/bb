@@ -86,6 +86,7 @@ function createFixture(platform: NodeJS.Platform = "win32") {
     createTab: unused,
     closeTab: unused,
     captureTab: unused,
+    evaluate: unused,
     profileSession: unused,
     attach: unused,
     detach: unused,
@@ -290,15 +291,14 @@ describe("desktop browser broker window lifecycle", () => {
   );
 
   it.each(["darwin", "linux"] as const)(
-    "preserves the existing destroyed-window lifecycle on %s",
+    "releases a destroyed window safely on %s",
     (platform) => {
       const { broker, addWindow } = createFixture(platform);
       const first = addWindow(7);
       first.destroy();
 
-      expect(() => broker.releaseWindow(7)).toThrow(
-        "Object has been destroyed",
-      );
+      expect(() => broker.releaseWindow(7)).not.toThrow();
+      expect(broker.listInstances()).toHaveLength(0);
     },
   );
 });

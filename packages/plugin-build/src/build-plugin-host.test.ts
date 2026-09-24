@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildPluginHost } from "./build-plugin-host.js";
 import { resolvePluginBuildToolchain } from "./toolchain.js";
@@ -197,9 +198,7 @@ describe("plugin host build", () => {
   });
 
   it("rejects a host entry using a sibling-prefix path outside the plugin directory", async () => {
-    const dir = await mkdtemp(
-      join(process.cwd(), ".host-build-sibling-test-"),
-    );
+    const dir = await mkdtemp(join(process.cwd(), ".host-build-sibling-test-"));
     tempDirs.push(dir);
     const siblingDir = `${dir}-2`;
     await mkdir(siblingDir, { recursive: true });
@@ -273,6 +272,7 @@ describe("plugin host build", () => {
       JSON.stringify({
         name: "bb-plugin-host-bridge-fixture",
         version: "1.0.0",
+        type: "module",
         engines: { bb: ">=0.0" },
         bb: {
           name: "Bridge surface fixture",
@@ -290,7 +290,8 @@ describe("plugin host build", () => {
     await writeFile(
       join(dir, "host.ts"),
       [
-        'import { experimental_defineProviderBridge, threadDeltaSchema, threadStartParamsSchema } from "@get-bb/plugin-sdk/provider-bridge";',
+        'import { experimental_compareVersions, experimental_defineProviderBridge, threadDeltaSchema, threadStartParamsSchema } from "@get-bb/plugin-sdk/provider-bridge";',
+        "export const compareVersions = experimental_compareVersions;",
         "export const experimental_providerBridge = experimental_defineProviderBridge({",
         "  handleLine(line) {",
         "    threadStartParamsSchema.safeParse(JSON.parse(line));",
@@ -308,6 +309,17 @@ describe("plugin host build", () => {
     const bundle = await readFile(result.jsPath, "utf8");
     expect(bundle).not.toMatch(/from\s*"@bb\//u);
     expect(bundle).toContain("experimental_apiVersion");
+    expect(bundle).not.toMatch(/(?:from\s*|require\()["']semver/u);
+    const builtEntry = await import(
+      `${pathToFileURL(result.jsPath).href}?test=${Date.now()}`
+    );
+    expect(
+      builtEntry.compareVersions("1.0.0-beta.9", "1.0.0-beta.10"),
+    ).toBeLessThan(0);
+    expect(
+      builtEntry.compareVersions("1.0.0-rc.10", "1.0.0-rc.2"),
+    ).toBeGreaterThan(0);
+    expect(() => builtEntry.compareVersions("invalid", "0.0.0")).toThrow();
   });
 
   describe("host contract imports without a usable SDK", () => {

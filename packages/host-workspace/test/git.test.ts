@@ -18,7 +18,6 @@ import {
   parsePorcelainEntries,
   readDefaultBranchRefs,
   readGitBlob,
-  readGitRepositoryState,
   runGit,
   runGitOutputPipeline,
   runGitWithNullRecordLimit,
@@ -624,14 +623,6 @@ describe("detectGitRepoKind", () => {
   });
 });
 
-describe("readGitRepositoryState", () => {
-  it("treats a bare repository root as a repository with commits", async () => {
-    const { root } = await initBareWorktreeLayout();
-
-    await expect(readGitRepositoryState(root)).resolves.toBe("has_commits");
-  });
-});
-
 describe("getCheckoutRef", () => {
   it("reports the HEAD branch of a bare repository root", async () => {
     const { root } = await initBareWorktreeLayout();
@@ -827,6 +818,7 @@ describe("fetchRemoteBranches", () => {
 
   it("leaves an interactive fetch free to prompt", async () => {
     const { repoPath, sshLogPath } = await initSshRemoteRepo();
+    vi.stubEnv("GIT_TERMINAL_PROMPT", undefined);
 
     await expect(
       fetchRemoteBranches(repoPath, { interactive: true }),

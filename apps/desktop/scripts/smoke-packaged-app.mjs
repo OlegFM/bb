@@ -1,3 +1,4 @@
+import { sleep, waitForChildExit } from "./child-process-helpers.mjs";
 import { appendOutput, formatProcessOutput } from "./smoke-output.mjs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -13,6 +14,7 @@ import {
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
 import { resolvePackagedAppBinary } from "./packaged-app-paths.mjs";
 import { taskkillTree } from "./smoke-windows-process-tools.mjs";
+import { smokePackagedNpm } from "./smoke-packaged-npm.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const desktopPackageRoot = resolve(scriptDirectory, "..");
@@ -296,37 +298,6 @@ async function waitForPreloadReady({ child, preloadReady, stdout, stderr }) {
   });
 }
 
-async function sleep(delayMs) {
-  await new Promise((resolvePromise) => {
-    setTimeout(resolvePromise, delayMs);
-  });
-}
-
-async function waitForProcessExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return true;
-  }
-
-  return await new Promise((resolvePromise) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      resolvePromise(false);
-    }, timeoutMs);
-
-    const handleExit = () => {
-      cleanup();
-      resolvePromise(true);
-    };
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      child.off("exit", handleExit);
-    };
-
-    child.once("exit", handleExit);
-  });
-}
-
 function requestWindowsQuit(quitRequestFile) {
   return writeFile(quitRequestFile, "quit\n", "utf8");
 }
@@ -351,31 +322,31 @@ async function removeSmokeRoot(smokeRoot) {
 }
 
 async function stopPackagedApp(child, quitRequestFile) {
-  if (await waitForProcessExit(child, 0)) {
+  if (await waitForChildExit(child, 0)) {
     return;
   }
 
   if (process.platform === "win32") {
     await requestWindowsQuit(quitRequestFile);
-    if (await waitForProcessExit(child, windowsQuitTimeoutMs)) {
+    if (await waitForChildExit(child, windowsQuitTimeoutMs)) {
       return;
     }
     if (child.pid !== undefined) {
       await taskkillTree(child.pid);
     }
-    await waitForProcessExit(child, exitTimeoutMs);
+    await waitForChildExit(child, exitTimeoutMs);
     throw new Error(
       "Packaged Electron app ignored the quit request file and was force-killed.",
     );
   }
 
   child.kill("SIGTERM");
-  if (await waitForProcessExit(child, exitTimeoutMs)) {
+  if (await waitForChildExit(child, exitTimeoutMs)) {
     return;
   }
 
   child.kill("SIGKILL");
-  await waitForProcessExit(child, exitTimeoutMs);
+  await waitForChildExit(child, exitTimeoutMs);
 }
 
 async function smokePackagedApp() {
@@ -387,6 +358,7 @@ async function smokePackagedApp() {
     productName: releaseConfig.applicationName,
     releaseDir,
   });
+  await smokePackagedNpm(appBinary);
   const smokeRoot = await mkdtemp(join(tmpdir(), "bb-desktop-packaged-smoke-"));
   const dataDir = join(smokeRoot, "data");
   const userDataDir = join(smokeRoot, "user-data");

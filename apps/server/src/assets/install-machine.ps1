@@ -1,8 +1,5 @@
 param(
-  [string]$JoinCode,
-  [string]$HostId,
-  [string]$Server,
-  [string]$MachineCode,
+  [string]$BootstrapEnv,
   [string]$HostDaemonPort,
   [Alias('h')][switch]$Help
 )
@@ -165,9 +162,15 @@ function Wait-Connected {
 }
 
 try {
-  if ($Help) { Write-Output 'Usage: install.ps1 -JoinCode <code> -HostId <host-id> -Server <http(s) origin> [-MachineCode <code>] [-HostDaemonPort <1-65535, except Desktop 38887>]'; exit 0 }
-  if (-not $JoinCode -or -not $HostId -or -not $Server) { throw 'JoinCode, HostId and Server are required.' }
-  if ($HostId -notmatch '^[A-Za-z0-9._-]+$' -or $JoinCode -match '[\x00-\x1f]' -or $MachineCode -match '[\x00-\x1f]') { throw 'Invalid host identity or code.' }
+  if ($Help) { Write-Output 'Usage: install.ps1 -BootstrapEnv <NAME> [-HostDaemonPort <1-65535, except Desktop 38887>]'; exit 0 }
+  if ($BootstrapEnv -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { throw 'BootstrapEnv must name an environment variable.' }
+  $bootstrapRaw = [Environment]::GetEnvironmentVariable($BootstrapEnv, 'Process')
+  if (-not $bootstrapRaw) { throw 'Bootstrap environment variable is empty.' }
+  try { $bootstrap = $bootstrapRaw | ConvertFrom-Json -ErrorAction Stop } catch { throw 'Invalid machine enrollment bootstrap.' }
+  if ($bootstrap.hostId -isnot [string] -or $bootstrap.serverUrl -isnot [string] -or $bootstrap.credential -isnot [string] -or $bootstrap.expiresAt -isnot [long] -and $bootstrap.expiresAt -isnot [double]) { throw 'Invalid machine enrollment bootstrap.' }
+  $HostId = [string]$bootstrap.hostId
+  $Server = [string]$bootstrap.serverUrl
+  if ($HostId -notmatch '^[A-Za-z0-9._-]+$' -or -not $bootstrap.credential -or [double]$bootstrap.expiresAt -le [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) { throw 'Invalid or expired machine enrollment bootstrap.' }
   $url = $null
   if (-not [uri]::TryCreate($Server, [UriKind]::Absolute, [ref]$url) -or $url.Scheme -notin @('http', 'https') -or $url.UserInfo -or $url.Query -or $url.Fragment -or $url.AbsolutePath -ne '/' -or $url.HostNameType -eq 'Unknown') { throw 'Server must be an HTTP(S) URL origin without credentials, path, query or fragment.' }
   $origin = $url.GetLeftPart([UriPartial]::Authority).TrimEnd('/')
@@ -185,7 +188,6 @@ try {
   $prefix = Join-Path $data 'npm'
   $authPath = Join-Path $data 'auth.json'
   $configPath = Join-Path $data 'config.json'
-  $alreadyJoined = $false
   if (Test-Path -LiteralPath $authPath) {
     Set-PrivateAcl $authPath $false
     $auth = [System.IO.File]::ReadAllText($authPath) | ConvertFrom-Json
@@ -193,7 +195,6 @@ try {
     Set-PrivateAcl $configPath $false
     $config = [System.IO.File]::ReadAllText($configPath) | ConvertFrom-Json
     if (([uri]$config.serverUrl).AbsoluteUri.TrimEnd('/') -cne $origin) { throw 'Data contains an incompatible enrollment for a different server.' }
-    $alreadyJoined = $true
   } elseif (Test-Path -LiteralPath $configPath) {
     Set-PrivateAcl $configPath $false
     $config = [System.IO.File]::ReadAllText($configPath) | ConvertFrom-Json
@@ -264,25 +265,15 @@ try {
     Native @('-e', 'const p=process.argv[1];try{require(p+"/node_modules/node-pty");require(p+"/node_modules/@parcel/watcher")}catch(e){console.error("Host native add-ons failed to load: "+e.message);process.exit(1)}', $packageRoot)
     Write-Private $digestPath $actual
   } else { throw 'Unexpected server host artifact response.' }
-  if ($MachineCode) {
-    if ($alreadyJoined -and (Supervisor-Active)) { throw 'Stop this enrollment using its verified supervisor before changing Connect credentials.' }
-    $labels = $url.DnsSafeHost.Split('.')
-    if ($labels.Count -lt 3 -or $url.HostNameType -ne 'Dns') { throw 'Cannot derive Connect apex from Server.' }
-    $apex = New-Object System.UriBuilder($url)
-    $apex.Host = ($labels[1..($labels.Count - 1)] -join '.')
-    $redeemed = Invoke-RestMethod -Uri ($apex.Uri.GetLeftPart([UriPartial]::Authority) + '/api/connect/redeem-machine') -Method Post -ContentType 'application/json' -Body (@{ code = $MachineCode } | ConvertTo-Json -Compress) -TimeoutSec 30
-    if ($redeemed.credential -isnot [string] -or $redeemed.credential -notmatch '^bbcm_[^\s\x00-\x1f]+$' -or $redeemed.machineId -isnot [string] -or -not $redeemed.machineId.Trim() -or $redeemed.machineId -match '[\x00-\x1f]') { throw 'Connect machine-code response is invalid.' }
-    $config = if (Test-Path -LiteralPath $configPath) { [System.IO.File]::ReadAllText($configPath) | ConvertFrom-Json } else { New-Object PSObject }
-    $config | Add-Member -NotePropertyName serverUrl -NotePropertyValue $origin -Force
-    $config | Add-Member -NotePropertyName machineCredential -NotePropertyValue $redeemed.credential -Force
-    $config | Add-Member -NotePropertyName connectMachineId -NotePropertyValue $redeemed.machineId -Force
-    Write-Private $configPath ($config | ConvertTo-Json -Depth 32)
-  }
   $env:BB_DATA_DIR = $data
   $env:BB_APP_NPM_PREFIX = $prefix
+  if (-not (Test-Path -LiteralPath $authPath)) {
+    Native @((Join-Path $packageRoot 'dist\bb.js'), 'machine', 'enroll', '--bootstrap-env', $BootstrapEnv)
+  }
+  [Environment]::SetEnvironmentVariable($BootstrapEnv, $null, 'Process')
   $launcherPath = Join-Path $data 'start-host-daemon.ps1'
   $launcher = @"
-param([string]`$BootstrapJoinCode, [string]`$BootstrapHostId, [string]`$BootstrapRunId)
+param([string]`$BootstrapRunId)
 `$ErrorActionPreference = 'Stop'
 `$previousData = `$env:BB_DATA_DIR
 `$previousPrefix = `$env:BB_APP_NPM_PREFIX
@@ -295,7 +286,6 @@ try {
   [System.IO.File]::WriteAllText($(Quote-Literal (Join-Path $data 'supervisor.json')), (`$identity | ConvertTo-Json), (New-Object System.Text.UTF8Encoding(`$false)))
   while (`$true) {
     `$arguments = @($(Quote-Literal $entry), 'host-daemon')
-    if (`$BootstrapJoinCode) { `$arguments += @('join', '--join-code', `$BootstrapJoinCode, '--host-id', `$BootstrapHostId) }
     `$arguments += @('--auto-update', '--host-daemon-port', '$port', '--server-url', $(Quote-Literal $origin))
     `$previousErrors = `$ErrorActionPreference
     try {
@@ -303,8 +293,6 @@ try {
       & $(Quote-Literal $node) @arguments *>> $(Quote-Literal (Join-Path $data 'logs\host-daemon.log'))
     } finally { `$ErrorActionPreference = `$previousErrors }
     if (-not (Test-Path -LiteralPath $(Quote-Literal $authPath))) { throw 'Enrollment failed before credentials were saved.' }
-    `$BootstrapJoinCode = ''
-    `$BootstrapHostId = ''
     Start-Sleep -Seconds 2
   }
 } catch {
@@ -357,20 +345,18 @@ Stop-OwnedTree `$held
     $pidPath = Join-Path $data 'install-supervisor.pid'
     $startupPath = Join-Path $data ('start.' + $runId + '.ps1')
     $startup = @"
-param([string]`$Code, [string]`$HostIdentity, [string]`$RunIdentity)
+param([string]`$RunIdentity)
 `$ErrorActionPreference = 'Stop'
 function Quote-Native {
 $((Get-Item Function:Quote-Native).ScriptBlock.ToString())
 }
 `$arguments = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $(Quote-Literal $launcherPath), '-BootstrapRunId', `$RunIdentity)
-if (`$Code) { `$arguments += @('-BootstrapJoinCode', `$Code, '-BootstrapHostId', `$HostIdentity) }
 `$process = Start-Process -FilePath $(Quote-Literal $powershell) -ArgumentList ((`$arguments | ForEach-Object { Quote-Native `$_ }) -join ' ') -WindowStyle Hidden -PassThru
 `$record = @{ pid = `$process.Id; startTime = `$process.StartTime.ToUniversalTime().ToString('o') }
 [System.IO.File]::WriteAllText($(Quote-Literal $pidPath), (`$record | ConvertTo-Json), (New-Object System.Text.UTF8Encoding(`$false)))
 "@
     Write-Private $startupPath ([string][char]0xfeff + $startup)
     $startupArgs = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $startupPath, '-RunIdentity', $runId)
-    if (-not $alreadyJoined) { $startupArgs += @('-Code', $JoinCode, '-HostIdentity', $HostId) }
     try { Native (@('-e', 'const fs=require("node:fs"),{spawn}=require("node:child_process");const [exe,log,...args]=process.argv.slice(1);const fd=fs.openSync(log,"a");const child=spawn(exe,args,{windowsHide:true,stdio:["ignore",fd,fd]});child.once("error",e=>{console.error(e.message);process.exitCode=1});child.once("exit",code=>{process.exitCode=code===null?1:code});', $powershell, (Join-Path $data 'logs\supervisor.log')) + $startupArgs) }
     finally { if (Test-Path -LiteralPath $startupPath) { Remove-Item -LiteralPath $startupPath -Force } }
     $spawnRecord = [System.IO.File]::ReadAllText($pidPath) | ConvertFrom-Json
@@ -420,6 +406,7 @@ if (`$Code) { `$arguments += @('-BootstrapJoinCode', `$Code, '-BootstrapHostId',
   Write-Error ($_.Exception.Message + "`n" + $_.ScriptStackTrace) -ErrorAction Continue
   exit 1
 } finally {
+  if ($BootstrapEnv -match '^[A-Za-z_][A-Za-z0-9_]*$') { [Environment]::SetEnvironmentVariable($BootstrapEnv, $null, 'Process') }
   $env:BB_DATA_DIR = $oldData
   $env:BB_APP_NPM_PREFIX = $oldPrefix
   if (-not $completed -and $joinProcess -and -not $joinProcess.HasExited) { Stop-OwnedTree $joinProcess }

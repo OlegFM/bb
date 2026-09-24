@@ -417,3 +417,10 @@ export {
   claudeTaskToolOutputSchema,
 } from "./claude-task-tools.js";
 export type { ClaudeTaskToolOutput } from "./claude-task-tools.js";
+
+export {
+  contextSnapshotSchema,
+  type ContextSnapshot,
+  type ContextCategory,
+  type ContextEntry,
+} from "@bb/domain";

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isPathWithinDirectory } from "@bb/process-utils";
 import { RootSubscription } from "./root-subscription.js";
 import { normalizeWatchEventPath } from "./watch-event-path.js";
 import { watchPathChanges } from "./watch-path.js";
@@ -22,11 +23,6 @@ interface ThreadStoragePathArgs {
 interface ThreadStoragePath {
   parts: string[];
   threadId: string;
-}
-
-interface DataDirSkillsPathArgs {
-  changedPath: string;
-  dataDirSkillsRootPath: string;
 }
 
 interface CollectThreadStorageObservedChangesArgs {
@@ -65,17 +61,6 @@ function toThreadStoragePath(
   };
 }
 
-function isDataDirSkillsPath(args: DataDirSkillsPathArgs): boolean {
-  const relativePath = path.relative(
-    args.dataDirSkillsRootPath,
-    args.changedPath,
-  );
-  return (
-    relativePath.length === 0 ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
-  );
-}
-
 export function collectThreadStorageObservedChanges(
   args: CollectThreadStorageObservedChangesArgs,
 ): ThreadStorageObservedChange[] {
@@ -107,10 +92,7 @@ export function collectDataDirSkillsObservedChanges(
 ): InjectedSkillsObservedChange[] {
   const changedPaths = args.changedPaths
     .filter((changedPath) =>
-      isDataDirSkillsPath({
-        changedPath,
-        dataDirSkillsRootPath: args.dataDirSkillsRootPath,
-      }),
+      isPathWithinDirectory(args.dataDirSkillsRootPath, changedPath),
     )
     .sort();
   if (changedPaths.length === 0) {

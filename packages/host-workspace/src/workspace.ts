@@ -8,6 +8,7 @@ import type {
   WorkspaceStatus,
 } from "@bb/domain";
 import path from "node:path";
+import { pathExists } from "@bb/process-utils";
 import {
   getPullRequestForCurrentBranch,
   runPullRequestActionForCurrentBranch,
@@ -17,7 +18,6 @@ import {
 } from "./git-host.js";
 import {
   createTempDir,
-  detectGitRepo,
   ensureGitRepo,
   getCheckoutRef,
   getCurrentBranch,
@@ -25,7 +25,6 @@ import {
   parseNameStatusSourceEntries,
   parseNumstatEntriesZ,
   parsePorcelainEntries,
-  pathExists,
   readDefaultBranch,
   readMergeBaseRef,
   parsePatchId,
@@ -45,10 +44,7 @@ import {
   WorkspaceError,
 } from "./git.js";
 import fs from "node:fs/promises";
-import {
-  withCheckoutMutationLock,
-  withCheckoutMutationLocks,
-} from "./checkout-mutation-lock.js";
+import { withCheckoutMutationLock } from "./checkout-mutation-lock.js";
 
 export interface DiffOptions {
   target?: WorkspaceDiffTarget;
@@ -198,13 +194,7 @@ type ResolvedTrackedDiffRange = {
   mergeBaseRef: string | null;
 };
 
-type WorkspaceMutationTargets = Workspace[];
 type WorkspaceMutationWork<T> = () => Promise<T>;
-
-interface ListWorkspaceFilesRecursivelyArgs {
-  dir: string;
-  root: string;
-}
 
 const WORKSPACE_STATUS_GIT_TIMEOUT_MS = 15_000;
 const WORKSPACE_STATUS_UNTRACKED_ENRICHMENT_TIMEOUT_MS = 10_000;
@@ -319,6 +309,11 @@ function isMissingHeadRevisionError(stderr: string): boolean {
     stderr.includes("unknown revision or path not in the working tree") ||
     stderr.includes("Needed a single revision")
   );
+}
+
+interface ListWorkspaceFilesRecursivelyArgs {
+  dir: string;
+  root: string;
 }
 
 async function listWorkspaceFilesRecursively(
@@ -536,18 +531,6 @@ export class Workspace {
     this.platform = platform;
   }
 
-  static withMutations<T>(
-    workspaces: WorkspaceMutationTargets,
-    work: WorkspaceMutationWork<T>,
-  ): Promise<T> {
-    return withCheckoutMutationLocks(
-      workspaces.map((workspace) => workspace.path),
-      work,
-      undefined,
-      workspaces[0]?.gitProcessOptions,
-    );
-  }
-
   withMutation<T>(work: WorkspaceMutationWork<T>): Promise<T> {
     return withCheckoutMutationLock(
       this.path,
@@ -602,10 +585,6 @@ export class Workspace {
 
   get exists(): Promise<boolean> {
     return pathExists(this.path);
-  }
-
-  get isGitRepo(): Promise<boolean> {
-    return detectGitRepo(this.path, this.gitProcessOptions);
   }
 
   get currentBranch(): Promise<string | undefined> {
@@ -1024,14 +1003,6 @@ export class Workspace {
       ).stdout.trim();
 
       return { commitSha, commitSubject };
-    });
-  }
-
-  async reset(): Promise<void> {
-    await ensureGitRepo(this.path, this.gitProcessOptions);
-    await this.withMutation(async () => {
-      await this.runGit(["reset", "--hard", "HEAD"], { cwd: this.path });
-      await this.runGit(["clean", "-fd"], { cwd: this.path });
     });
   }
 

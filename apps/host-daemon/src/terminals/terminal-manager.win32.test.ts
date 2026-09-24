@@ -118,6 +118,7 @@ async function openWin32Terminal(): Promise<Win32TerminalHarness> {
 
   await manager.handleMessage({
     type: "terminal.open",
+    contributedEnv: [],
     requestId: "open-conpty",
     terminalId: harness.terminalId,
     target: { kind: "host_path", cwd },

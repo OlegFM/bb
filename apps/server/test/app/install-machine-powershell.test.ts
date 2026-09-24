@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { resolveBundledNpmCli } from "@bb/plugin-build";
 
 const installer = fileURLToPath(
   new URL("../../src/assets/install-machine.ps1", import.meta.url),
@@ -22,7 +23,7 @@ const installer = fileURLToPath(
 const wrapper = fileURLToPath(
   new URL("../fixtures/install-machine-wrapper.ps1", import.meta.url),
 );
-const npm = join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js");
+const npm = resolveBundledNpmCli();
 const shells = ["powershell.exe", "pwsh.exe"];
 let scratch: string;
 let artifact: Buffer;
@@ -65,10 +66,13 @@ beforeAll(async () => {
   mkdirSync(join(pkg, "dist"));
   mkdirSync(join(pkg, "host-daemon/dist"), { recursive: true });
   writeFileSync(join(pkg, "host-daemon/dist/daemon-bundle.mjs"), "export {};");
-  writeFileSync(join(pkg, "dist/bb.js"), "");
+  writeFileSync(
+    join(pkg, "dist/bb.js"),
+    `const fs=require('fs'),path=require('path');const args=process.argv.slice(2);if(args[0]!=='machine'||args[1]!=='enroll'||args[2]!=='--bootstrap-env')process.exit(1);const bootstrap=JSON.parse(process.env[args[3]]);const data=process.env.BB_DATA_DIR;fs.writeFileSync(path.join(data,'auth.json'),JSON.stringify({hostId:bootstrap.hostId,hostKey:'fixture'}));fs.writeFileSync(path.join(data,'config.json'),JSON.stringify({serverUrl:bootstrap.serverUrl}));fs.writeFileSync(path.join(data,'host-id'),bootstrap.hostId+'\\n');`,
+  );
   writeFileSync(
     join(pkg, "dist/bb-app.js"),
-    `const fs=require('fs'),http=require('http'),path=require('path');console.error('fixture normal daemon stderr');const args=process.argv.slice(2);const get=(flag)=>args[args.indexOf(flag)+1];const data=process.env.BB_DATA_DIR;const authPath=path.join(data,'auth.json');if(args.includes('join')){fs.writeFileSync(authPath,JSON.stringify({hostId:get('--host-id')}));fs.writeFileSync(path.join(data,'config.json'),JSON.stringify({...JSON.parse(fs.existsSync(path.join(data,'config.json'))?fs.readFileSync(path.join(data,'config.json'),'utf8'):'{}'),serverUrl:get('--server-url')}));}const auth=JSON.parse(fs.readFileSync(authPath,'utf8'));fs.writeFileSync(path.join(data,'fixture.pid'),String(process.pid));if(fs.existsSync(path.join(data,'fixture-pause'))){setInterval(()=>{},1000);}else{http.createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({hostId:auth.hostId,serverUrl:get('--server-url'),connected:true}));}).listen(Number(get('--host-daemon-port')),'127.0.0.1');}`,
+    `const fs=require('fs'),http=require('http'),path=require('path');console.error('fixture normal daemon stderr');const args=process.argv.slice(2);const get=(flag)=>args[args.indexOf(flag)+1];const data=process.env.BB_DATA_DIR;const auth=JSON.parse(fs.readFileSync(path.join(data,'auth.json'),'utf8'));fs.writeFileSync(path.join(data,'fixture.pid'),String(process.pid));if(fs.existsSync(path.join(data,'fixture-pause'))){setInterval(()=>{},1000);}else{http.createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({hostId:auth.hostId,serverUrl:get('--server-url'),connected:true}));}).listen(Number(get('--host-daemon-port')),'127.0.0.1');}`,
   );
   const packed = await run(process.execPath, [
     npm,
@@ -131,16 +135,6 @@ describe.skipIf(process.platform !== "win32").each(shells)(
       const requests: string[] = [];
       const server = createServer((req, res) => {
         requests.push(req.url ?? "");
-        if (req.url === "/api/connect/redeem-machine") {
-          res.setHeader("content-type", "application/json");
-          res.end(
-            JSON.stringify({
-              credential: mode === "pairing-invalid" ? "bad" : "bbcm_fixture",
-              machineId: "machine-fixture",
-            }),
-          );
-          return;
-        }
         if (mode === "unavailable" || serverUnavailable) {
           res.writeHead(404);
           res.end();
@@ -168,22 +162,19 @@ describe.skipIf(process.platform !== "win32").each(shells)(
       if (!address || typeof address === "string")
         throw new Error("No server port");
       const origin = `http://127.0.0.1:${address.port}`;
-      const target = mode.startsWith("pairing")
-        ? `http://host.example.test:${address.port}`
-        : origin;
-      if (mode === "pairing-unicode") {
-        mkdirSync(data);
-        writeFileSync(
-          join(data, "config.json"),
-          JSON.stringify({ label: "地質 данные" }),
-        );
-      }
       const env = {
         ...process.env,
         BB_DATA_DIR: mode === "junction-default" ? "" : data,
         USERPROFILE: root,
+        LOCALAPPDATA: root,
         BB_FIXTURE_ORIGIN: origin,
         BB_FIXTURE_NATIVE_FAIL: mode === "native" ? "1" : "",
+        BB_ENROLLMENT: JSON.stringify({
+          hostId: "host-fixture",
+          serverUrl: origin,
+          credential: "private-enrollment-token",
+          expiresAt: Date.now() + 60 * 60 * 1000,
+        }),
         BB_APP_NPM_PREFIX: "preserve-me",
       };
       const invoke = (extra: string[] = []) =>
@@ -201,30 +192,29 @@ describe.skipIf(process.platform !== "win32").each(shells)(
             "-FixtureDirectory",
             root,
             ...(denyTask ? ["-DenyTask"] : []),
-            ...(mode === "pairing-acl" ? ["-DenyAcl"] : []),
             ...(mode === "folder-only" ? ["-FolderOnly"] : []),
             ...(bystanderPid ? ["-BystanderPid", String(bystanderPid)] : []),
             ...(mode.startsWith("junction")
               ? ["-JunctionTarget", junctionTarget]
               : []),
-            "-JoinCode",
-            "secret-join",
-            "-HostId",
-            extra.includes("-HostId")
-              ? extra[extra.indexOf("-HostId") + 1]!
-              : "host-fixture",
-            "-Server",
-            target,
+            "-BootstrapEnv",
+            "BB_ENROLLMENT",
             ...args,
-            ...(extra.includes("-HostId")
-              ? extra.filter(
-                  (_value, index) =>
-                    index !== extra.indexOf("-HostId") &&
-                    index !== extra.indexOf("-HostId") + 1,
-                )
-              : extra),
+            ...extra.filter(
+              (value) => value !== "-HostId" && value !== "different",
+            ),
           ],
-          env,
+          extra.includes("-HostId")
+            ? {
+                ...env,
+                BB_ENROLLMENT: JSON.stringify({
+                  hostId: "different",
+                  serverUrl: origin,
+                  credential: "private-enrollment-token",
+                  expiresAt: Date.now() + 60 * 60 * 1000,
+                }),
+              }
+            : env,
         );
       try {
         const result = await invoke();
@@ -300,25 +290,8 @@ describe.skipIf(process.platform !== "win32").each(shells)(
     it.each(
       [
         [],
-        ["-JoinCode", "x", "-HostId", "x", "-Server", "file:///C:/bad"],
-        [
-          "-JoinCode",
-          "x",
-          "-HostId",
-          "x",
-          "-Server",
-          "https://example.com/path",
-        ],
-        [
-          "-JoinCode",
-          "x",
-          "-HostId",
-          "x",
-          "-Server",
-          "https://example.com",
-          "-HostDaemonPort",
-          "38887",
-        ],
+        ["-BootstrapEnv", "bad-name"],
+        ["-BootstrapEnv", "BB_ENROLLMENT"],
       ].map((args) => ({ args })),
     )("rejects unsupported arguments %j", async ({ args }) => {
       const result = await run(shell, [
@@ -331,7 +304,9 @@ describe.skipIf(process.platform !== "win32").each(shells)(
         ...args,
       ]);
       expect(result.code).not.toBe(0);
-      expect(result.output).toMatch(/required|origin|Desktop|Server/i);
+      expect(result.output.replace(/\r?\n/gu, "")).toMatch(
+        /BootstrapEnv|bootstrap environment/iu,
+      );
     });
     it.each(["missing", "mismatch", "unavailable", "native"])(
       "fails closed for %s",
@@ -376,14 +351,19 @@ describe.skipIf(process.platform !== "win32").each(shells)(
             "Bypass",
             "-File",
             installer,
-            "-JoinCode",
-            "x",
-            "-HostId",
-            "x",
-            "-Server",
-            "https://example.test",
+            "-BootstrapEnv",
+            "BB_ENROLLMENT",
           ],
-          { ...process.env, BB_DATA_DIR: data },
+          {
+            ...process.env,
+            BB_DATA_DIR: data,
+            BB_ENROLLMENT: JSON.stringify({
+              hostId: "host-fixture",
+              serverUrl: "https://example.test",
+              credential: "private-enrollment-token",
+              expiresAt: Date.now() + 60_000,
+            }),
+          },
         );
         expect(result.code, result.output).not.toBe(0);
         expect(result.output).toMatch(/data paths|drive-local path/i);
@@ -395,7 +375,7 @@ describe.skipIf(process.platform !== "win32").each(shells)(
         expect(test.result.code, test.result.output).toBe(0);
         expect(
           JSON.parse(readFileSync(join(test.data, "auth.json"), "utf8")),
-        ).toEqual({ hostId: "host-fixture" });
+        ).toMatchObject({ hostId: "host-fixture" });
         const daemonPid = readFileSync(join(test.data, "fixture.pid"), "utf8");
         const port = readFileSync(join(test.data, "host-daemon-port"), "utf8");
         const repeated = await test.invoke();
@@ -422,7 +402,7 @@ describe.skipIf(process.platform !== "win32").each(shells)(
             join(test.data, "start-host-daemon.ps1"),
             "utf8",
           );
-          expect(launcher).not.toContain("secret-join");
+          expect(launcher).not.toContain("private-enrollment-token");
           expect(launcher).toContain(test.data.replaceAll("'", "''"));
           expect(
             JSON.parse(
@@ -475,61 +455,6 @@ describe.skipIf(process.platform !== "win32").each(shells)(
       },
       60_000,
     );
-    it.each(["pairing", "pairing-invalid", "pairing-acl", "pairing-unicode"])(
-      "redeems Connect credentials with validated private config: %s",
-      async (mode) => {
-        const test = await scenario(mode, [
-          "-MachineCode",
-          'machine-code"quoted',
-        ]);
-        try {
-          if (mode === "pairing-invalid" || mode === "pairing-acl") {
-            expect(test.result.code, test.result.output).not.toBe(0);
-            expect(test.result.output).toMatch(
-              mode === "pairing-acl"
-                ? /ACL privacy setup denied/i
-                : /response is invalid/i,
-            );
-            expect(existsSync(join(test.data, "config.json"))).toBe(false);
-            if (mode === "pairing-acl")
-              expect(
-                readFileSync(join(test.root, "failed-acl-length"), "utf8"),
-              ).toBe("0");
-          } else {
-            expect(test.result.code, test.result.output).toBe(0);
-            const config: {
-              machineCredential: string;
-              connectMachineId: string;
-            } = JSON.parse(
-              readFileSync(join(test.data, "config.json"), "utf8"),
-            );
-            expect(config.machineCredential).toBe("bbcm_fixture");
-            expect(config.connectMachineId).toBe("machine-fixture");
-            if (mode === "pairing-unicode")
-              expect(
-                JSON.parse(
-                  readFileSync(join(test.data, "config.json"), "utf8"),
-                ),
-              ).toMatchObject({ label: "地質 данные" });
-            const redeemed: { uri: string; body: string } = JSON.parse(
-              readFileSync(join(test.root, "redeem.json"), "utf8"),
-            );
-            expect(redeemed.uri).toMatch(
-              /^http:\/\/example\.test:\d+\/api\/connect\/redeem-machine$/,
-            );
-            expect(JSON.parse(redeemed.body)).toEqual({
-              code: 'machine-code"quoted',
-            });
-            expect(
-              readFileSync(join(test.data, "start-host-daemon.ps1"), "utf8"),
-            ).not.toContain("machine-code");
-          }
-        } finally {
-          await test.cleanup();
-        }
-      },
-      40_000,
-    );
     it("repairs a folder-only ACL before creating private credentials", async () => {
       const test = await scenario("folder-only");
       try {
@@ -558,7 +483,9 @@ describe.skipIf(process.platform !== "win32").each(shells)(
       );
       try {
         expect(test.result.code, test.result.output).not.toBe(0);
-        expect(test.result.output).toMatch(/New supervisor process identity/i);
+        expect(test.result.output.replaceAll(/\r?\n/gu, "")).toMatch(
+          /New supervisor process identity/i,
+        );
         expect(bystander.exitCode).toBeNull();
         expect(bystander.killed).toBe(false);
       } finally {
@@ -599,7 +526,9 @@ describe.skipIf(process.platform !== "win32").each(shells)(
           previousPort === "39900" ? "39901" : "39900",
         ]);
         expect(refusedPort.code, refusedPort.output).not.toBe(0);
-        expect(refusedPort.output).toMatch(/live supervisor/i);
+        expect(refusedPort.output.replaceAll(/\r?\n/gu, "")).toMatch(
+          /live supervisor/i,
+        );
         expect(readFileSync(join(test.data, "host-daemon-port"), "utf8")).toBe(
           previousPort,
         );
@@ -626,14 +555,18 @@ describe.skipIf(process.platform !== "win32").each(shells)(
         test.changeArtifact();
         const refusedArtifact = await test.invoke();
         expect(refusedArtifact.code, refusedArtifact.output).not.toBe(0);
-        expect(refusedArtifact.output).toMatch(/live supervisor/i);
+        expect(refusedArtifact.output.replaceAll(/\r?\n/gu, "")).toMatch(
+          /live supervisor/i,
+        );
         expect(
           readFileSync(join(test.data, "host-artifact.sha256"), "utf8"),
         ).toBe(oldDigest);
         rmSync(join(test.data, "host-artifact.sha256"));
         const refusedRepair = await test.invoke();
         expect(refusedRepair.code, refusedRepair.output).not.toBe(0);
-        expect(refusedRepair.output).toMatch(/live supervisor/i);
+        expect(refusedRepair.output.replaceAll(/\r?\n/gu, "")).toMatch(
+          /live supervisor/i,
+        );
         const reservationPath = join(
           test.root,
           ".bb-machines/host-daemon-ports",

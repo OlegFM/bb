@@ -1,5 +1,6 @@
-param([string]$Installer, [string]$FixtureDirectory, [switch]$DenyTask, [switch]$DenyAcl, [switch]$FolderOnly, [int]$BystanderPid, [string]$JunctionTarget, [string]$JoinCode, [string]$HostId, [string]$Server, [string]$MachineCode, [string]$HostDaemonPort)
+param([string]$Installer, [string]$FixtureDirectory, [switch]$DenyTask, [switch]$DenyAcl, [switch]$FolderOnly, [int]$BystanderPid, [string]$JunctionTarget, [string]$BootstrapEnv, [string]$HostDaemonPort)
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSEdition -eq 'Desktop') { Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -ErrorAction Stop }
 function Write-FixtureJson {
   param([string]$LiteralPath, [Parameter(ValueFromPipeline = $true)][string]$Value)
   process { [System.IO.File]::WriteAllText($LiteralPath, $Value, (New-Object System.Text.UTF8Encoding($false))) }
@@ -80,8 +81,7 @@ if ($FolderOnly) {
 $beforeData = $env:BB_DATA_DIR
 $beforePrefix = $env:BB_APP_NPM_PREFIX
 $beforeJunctionAcl = if ($JunctionTarget) { (Get-Acl -LiteralPath $JunctionTarget).Sddl } else { '' }
-$installerParams = @{ JoinCode = $JoinCode; HostId = $HostId; Server = $Server }
-if ($MachineCode) { $installerParams.MachineCode = $MachineCode }
+$installerParams = @{ BootstrapEnv = $BootstrapEnv }
 if ($HostDaemonPort) { $installerParams.HostDaemonPort = $HostDaemonPort }
 $global:LASTEXITCODE = 0
 try { & $Installer @installerParams; $status = $LASTEXITCODE }

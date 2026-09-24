@@ -3,7 +3,7 @@ import { mkdir, open, readdir, stat } from "node:fs/promises";
 import { watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { escapeHtmlText } from "@bb/domain";
+import { escapeHtmlText } from "@bb/text-utils";
 import { z } from "zod";
 import {
   LOG_VIEWER_VISIBLE_LINE_LIMIT,
@@ -120,8 +120,6 @@ interface CreateLogLineBufferArgs {
 
 export interface LogLineBuffer {
   append(lines: LogViewerLine[]): void;
-  clear(): void;
-  flush(): void;
   lines(): LogViewerLine[];
   stop(): void;
 }
@@ -139,7 +137,6 @@ interface LogFileCandidate {
 
 interface TailProcess {
   childProcess: ChildProcess;
-  filePath: string;
 }
 
 interface FileFollow {
@@ -281,12 +278,6 @@ export function createLogLineBuffer(
       }
       scheduleBufferFlush({ buffer: state });
     },
-    clear() {
-      clearFlushTimer();
-      state.pendingLines = [];
-      state.visibleLines = [];
-    },
-    flush,
     lines() {
       return [...state.visibleLines];
     },
@@ -695,7 +686,7 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
   let stopped = false;
 
   function emitSystemLine(emitArgs: EmitSystemLineArgs): void {
-    args.onLines([{ source: "system", text: `[system] ${emitArgs.text}` }]);
+    args.onLines([{ text: `[system] ${emitArgs.text}` }]);
   }
 
   function emitComponentLines(emitArgs: EmitComponentLinesArgs): void {
@@ -703,7 +694,6 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
       emitArgs.lines
         .filter((line) => line.length > 0)
         .map((line) => ({
-          source: emitArgs.component,
           text: formatLogLine({ component: emitArgs.component, line }),
         })),
     );
@@ -863,7 +853,6 @@ export function createLogTailer(args: CreateLogTailerArgs): LogTailer {
     );
     const tailProcess: TailProcess = {
       childProcess,
-      filePath: restartArgs.filePath,
     };
     restartArgs.state.tailProcess = tailProcess;
 

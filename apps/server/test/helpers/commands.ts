@@ -15,7 +15,6 @@ import {
 import {
   buildHostPathKey,
   normalizeHostPath,
-  type HostType,
   type ThreadEvent,
 } from "@bb/domain";
 import type {
@@ -86,22 +85,6 @@ export function listQueuedThreadCommands(
     .map((queued) => hostDaemonCommandSchema.parse(queued.command));
 }
 
-export function listQueuedEnvironmentCommands(
-  harness: TestAppHarness,
-  type: HostDaemonCommand["type"],
-  environmentId: string,
-): HostDaemonCommand[] {
-  return pendingHostRpcRequests
-    .filter(
-      (queued) =>
-        isCapturedRpcForHarness(harness, queued) &&
-        queued.command.type === type &&
-        "environmentId" in queued.command &&
-        queued.command.environmentId === environmentId,
-    )
-    .map((queued) => hostDaemonCommandSchema.parse(queued.command));
-}
-
 const pendingHostRpcRequests: QueuedCommand[] = [];
 const testRpcCursorByHost = new Map<string, number>();
 
@@ -109,6 +92,9 @@ interface RegisterTestHostRpcCaptureArgs {
   hostId: string;
   sessionId: string;
   queueBranchOptions?: boolean;
+  onPluginHostCall?: (
+    command: Extract<HostDaemonRpcCommand, { type: "plugin.host.call" }>,
+  ) => Promise<HostDaemonOnlineRpcResult<"plugin.host.call">>;
   onEnvironmentHook?: (
     command: Extract<HostDaemonRpcCommand, { type: "environment.hook.run" }>,
   ) => Promise<void>;
@@ -305,12 +291,11 @@ export function createTestDaemonEventEnvelope(
 
 export function internalAuthHeaders(
   harness: TestAppHarness,
-  args: { hostId?: string; hostType?: HostType } = {},
+  args: { hostId?: string } = {},
 ): HeadersInit {
   const activeSessions = harness.db
     .select({
       hostId: hostDaemonSessions.hostId,
-      hostType: hostDaemonSessions.hostType,
     })
     .from(hostDaemonSessions)
     .where(eq(hostDaemonSessions.status, "active"))
@@ -321,7 +306,6 @@ export function internalAuthHeaders(
   return {
     authorization: `Bearer ${createTestDaemonHostKey({
       hostId: args.hostId ?? inferredHost?.hostId ?? "host-1",
-      hostType: args.hostType ?? inferredHost?.hostType ?? "persistent",
     })}`,
     "content-type": "application/json",
   };
@@ -358,6 +342,10 @@ export function registerTestHostRpcCapture(
     close() {},
     send(data) {
       const message = hostDaemonServerWsMessageSchema.parse(JSON.parse(data));
+      if (message.type === "machine.shutdown") {
+        deps.hub.unregisterDaemon(args.sessionId);
+        return;
+      }
       if (message.type !== "host-rpc.request") {
         return;
       }
@@ -437,6 +425,38 @@ export function registerTestHostRpcCapture(
                 sessionId: args.sessionId,
               }),
           );
+        return;
+      }
+      if (
+        command.type === "plugin.host.call" &&
+        args.onPluginHostCall !== undefined
+      ) {
+        void args.onPluginHostCall(command).then(
+          (result) =>
+            deps.hub.recordHostOnlineRpcResponse({
+              message: hostDaemonOnlineRpcResponseMessageSchema.parse({
+                type: "host-rpc.response",
+                requestId: message.requestId,
+                commandType: command.type,
+                ok: true,
+                result,
+              }),
+              sessionId: args.sessionId,
+            }),
+          (error: unknown) =>
+            deps.hub.recordHostOnlineRpcResponse({
+              message: hostDaemonOnlineRpcResponseMessageSchema.parse({
+                type: "host-rpc.response",
+                requestId: message.requestId,
+                commandType: command.type,
+                ok: false,
+                errorCode: "test_plugin_host_call_failed",
+                errorMessage:
+                  error instanceof Error ? error.message : String(error),
+              }),
+              sessionId: args.sessionId,
+            }),
+        );
         return;
       }
       if (respondToRuntimeWorkspaceFileCommand(deps, args, message)) {
@@ -576,7 +596,7 @@ export async function reportQueuedCommandSuccess<
   harness: TestAppHarness,
   queued: QueuedCommand<TCommand>,
   result: QueuedCommandResult<TCommand>,
-  args: { hostId?: string; hostType?: HostType } = {},
+  args: { hostId?: string } = {},
 ): Promise<Response> {
   const sessionId = queued.row.sessionId;
   if (!sessionId) {
@@ -632,7 +652,7 @@ export async function reportQueuedCommandError(
   harness: TestAppHarness,
   queued: QueuedCommand,
   args: { errorCode: string; errorMessage: string },
-  auth: { hostId?: string; hostType?: HostType } = {},
+  auth: { hostId?: string } = {},
 ): Promise<Response> {
   const sessionId = queued.row.sessionId;
   if (!sessionId) {

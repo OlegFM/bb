@@ -11,6 +11,7 @@ import {
   getEnvironment,
   listRetiredLoadedEnvironmentIdsOnHost,
   moveEnvironmentPathClaim,
+  markHostEnvironmentsDestroyed,
   recordEnvironmentCurrentBranch,
   recordProvisionedEnvironmentWorkspace,
   reserveEnvironment,
@@ -26,7 +27,6 @@ function setup() {
   const db = createMigratedConnection();
   const host = upsertHost(db, noopNotifier, {
     name: "test-host",
-    type: "persistent",
   });
   const { project } = createProject(db, noopNotifier, {
     name: "test-project",
@@ -51,6 +51,60 @@ function createNotifierSpy(): DbNotifier {
 }
 
 describe("environments", () => {
+  it("marks every environment on a removed host as destroyed history", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(25_000);
+    const { db, host, project } = setup();
+    const first = createEnvironment(db, noopNotifier, {
+      providerOwnsPath: true,
+      projectId: project.id,
+      hostId: host.id,
+      path: "/tmp/removed-host-first",
+      pathKey: "/tmp/removed-host-first",
+      status: "ready",
+    });
+    const second = createEnvironment(db, noopNotifier, {
+      providerOwnsPath: false,
+      projectId: project.id,
+      hostId: host.id,
+      path: "/tmp/removed-host-second",
+      pathKey: "/tmp/removed-host-second",
+      status: "error",
+    });
+    db.update(environments)
+      .set({
+        resource: { provider: "state" },
+        retireAt: 30_000,
+        teardownMessage: "previous failure",
+        teardownStatus: "failed",
+      })
+      .where(eq(environments.id, second.id))
+      .run();
+    const notifier = createNotifierSpy();
+
+    const updated = markHostEnvironmentsDestroyed(db, notifier, host.id);
+
+    expect(updated.map((environment) => environment.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    for (const environment of updated) {
+      expect(environment).toMatchObject({
+        path: null,
+        resource: null,
+        retireAt: null,
+        status: "destroyed",
+        teardownMessage: null,
+        teardownStatus: "removed",
+        updatedAt: 25_000,
+      });
+      expect(notifier.notifyEnvironment).toHaveBeenCalledWith(environment.id, [
+        "metadata-changed",
+        "status-changed",
+      ]);
+    }
+  });
+
   it("keeps a path unique while provider teardown is pending", () => {
     const { db, host, project } = setup();
     const first = createEnvironment(db, noopNotifier, {
@@ -474,7 +528,6 @@ describe("environments", () => {
     const { db, host, project } = setup();
     const otherHost = upsertHost(db, noopNotifier, {
       name: "other-host",
-      type: "persistent",
     });
     const { project: otherProject } = createProject(db, noopNotifier, {
       name: "other-project",
@@ -525,7 +578,11 @@ describe("environments", () => {
 describe("environment path claims", () => {
   function seedClaim(
     args: ReturnType<typeof setup>,
-    input: { environmentProviderId: string; path: string; providerOwnsPath: boolean },
+    input: {
+      environmentProviderId: string;
+      path: string;
+      providerOwnsPath: boolean;
+    },
   ) {
     return createEnvironment(args.db, noopNotifier, {
       projectId: args.project.id,

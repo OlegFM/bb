@@ -3,6 +3,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readFile,
   rename,
   rm,
   stat,
@@ -16,8 +17,9 @@ import { resolveBuiltinSkillsRootPath } from "../../src/services/skills/builtin-
 import {
   hashSkillTreeEntries,
   readSkillTreeManifest,
-  resolveInjectedSkillSources as resolveInjectedSkillSourcesWithRegistry,
+  resolveProjectSkillSourceFromContent,
   resolveServerOwnedSkillCatalogEntries,
+  resolveSkillCatalogEntries,
   SkillTreeRegistry,
   type ResolveInjectedSkillSourcesArgs,
 } from "../../src/services/skills/injected-skills.js";
@@ -45,10 +47,10 @@ function resolveInjectedSkillSources(
   logger: ServerLogger,
   args: Omit<ResolveInjectedSkillSourcesArgs, "skillTreeRegistry">,
 ) {
-  return resolveInjectedSkillSourcesWithRegistry(logger, {
+  return resolveSkillCatalogEntries(logger, {
     ...args,
     skillTreeRegistry: new SkillTreeRegistry(),
-  });
+  }).map((entry) => entry.runtimeSource);
 }
 
 const tempDirs: string[] = [];
@@ -208,7 +210,6 @@ describe("injected skill source discovery", () => {
     const { logger } = createCapturingLogger();
 
     const sources = await resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath: path.join(dataDir, "builtin-skills"),
       dataDir,
     });
 
@@ -241,7 +242,6 @@ describe("injected skill source discovery", () => {
 
     expect(
       resolveInjectedSkillSources(logger, {
-        builtinSkillsRootPath: path.join(dataDir, "builtin-skills"),
         dataDir,
       }),
     ).toEqual([]);
@@ -274,7 +274,6 @@ describe("injected skill source discovery", () => {
 
     expect(
       resolveInjectedSkillSources(logger, {
-        builtinSkillsRootPath: path.join(dataDir, "builtin-skills"),
         dataDir,
       }),
     ).toEqual([]);
@@ -284,45 +283,9 @@ describe("injected skill source discovery", () => {
     });
   });
 
-  it("aggregates built-in skills alongside user skills", async () => {
-    const dataDir = await makeTempDir();
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
-    const builtinSkillRoot = await writeSkill({
-      rootPath: builtinSkillsRootPath,
-      name: "bb-cli",
-    });
-    const dataDirSkillRoot = await writeSkill({
-      rootPath: path.join(dataDir, "skills"),
-      name: "release-notes",
-    });
-    const { logger, warnings } = createCapturingLogger();
-
-    const sources = await resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath,
-      dataDir,
-    });
-
-    expect(sources).toEqual([
-      expectedTreeSource({
-        sourceType: "builtin",
-        name: "bb-cli",
-        description: "Use bb-cli when tests need it.",
-        rootPath: builtinSkillRoot,
-      }),
-      expectedTreeSource({
-        sourceType: "data-dir",
-        name: "release-notes",
-        description: "Use release-notes when tests need it.",
-        rootPath: dataDirSkillRoot,
-      }),
-    ]);
-    expect(warnings).toEqual([]);
-  });
-
   it("adds inherited skills as lower-priority user skills", async () => {
     const dataDir = await makeTempDir();
     const inheritedSkillsRootPath = path.join(dataDir, "inherited-skills");
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
     const inheritedSkillRoot = await writeSkill({
       rootPath: inheritedSkillsRootPath,
       name: "stories",
@@ -337,7 +300,6 @@ describe("injected skill source discovery", () => {
 
     const sources = await resolveInjectedSkillSources(logger, {
       additionalSkillsRootPaths: [inheritedSkillsRootPath],
-      builtinSkillsRootPath,
       dataDir,
     });
 
@@ -360,7 +322,6 @@ describe("injected skill source discovery", () => {
 
   it("applies bb precedence around shared user and project roots", async () => {
     const dataDir = await makeTempDir();
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
     const userSkillRoot = await writeSkill({
       rootPath: path.join(dataDir, "skills"),
       name: "review",
@@ -376,7 +337,6 @@ describe("injected skill source discovery", () => {
     const { logger } = createCapturingLogger();
 
     const sources = resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath,
       dataDir,
       sharedSkillSources: [
         {
@@ -416,46 +376,9 @@ describe("injected skill source discovery", () => {
     ]);
   });
 
-  it("lets a data-dir skill override a built-in skill with the same name", async () => {
-    const dataDir = await makeTempDir();
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
-    await writeSkill({
-      rootPath: builtinSkillsRootPath,
-      name: "bb-cli",
-      description: "Built-in copy.",
-    });
-    const overrideSkillRoot = await writeSkill({
-      rootPath: path.join(dataDir, "skills"),
-      name: "bb-cli",
-      description: "User override copy.",
-    });
-    const { logger, debugs, warnings } = createCapturingLogger();
-
-    const sources = await resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath,
-      dataDir,
-    });
-
-    expect(sources).toEqual([
-      expectedTreeSource({
-        sourceType: "data-dir",
-        name: "bb-cli",
-        description: "User override copy.",
-        rootPath: overrideSkillRoot,
-      }),
-    ]);
-    expect(warnings).toEqual([]);
-    expect(debugs).toEqual([
-      expect.objectContaining({
-        message: "Built-in injected skill overridden by user skill",
-      }),
-    ]);
-  });
-
   it("lets a data-dir skill override an inherited skill with the same name", async () => {
     const dataDir = await makeTempDir();
     const inheritedSkillsRootPath = path.join(dataDir, "inherited-skills");
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
     await writeSkill({
       rootPath: inheritedSkillsRootPath,
       name: "stories",
@@ -470,7 +393,6 @@ describe("injected skill source discovery", () => {
 
     const sources = await resolveInjectedSkillSources(logger, {
       additionalSkillsRootPaths: [inheritedSkillsRootPath],
-      builtinSkillsRootPath,
       dataDir,
     });
 
@@ -495,7 +417,6 @@ describe("injected skill source discovery", () => {
     const dataDir = await makeTempDir();
     const parentSkillsRootPath = path.join(dataDir, "parent-skills");
     const prodSkillsRootPath = path.join(dataDir, "prod-skills");
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
     const parentSkillRoot = await writeSkill({
       rootPath: parentSkillsRootPath,
       name: "stories",
@@ -510,7 +431,6 @@ describe("injected skill source discovery", () => {
 
     const sources = await resolveInjectedSkillSources(logger, {
       additionalSkillsRootPaths: [parentSkillsRootPath, prodSkillsRootPath],
-      builtinSkillsRootPath,
       dataDir,
     });
 
@@ -534,12 +454,6 @@ describe("injected skill source discovery", () => {
   it("lets a project skill override global skills with the same name", async () => {
     const dataDir = await makeTempDir();
     const workspacePath = await makeTempDir();
-    const builtinSkillsRootPath = path.join(dataDir, "builtin-skills");
-    await writeSkill({
-      rootPath: builtinSkillsRootPath,
-      name: "bb-cli",
-      description: "Built-in copy.",
-    });
     await writeSkill({
       rootPath: path.join(dataDir, "skills"),
       name: "bb-cli",
@@ -551,11 +465,17 @@ describe("injected skill source discovery", () => {
       description: "Project copy.",
     });
     const { logger, warnings } = createCapturingLogger();
+    const projectSkillSource = resolveProjectSkillSourceFromContent(logger, {
+      candidatePath: projectSkillRoot,
+      content: await readFile(path.join(projectSkillRoot, "SKILL.md"), "utf8"),
+      directoryName: "bb-cli",
+    });
+    expect(projectSkillSource).not.toBeNull();
 
-    const sources = await resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath,
+    const sources = resolveInjectedSkillSources(logger, {
       dataDir,
-      projectSkillsRootPath: path.join(workspacePath, ".bb", "skills"),
+      projectSkillSources:
+        projectSkillSource === null ? [] : [projectSkillSource],
     });
 
     expect(sources).toEqual([
@@ -573,13 +493,16 @@ describe("injected skill source discovery", () => {
 
   it("resolves the bundled built-in skills root with valid built-in skills", async () => {
     const dataDir = await makeTempDir();
-    const builtinSkillsRootPath = resolveBuiltinSkillsRootPath();
     const { logger, warnings } = createCapturingLogger();
 
-    const sources = await resolveInjectedSkillSources(logger, {
-      builtinSkillsRootPath,
+    const sources = resolveServerOwnedSkillCatalogEntries({
+      builtinSkillsRootPath: resolveBuiltinSkillsRootPath(),
       dataDir,
-    });
+      logger,
+      skillTreeRegistry: new SkillTreeRegistry(),
+    })
+      .filter((entry) => entry.provenance.kind === "builtin")
+      .map((entry) => entry.runtimeSource);
 
     const builtinNames = sources.map((source) => source.name);
     expect(builtinNames).toContain("bb-cli");

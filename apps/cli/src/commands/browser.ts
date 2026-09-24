@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { writeNewPrivateOutput } from "./private-output.js";
 import { Command } from "commander";
 import type {
   ExperimentalDesktopBrowserImportOutcome,
@@ -208,7 +209,7 @@ export function registerBrowserCommands(
   )
     .requiredOption(
       "--output <file>",
-      "New credential file (mode 0600); endpoint works only on browser host",
+      "New private credential file; endpoint works only on browser host",
     )
     .action(
       action(
@@ -217,10 +218,10 @@ export function registerBrowserCommands(
             ...scope(options),
             leaseId,
           });
-          await writeFile(options.output, JSON.stringify(connection), {
-            mode: 0o600,
-            flag: "wx",
-          });
+          await writeNewPrivateOutput(
+            options.output,
+            JSON.stringify(connection),
+          );
           print(
             {
               path: options.output,

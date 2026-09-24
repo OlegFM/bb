@@ -95,7 +95,7 @@ await Promise.all([
   build({
     ...commonOptions,
     entryPoints: [resolve(packageRoot, "src", "main.ts")],
-    external: ["electron"],
+    external: ["electron", "fs-native-extensions"],
     format: "cjs",
     outfile: resolve(distDir, "main.js"),
   }),
@@ -105,6 +105,20 @@ await Promise.all([
     external: ["electron"],
     format: "cjs",
     outfile: resolve(distDir, "preload.cjs"),
+  }),
+  build({
+    ...commonOptions,
+    entryPoints: [resolve(packageRoot, "src", "browser-page-preload.ts")],
+    external: ["electron"],
+    format: "cjs",
+    outfile: resolve(distDir, "browser-page-preload.cjs"),
+  }),
+  build({
+    ...commonOptions,
+    entryPoints: [resolve(packageRoot, "src", "find-bar-preload.ts")],
+    external: ["electron"],
+    format: "cjs",
+    outfile: resolve(distDir, "find-bar-preload.cjs"),
   }),
   build({
     ...commonOptions,

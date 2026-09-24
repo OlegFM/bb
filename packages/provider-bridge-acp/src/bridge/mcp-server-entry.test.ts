@@ -125,7 +125,7 @@ function sendToBridge(
 async function readAdvertisedMcpServer(
   bridge: ChildProcess,
   workspaceDir: string,
-): Promise<AdvertisedMcpServer> {
+): Promise<{ config: AdvertisedMcpServer; providerThreadId: string }> {
   const startId = sendToBridge(bridge, "thread/start", {
     threadId: "thread-1918",
     cwd: workspaceDir,
@@ -189,7 +189,7 @@ async function readAdvertisedMcpServer(
   if (!config) {
     throw new Error("Fake ACP agent reported no MCP server config");
   }
-  return config;
+  return { config, providerThreadId };
 }
 
 async function runMcpInitialize(config: AdvertisedMcpServer): Promise<{
@@ -241,12 +241,23 @@ async function runMcpInitialize(config: AdvertisedMcpServer): Promise<{
   return { exitCode, stderr, stdoutLines };
 }
 
-afterEach(() => {
-  for (const child of children.splice(0)) {
-    child.kill("SIGKILL");
-  }
+afterEach(async () => {
+  await Promise.all(
+    children.splice(0).map(async (child) => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      await new Promise<void>((resolveClose) => {
+        child.once("close", () => resolveClose());
+        child.kill("SIGKILL");
+      });
+    }),
+  );
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, {
+      recursive: true,
+      force: true,
+      maxRetries: 8,
+      retryDelay: 100,
+    });
   }
   bridgeLines.length = 0;
   bridgeStderr = "";
@@ -258,7 +269,10 @@ describe("bb-bridge MCP server entry point (#1918)", () => {
     const workspaceDir = makeTempDir("bb-acp-mcp-entry-ws-");
     const bridge = spawnBridgeLikeTheAgentRuntime(dataDir);
 
-    const config = await readAdvertisedMcpServer(bridge, workspaceDir);
+    const { config, providerThreadId } = await readAdvertisedMcpServer(
+      bridge,
+      workspaceDir,
+    );
     expect(config.name).toBe(ACP_BRIDGE_MCP_SERVER_NAME);
     expect(config.args).toContain("--mcp-stdio");
 
@@ -280,5 +294,19 @@ describe("bb-bridge MCP server entry point (#1918)", () => {
     expect(config.args.some((arg) => arg.includes("bridge-worker"))).toBe(
       false,
     );
+    const stopId = sendToBridge(bridge, "thread/stop", {
+      threadId: "thread-1918",
+      providerThreadId,
+      intent: "release",
+      activeTurnId: null,
+    });
+    const stopResponse = await waitFor(
+      () =>
+        bridgeLines.find(
+          (line) => line.id === stopId && line.method === undefined,
+        ),
+      "thread/stop response",
+    );
+    expect(stopResponse.error).toBeUndefined();
   }, 60_000);
 });

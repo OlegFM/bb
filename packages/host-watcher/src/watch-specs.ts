@@ -6,17 +6,16 @@ import {
   normalizeWatchEventPath,
   toWatchRootRelativeKey,
 } from "./watch-event-path.js";
+import type {
+  ParcelWatcherEventBatch,
+  ParcelWatcherSubscribeOptions,
+} from "./parcel-watcher-backend.js";
 import type { WorkspaceStatusChangeEvent } from "./watch-status-types.js";
-
-type ParcelWatcherSubscribe = (typeof import("@parcel/watcher"))["subscribe"];
-type ParcelWatcherOptions = Parameters<ParcelWatcherSubscribe>[2];
-type ParcelWatcherCallback = Parameters<ParcelWatcherSubscribe>[1];
-type ParcelWatcherEventBatch = Parameters<ParcelWatcherCallback>[1];
 
 export interface WatchSubscriptionSpec {
   includeSharedGitRefs?: boolean;
   kind: "common-dir" | "git-dir" | "workspace-root";
-  options?: ParcelWatcherOptions;
+  options?: ParcelWatcherSubscribeOptions;
   rootPath: string;
 }
 
@@ -25,7 +24,7 @@ interface GitMetadataLayout {
   gitDirPath: string;
 }
 
-async function canonicalizePath(inputPath: string): Promise<string> {
+export async function canonicalizePath(inputPath: string): Promise<string> {
   try {
     return await fs.realpath(inputPath);
   } catch {
@@ -89,7 +88,7 @@ async function resolveGitMetadataLayout(
   };
 }
 
-function createCommonDirWatchOptions(): ParcelWatcherOptions {
+function createCommonDirWatchOptions(): ParcelWatcherSubscribeOptions {
   return {
     ignore: ["hooks", "info", "logs", "modules", "objects", "worktrees"],
   };

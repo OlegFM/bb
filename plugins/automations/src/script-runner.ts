@@ -7,7 +7,7 @@ import {
 } from "node:child_process";
 import { constants } from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
+import { promisify, stripVTControlCharacters } from "node:util";
 import { access, mkdir, stat } from "node:fs/promises";
 import {
   assignPathEnv,
@@ -31,6 +31,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_OUTPUT_MAX_BYTES = 1024 * 1024;
+const SCRIPT_FAILURE_DETAIL_MAX_CHARS = 200;
 
 let resolvedBbPath: string | null = null;
 
@@ -163,6 +164,14 @@ export async function isExecutableFile(
   }
 }
 
+async function isDirectory(candidate: string): Promise<boolean> {
+  try {
+    return (await stat(candidate)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 async function resolveBbBinary(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
@@ -216,6 +225,7 @@ export function isWakeAgentSuppressed(output: string): boolean {
 export interface ScriptRunResult {
   exitCode: number | null;
   output: string;
+  stderr: string;
   timedOut: boolean;
 }
 
@@ -225,6 +235,29 @@ interface ScriptRunOutcome {
   exitCode: number | null;
   error: string | null;
   skipReason: string | null;
+}
+
+function firstStderrLine(stderr: string): string | null {
+  let start = 0;
+  while (start < stderr.length) {
+    const newline = stderr.indexOf("\n", start);
+    const lineEnd = newline === -1 ? stderr.length : newline;
+    const trimmedEnd =
+      lineEnd > start && stderr[lineEnd - 1] === "\r" ? lineEnd - 1 : lineEnd;
+    if (trimmedEnd > start) {
+      const trimmed = stripVTControlCharacters(stderr.slice(start, trimmedEnd))
+        .replace(/\p{Cc}/gu, " ")
+        .trim();
+      if (trimmed.length > 0) {
+        return trimmed.length > SCRIPT_FAILURE_DETAIL_MAX_CHARS
+          ? `${trimmed.slice(0, SCRIPT_FAILURE_DETAIL_MAX_CHARS - 1)}…`
+          : trimmed;
+      }
+    }
+    if (newline === -1) break;
+    start = newline + 1;
+  }
+  return null;
 }
 
 export function mapScriptResultToRun(
@@ -240,11 +273,14 @@ export function mapScriptResultToRun(
     };
   }
   if (result.exitCode !== 0) {
+    const detail = firstStderrLine(result.stderr);
     return {
       status: "failed",
       output: result.output.length > 0 ? result.output : null,
       exitCode: result.exitCode,
-      error: `Script exited with code ${result.exitCode}`,
+      error: `Script exited with code ${result.exitCode}${
+        detail === null ? "" : `: ${detail}`
+      }`,
       skipReason: null,
     };
   }
@@ -373,11 +409,11 @@ function executeWithProcessGroup(args: {
         signalProcessGroup(child, "SIGKILL");
       }
       const suffix = outputLimitExceeded ? "\n[output truncated]\n" : "";
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
       const result: ScriptRunResult = {
         exitCode: timedOut ? null : outputLimitExceeded ? 1 : code,
-        output: `${Buffer.concat(stdoutChunks).toString("utf8")}${Buffer.concat(
-          stderrChunks,
-        ).toString("utf8")}${suffix}`,
+        output: `${Buffer.concat(stdoutChunks).toString("utf8")}${stderr}${suffix}`,
+        stderr,
         timedOut,
       };
       const termination = treeTermination;
@@ -409,6 +445,7 @@ export async function executeStoredScript(args: {
   env?: Record<string, string>;
   platform?: NodeJS.Platform;
   serverUrl: string;
+  workingDir: string;
 }): Promise<ScriptRunResult> {
   const scriptPath = await resolveAutomationScriptPath({
     dataDir: args.pluginDataDir,
@@ -440,8 +477,13 @@ export async function executeStoredScript(args: {
   if (bbPath !== null) {
     scriptEnv.BB_CLI = bbPath;
   }
-  const cwd = scriptsRoot(args.pluginDataDir);
-  await mkdir(cwd, { recursive: true });
+  await mkdir(scriptsRoot(args.pluginDataDir), { recursive: true });
+  if (!(await isDirectory(args.workingDir))) {
+    throw new Error(
+      `Script working directory is not an existing directory: ${args.workingDir}`,
+    );
+  }
+  const cwd = args.workingDir;
   const result = await executeWithProcessGroup({
     command,
     args: [...argsPrefix, scriptPath],

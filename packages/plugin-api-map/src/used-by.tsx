@@ -1,45 +1,16 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Icon } from "@bb/shared-ui/icon";
 
 import { cn } from "./cn";
-import { SCROLLBAR_HIDDEN_CLASS, scrollEdgeFadeStyle } from "./scroll-edges";
+import { FOCUS_RING_CLASS } from "./annotation";
+import {
+  SCROLLBAR_HIDDEN_CLASS,
+  scrollEdgeFadeStyle,
+  useScrollEdges,
+} from "./scroll-edges";
 
-const SCROLL_EPSILON_PX = 1;
 const SCROLL_OVERLAP_PX = 32;
 const MIN_SCROLL_STEP_PX = 80;
-
-export interface UsedByScrollState {
-  canScrollLeft: boolean;
-  canScrollRight: boolean;
-}
-
-export interface UsedByScrollMetrics {
-  scrollLeft: number;
-  scrollWidth: number;
-  clientWidth: number;
-}
-
-export function usedByScrollState({
-  scrollLeft,
-  scrollWidth,
-  clientWidth,
-}: UsedByScrollMetrics): UsedByScrollState {
-  const maxScroll = scrollWidth - clientWidth;
-  if (maxScroll <= SCROLL_EPSILON_PX) {
-    return { canScrollLeft: false, canScrollRight: false };
-  }
-  return {
-    canScrollLeft: scrollLeft > SCROLL_EPSILON_PX,
-    canScrollRight: scrollLeft < maxScroll - SCROLL_EPSILON_PX,
-  };
-}
 
 export function usedByScrollStep(clientWidth: number): number {
   return Math.max(clientWidth - SCROLL_OVERLAP_PX, MIN_SCROLL_STEP_PX);
@@ -98,8 +69,8 @@ function Caret({
         !shown && "invisible",
       )}
     >
-      <HugeiconsIcon
-        icon={direction === "left" ? ArrowLeft01Icon : ArrowRight01Icon}
+      <Icon
+        name={direction === "left" ? "ChevronLeft" : "ChevronRight"}
         className="size-3.5"
       />
     </button>
@@ -114,37 +85,8 @@ export function UsedByList({
   renderItem: (item: string) => ReactNode;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [scroll, setScroll] = useState<UsedByScrollState>({
-    canScrollLeft: false,
-    canScrollRight: false,
-  });
+  const scroll = useScrollEdges(viewportRef);
   const reducedMotion = useReducedMotion();
-
-  const sync = useCallback(() => {
-    const viewport = viewportRef.current;
-    if (viewport) {
-      setScroll(usedByScrollState(viewport));
-    }
-  }, []);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) {
-      return;
-    }
-    sync();
-    const observer = new ResizeObserver(sync);
-    observer.observe(viewport);
-    const row = viewport.firstElementChild;
-    if (row) {
-      observer.observe(row);
-    }
-    viewport.addEventListener("scroll", sync, { passive: true });
-    return () => {
-      observer.disconnect();
-      viewport.removeEventListener("scroll", sync);
-    };
-  }, [items, sync]);
 
   const page = (direction: -1 | 1) => {
     const viewport = viewportRef.current;
@@ -197,6 +139,63 @@ export function UsedByList({
           shown={scroll.canScrollRight}
           onClick={() => page(1)}
         />
+      ) : null}
+    </div>
+  );
+}
+
+export function UsedByPager({
+  items,
+  renderItem,
+}: {
+  items: readonly string[];
+  renderItem: (item: string) => ReactNode;
+}) {
+  const [index, setIndex] = useState(0);
+  const currentIndex = Math.min(index, items.length - 1);
+  const item = items[currentIndex];
+  if (!item) return null;
+
+  return (
+    <div
+      role="group"
+      aria-label="Example plugins"
+      className="flex min-w-0 flex-1 items-center gap-1"
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        event.stopPropagation();
+        setIndex(Math.max(0, Math.min(
+          items.length - 1,
+          currentIndex + (event.key === "ArrowLeft" ? -1 : 1),
+        )));
+      }}
+    >
+      {items.length > 1 ? (
+        <button
+          type="button"
+          aria-label="Previous example plugin"
+          disabled={currentIndex === 0}
+          onClick={() => setIndex(currentIndex - 1)}
+          className={`inline-flex size-9 @2xl/guide:size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-state-hover hover:text-foreground disabled:cursor-default disabled:opacity-35 ${FOCUS_RING_CLASS}`}
+        >
+          <Icon name="ChevronLeft" className="size-3.5" />
+        </button>
+      ) : null}
+      <div className="min-w-0 flex-1" aria-live="polite" aria-atomic="true">
+        <span className="sr-only">Example {currentIndex + 1} of {items.length}: </span>
+        {renderItem(item)}
+      </div>
+      {items.length > 1 ? (
+        <button
+          type="button"
+          aria-label="Next example plugin"
+          disabled={currentIndex === items.length - 1}
+          onClick={() => setIndex(currentIndex + 1)}
+          className={`inline-flex size-9 @2xl/guide:size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-state-hover hover:text-foreground disabled:cursor-default disabled:opacity-35 ${FOCUS_RING_CLASS}`}
+        >
+          <Icon name="ChevronRight" className="size-3.5" />
+        </button>
       ) : null}
     </div>
   );

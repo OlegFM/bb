@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -46,6 +47,150 @@ function childRequestLine(): string {
 }
 
 describe("codex app-server connection", () => {
+  it("allows stdin shutdown cleanup before terminating the provider", async () => {
+    const ready = deferred<void>();
+    const exited = deferred<CodexAppServerExitInfo>();
+    const connection = createCodexAppServerConnection({
+      command: process.execPath,
+      args: [
+        "-e",
+        [
+          "process.stdin.resume();",
+          'process.stdin.on("end", () => {',
+          'setTimeout(() => { process.stderr.write("cleanup finished"); process.exit(0); }, 100);',
+          "});",
+          'process.stdout.write(JSON.stringify({method: "ready"}) + "\\n");',
+        ].join(""),
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      onNotification: () => ready.resolve(),
+      onRequest: () => undefined,
+      onExit: exited.resolve,
+    });
+    try {
+      await ready.promise;
+      await connection.kill();
+      await expect(exited.promise).resolves.toMatchObject({
+        code: 0,
+        signal: null,
+        stderrTail: "cleanup finished",
+      });
+    } finally {
+      await connection.kill();
+    }
+  });
+
+  it("forces termination when a provider ignores stdin shutdown and SIGTERM", async () => {
+    const ready = deferred<void>();
+    const exited = deferred<CodexAppServerExitInfo>();
+    const connection = createCodexAppServerConnection({
+      command: process.execPath,
+      args: [
+        "-e",
+        [
+          "process.stdin.resume();",
+          'process.on("SIGTERM", () => {});',
+          "setInterval(() => {}, 1000);",
+          'process.stdout.write(JSON.stringify({method: "ready"}) + "\\n");',
+        ].join(""),
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      onNotification: () => ready.resolve(),
+      onRequest: () => undefined,
+      onExit: exited.resolve,
+    });
+    try {
+      await ready.promise;
+      await connection.kill();
+      await expect(exited.promise).resolves.toMatchObject({
+        code: null,
+        signal: process.platform === "win32" ? "SIGTERM" : "SIGKILL",
+      });
+    } finally {
+      await connection.kill();
+    }
+  }, 10_000);
+
+  it("ignores late approval replies and rejects new requests during graceful shutdown", async () => {
+    const ready = deferred<() => void>();
+    const exited = deferred<CodexAppServerExitInfo>();
+    const connection = createCodexAppServerConnection({
+      command: process.execPath,
+      args: [
+        "-e",
+        [
+          "process.stdin.resume();",
+          'process.stdin.on("end", () => setTimeout(() => process.exit(0), 150));',
+          `process.stdout.write(${JSON.stringify(childRequestLine())});`,
+        ].join(""),
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      onNotification: () => undefined,
+      onRequest: (_method, _params, responder) =>
+        ready.resolve(() => responder.result({ decision: "accept" })),
+      onExit: exited.resolve,
+    });
+    try {
+      const reply = await ready.promise;
+      const stopped = connection.kill();
+      reply();
+      await expect(
+        connection.request({
+          method: "thread/start",
+          resultSchema: z.unknown(),
+        }),
+      ).rejects.toThrow(/not running/);
+      await stopped;
+      await expect(exited.promise).resolves.toMatchObject({
+        code: 0,
+        signal: null,
+        stderrTail: "",
+      });
+    } finally {
+      await connection.kill();
+    }
+  });
+
+  it("offers SIGTERM cleanup when a provider does not exit on EOF", async () => {
+    const ready = deferred<void>();
+    const exited = deferred<CodexAppServerExitInfo>();
+    const connection = createCodexAppServerConnection({
+      command: process.execPath,
+      args: [
+        "-e",
+        [
+          "process.stdin.resume();",
+          "setInterval(() => {}, 1000);",
+          'process.on("SIGTERM", () => { process.stderr.write("terminated cleanly"); process.exit(0); });',
+          'process.stdout.write(JSON.stringify({method: "ready"}) + "\\n");',
+        ].join(""),
+      ],
+      cwd: process.cwd(),
+      env: process.env,
+      recordThreadId: null,
+      onNotification: () => ready.resolve(),
+      onRequest: () => undefined,
+      onExit: exited.resolve,
+    });
+    try {
+      await ready.promise;
+      await connection.kill();
+      await expect(exited.promise).resolves.toMatchObject(
+        process.platform === "win32"
+          ? { code: null, signal: "SIGTERM", stderrTail: "" }
+          : { code: 0, signal: null, stderrTail: "terminated cleanly" },
+      );
+    } finally {
+      await connection.kill();
+    }
+  });
+
   it("preserves final output and exit details while stdio drains", async () => {
     const exited = deferred<CodexAppServerExitInfo>();
     const lateResponseLine = `${JSON.stringify({
@@ -55,18 +200,29 @@ describe("codex app-server connection", () => {
     })}\n`;
     const descendantScript = [
       `const line = ${JSON.stringify(lateResponseLine)};`,
+      'process.send?.("ready");',
       "setTimeout(() => process.stdout.write(line, () => process.exit(0)), 250);",
     ].join("");
-    const childScript = [
-      'const { spawn } = require("node:child_process");',
-      'process.stdin.once("data", () => {',
-      'process.stderr.write("fixture stderr\\n");',
-      `process.stdout.write(${JSON.stringify(childRequestLine())}, () => {`,
-      `spawn(process.execPath, ["-e", ${JSON.stringify(descendantScript)}], { stdio: ["ignore", 1, "ignore"] });`,
-      "process.exit(7);",
-      "});",
-      "});",
-    ].join("");
+    const childScript =
+      process.platform === "win32"
+        ? [
+            'process.stdin.once("data", () => {',
+            'process.stderr.write("fixture stderr\\n");',
+            `process.stdout.write(${JSON.stringify(childRequestLine())}, () => {`,
+            `setTimeout(() => process.stdout.write(${JSON.stringify(lateResponseLine)}, () => process.exit(7)), 250);`,
+            "});",
+            "});",
+          ].join("")
+        : [
+            'const { spawn } = require("node:child_process");',
+            'process.stdin.once("data", () => {',
+            'process.stderr.write("fixture stderr\\n");',
+            `process.stdout.write(${JSON.stringify(childRequestLine())}, () => {`,
+            `const descendant = spawn(process.execPath, ["-e", ${JSON.stringify(descendantScript)}], { stdio: ["ignore", 1, "ignore", "ipc"] });`,
+            'descendant.once("message", () => process.exit(7));',
+            "});",
+            "});",
+          ].join("");
     const connection = createCodexAppServerConnection({
       command: process.execPath,
       args: ["-e", childScript],
@@ -137,66 +293,129 @@ describe("codex app-server connection", () => {
     }
   }, 30_000);
 
-  it("makes a broken child stdin immediately terminal", async () => {
-    const ready = deferred<void>();
-    const exited = deferred<CodexAppServerExitInfo>();
-    const connection = createCodexAppServerConnection({
-      command: process.execPath,
-      args: [
-        "-e",
-        [
-          'require("node:fs").closeSync(0);',
-          `process.stdout.write(${JSON.stringify(
-            `${JSON.stringify({ jsonrpc: "2.0", method: "ready" })}\n`,
-          )});`,
-          'process.on("SIGTERM", () => {});',
-          "setTimeout(() => process.exit(0), 1000);",
-        ].join(""),
-      ],
-      cwd: process.cwd(),
-      env: process.env,
-      recordThreadId: null,
-      onNotification(method) {
-        if (method === "ready") ready.resolve();
-      },
-      onRequest: () => undefined,
-      onExit: exited.resolve,
-    });
+  it.runIf(process.platform !== "win32")(
+    "makes a broken child stdin immediately terminal",
+    async () => {
+      const ready = deferred<void>();
+      const exited = deferred<CodexAppServerExitInfo>();
+      const connection = createCodexAppServerConnection({
+        command: process.execPath,
+        args: [
+          "-e",
+          [
+            'require("node:fs").closeSync(0);',
+            `process.stdout.write(${JSON.stringify(
+              `${JSON.stringify({ jsonrpc: "2.0", method: "ready" })}\n`,
+            )});`,
+            'process.on("SIGTERM", () => {});',
+            "setTimeout(() => process.exit(0), 1000);",
+          ].join(""),
+        ],
+        cwd: process.cwd(),
+        env: process.env,
+        recordThreadId: null,
+        onNotification(method) {
+          if (method === "ready") ready.resolve();
+        },
+        onRequest: () => undefined,
+        onExit: exited.resolve,
+      });
 
-    try {
-      await ready.promise;
-      const pendingRequest = connection.request({
-        method: "thread/start",
-        params: { payload: "x".repeat(EPIPE_PAYLOAD_SIZE) },
-        resultSchema: z.unknown(),
-      });
-      await expect(
-        Promise.race([
-          pendingRequest,
-          delay(500).then(() => {
-            throw new Error(
-              "Codex request remained pending after stdin closed",
-            );
-          }),
-        ]),
-      ).rejects.toBeInstanceOf(CodexAppServerExitedError);
-      expect(connection.exited).toBe(true);
-      await expect(
-        connection.request({
-          method: "thread/resume",
+      try {
+        await ready.promise;
+        const pendingRequest = connection.request({
+          method: "thread/start",
+          params: { payload: "x".repeat(EPIPE_PAYLOAD_SIZE) },
           resultSchema: z.unknown(),
-        }),
-      ).rejects.toBeInstanceOf(CodexAppServerExitedError);
-      await expect(exited.promise).resolves.toMatchObject({
-        code: null,
-        signal: "SIGKILL",
-        stderrTail: expect.stringMatching(/stdin failed \(EPIPE\)/),
-        spawnFailed: false,
+        });
+        await expect(
+          Promise.race([
+            pendingRequest,
+            delay(500).then(() => {
+              throw new Error(
+                "Codex request remained pending after stdin closed",
+              );
+            }),
+          ]),
+        ).rejects.toBeInstanceOf(CodexAppServerExitedError);
+        expect(connection.exited).toBe(true);
+        await expect(
+          connection.request({
+            method: "thread/resume",
+            resultSchema: z.unknown(),
+          }),
+        ).rejects.toBeInstanceOf(CodexAppServerExitedError);
+        await expect(exited.promise).resolves.toMatchObject({
+          code: null,
+          signal: "SIGKILL",
+          stderrTail: expect.stringMatching(/stdin failed \(EPIPE\)/),
+          spawnFailed: false,
+        });
+      } finally {
+        await stopConnection(connection, exited.promise);
+      }
+    },
+    30_000,
+  );
+
+  it.runIf(process.platform === "win32")(
+    "rejects pending requests and reaps the provider after a Windows stdin EOF",
+    async () => {
+      const child = spawn(
+        process.execPath,
+        ["-e", "setInterval(() => {}, 1000)"],
+        {
+          stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+        },
+      );
+      const closed = once(child, "close");
+      const exited = deferred<CodexAppServerExitInfo>();
+      const connection = createCodexAppServerConnection({
+        command: process.execPath,
+        args: [],
+        cwd: process.cwd(),
+        env: process.env,
+        recordThreadId: null,
+        spawnImpl: () => child,
+        onNotification: () => undefined,
+        onRequest: () => undefined,
+        onExit: exited.resolve,
       });
-    } finally {
-      await stopConnection(connection, exited.promise);
-    }
-  }, 30_000);
+      try {
+        const rejected = expect(
+          connection.request({
+            method: "thread/start",
+            resultSchema: z.unknown(),
+          }),
+        ).rejects.toBeInstanceOf(CodexAppServerExitedError);
+        if (!child.stdin) throw new Error("Provider stdin is unavailable");
+        child.stdin.emit(
+          "error",
+          Object.assign(new Error("write EOF"), { code: "EOF" }),
+        );
+        await rejected;
+        expect(connection.exited).toBe(true);
+        await expect(
+          connection.request({
+            method: "thread/resume",
+            resultSchema: z.unknown(),
+          }),
+        ).rejects.toBeInstanceOf(CodexAppServerExitedError);
+        await expect(exited.promise).resolves.toMatchObject({
+          code: null,
+          signal: "SIGKILL",
+          stderrTail: expect.stringMatching(/stdin failed \(EOF\)/u),
+          spawnFailed: false,
+        });
+        await closed;
+      } finally {
+        child.kill("SIGKILL");
+        await closed;
+      }
+    },
+    30_000,
+  );
 });
 
 describe("codex app-server spawn options", () => {
